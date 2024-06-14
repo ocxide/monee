@@ -31,7 +31,7 @@ fn create_local_path() -> PathBuf {
 mod snapshot_io {
     use std::{
         fs,
-        io::{self, Read},
+        io::{self, Read, Seek},
         path::PathBuf,
     };
 
@@ -84,6 +84,8 @@ mod snapshot_io {
 
         pub fn write(&mut self, entry: SnapshotEntry) -> io::Result<()> {
             self.0.set_len(0)?;
+            self.0.rewind()?;
+
             serde_json::to_writer(&mut self.0, &entry).map_err(Into::into)
         }
     }
