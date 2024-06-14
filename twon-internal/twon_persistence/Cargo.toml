@@ -1,8 +1,12 @@
 [package]
-name = "twon-persistence"
+name = "twon_persistence"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+twon_core = { path = "../twon_core" }
+serde = { version = "1.0.203", features = ["derive"] }
+surrealdb = { version = "1.5.2", features = ["kv-rocksdb"] }
+serde_json = "1.0.117"
