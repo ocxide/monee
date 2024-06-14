@@ -3,11 +3,14 @@ use std::{fs, path::PathBuf};
 pub use database::connect;
 pub use snapshot_io::SnapshotIO;
 
-mod database {
+pub mod database {
     use crate::create_local_path;
     use surrealdb::engine::local::Db;
+    pub use surrealdb::Result;
 
-    pub async fn connect() -> surrealdb::Result<surrealdb::Surreal<Db>> {
+    pub type Connection = surrealdb::Surreal<Db>;
+
+    pub async fn connect() -> surrealdb::Result<Connection> {
         let path = create_local_path().join("twon.db");
         let db = surrealdb::Surreal::new::<surrealdb::engine::local::File>(format!(
             "file://{}",
@@ -17,6 +20,30 @@ mod database {
         db.use_ns("twon").use_db("twon").await?;
 
         Ok(db)
+    }
+
+    #[derive(serde::Serialize)]
+    pub struct EventRow {
+        #[serde(flatten)]
+        pub inner: twon_core::Event,
+        pub created_at: u8,
+    }
+
+    #[derive(serde::Deserialize)]
+    pub struct Record {}
+
+    pub async fn add_event(
+        connection: &Connection,
+        event: twon_core::Event,
+        created_at: u8,
+    ) -> Result<()> {
+        let row = EventRow {
+            created_at,
+            inner: event,
+        };
+        let _: Vec<Record> = connection.create("event").content(row).await?;
+
+        Ok(())
     }
 }
 

@@ -50,13 +50,13 @@ fn main() {
                 let event = match commands {
                     AddEvent::Deposit { wallet_id, amount } => twon_core::Event::Deposit {
                         amount,
-                        id: wallet_id,
+                        wallet_id,
                     },
                     AddEvent::CreateWallet {
                         wallet_id,
                         currency_id,
                     } => twon_core::Event::CreateWallet {
-                        id: wallet_id,
+                        wallet_id,
                         currency: CurrencyId::new(currency_id),
                     },
                 };
@@ -64,6 +64,20 @@ fn main() {
                 if let Err(why) = snapshot_entry.snapshot.apply(event.clone()) {
                     panic!("{:?}", why);
                 };
+
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime")
+                    .block_on(async {
+                        let db = twon_persistence::database::connect()
+                            .await
+                            .expect("Failed to connect");
+
+                        twon_persistence::database::add_event(&db, event, 0)
+                            .await
+                            .expect("Failed to add event");
+                    });
 
                 snapshot_io
                     .write(snapshot_entry)

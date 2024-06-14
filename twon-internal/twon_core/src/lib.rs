@@ -137,24 +137,23 @@ impl AddAssign for Balance {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
     Deposit {
-        id: WalletId,
+        wallet_id: WalletId,
         amount: Balance,
     },
     Deduct {
-        id: WalletId,
+        wallet_id: WalletId,
         amount: Balance,
     },
     CreateWallet {
-        id: WalletId,
+        wallet_id: WalletId,
         currency: CurrencyId,
     },
     ///  Does not handle transference before deletion
-    DeleteWallet {
-        id: WalletId,
-    },
+    DeleteWallet { wallet_id: WalletId },
 }
 
 #[derive(Debug)]
@@ -167,7 +166,10 @@ pub enum Error {
 impl Snapshot {
     pub fn apply(&mut self, event: Event) -> Result<(), Error> {
         match event {
-            Event::Deposit { id, amount } => {
+            Event::Deposit {
+                wallet_id: id,
+                amount,
+            } => {
                 if let Some(wallet) = self.wallets.get_mut(&id) {
                     wallet.balance += amount;
                     Ok(())
@@ -175,7 +177,10 @@ impl Snapshot {
                     Err(Error::WalletNotFound)
                 }
             }
-            Event::Deduct { id, amount } => {
+            Event::Deduct {
+                wallet_id: id,
+                amount,
+            } => {
                 if let Some(wallet) = self.wallets.get_mut(&id) {
                     wallet
                         .balance
@@ -187,7 +192,10 @@ impl Snapshot {
                     Err(Error::WalletNotFound)
                 }
             }
-            Event::CreateWallet { id, currency } => {
+            Event::CreateWallet {
+                wallet_id: id,
+                currency,
+            } => {
                 if self.wallets.contains_key(&id) {
                     return Err(Error::WalletAlreadyExists);
                 }
@@ -201,7 +209,7 @@ impl Snapshot {
                 );
                 Ok(())
             }
-            Event::DeleteWallet { id } => {
+            Event::DeleteWallet { wallet_id: id } => {
                 self.wallets.remove(&id);
                 Ok(())
             }
