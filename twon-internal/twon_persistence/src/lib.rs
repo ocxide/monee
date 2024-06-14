@@ -55,10 +55,10 @@ fn create_local_path() -> PathBuf {
     path
 }
 
-mod snapshot_io {
+pub mod snapshot_io {
     use std::{
         fs,
-        io::{self, Read, Seek},
+        io::{self, Seek},
     };
 
     use crate::create_local_path;
@@ -82,7 +82,55 @@ mod snapshot_io {
         }
     }
 
+    pub mod read {
+        use std::{
+            io::{self, Read},
+            path::PathBuf,
+        };
+
+        use super::{SnapshotEntry, SnapshotIO, SnapshotMetadata};
+
+        pub enum Error {
+            Io(io::Error),
+            Json(JsonDecodeError),
+        }
+
+        pub struct JsonDecodeError {
+            pub error: serde_json::Error,
+            pub json: String,
+            pub filename: PathBuf,
+        }
+
+        impl SnapshotIO {
+            pub fn read(&mut self) -> Result<SnapshotEntry, Error> {
+                let mut buf = String::new();
+                self.0.read_to_string(&mut buf).map_err(Error::Io)?;
+
+                if buf.is_empty() {
+                    let snapshot = twon_core::Snapshot::default();
+                    return Ok(SnapshotEntry {
+                        metadata: SnapshotMetadata { created_at: 0 },
+                        snapshot,
+                    });
+                }
+
+                match serde_json::from_str(&buf) {
+                    Ok(entry) => Ok(entry),
+                    Err(e) => Err(Error::Json(JsonDecodeError {
+                        error: e,
+                        json: buf,
+                        filename: Self::create_snapshot_path(),
+                    })),
+                }
+            }
+        }
+    }
+
     impl SnapshotIO {
+        fn create_snapshot_path() -> std::path::PathBuf {
+            create_local_path().join("snapshot.json")
+        }
+
         pub fn new() -> Self {
             let mut opts = fs::OpenOptions::new();
             opts.read(true).write(true).create(true);
@@ -91,27 +139,11 @@ mod snapshot_io {
         }
 
         pub fn open(options: &fs::OpenOptions) -> Self {
-            let path = create_local_path();
             let file = options
-                .open(path.join("snapshot.json"))
+                .open(Self::create_snapshot_path())
                 .expect("To open snapshot file");
 
             Self(file)
-        }
-
-        pub fn read(&mut self) -> io::Result<SnapshotEntry> {
-            let mut buf = String::new();
-            self.0.read_to_string(&mut buf)?;
-
-            if buf.is_empty() {
-                let snapshot = twon_core::Snapshot::default();
-                return Ok(SnapshotEntry {
-                    metadata: SnapshotMetadata { created_at: 0 },
-                    snapshot,
-                });
-            }
-
-            serde_json::from_str(&buf).map_err(Into::into)
         }
 
         pub fn write(&mut self, entry: SnapshotEntry) -> io::Result<()> {
