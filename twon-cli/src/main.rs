@@ -1,5 +1,5 @@
 use clap::Parser;
-use twon_core::{Balance, CurrencyId, WalletId};
+use twon_core::{Amount, CurrencyId, WalletId};
 
 #[derive(clap::Parser)]
 struct CliParser {
@@ -29,7 +29,7 @@ enum AddEvent {
         #[arg(short, long)]
         wallet_id: WalletId,
         #[arg(short, long)]
-        amount: Balance,
+        amount: Amount,
     },
     CreateWallet {
         #[arg(short, long)]
@@ -48,10 +48,9 @@ fn main() {
                 let mut snapshot_entry = snapshot_io.read().expect("Failed to read snapshot");
 
                 let event = match commands {
-                    AddEvent::Deposit { wallet_id, amount } => twon_core::Event::Deposit {
-                        amount,
-                        wallet_id,
-                    },
+                    AddEvent::Deposit { wallet_id, amount } => {
+                        twon_core::Event::Deposit { amount, wallet_id }
+                    }
                     AddEvent::CreateWallet {
                         wallet_id,
                         currency_id,
