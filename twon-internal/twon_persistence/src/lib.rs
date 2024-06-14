@@ -10,6 +10,16 @@ pub mod database {
 
     pub type Connection = surrealdb::Surreal<Db>;
 
+    async fn setup(connection: &Connection) -> Result<()> {
+        connection
+            .query("DEFINE TABLE event")
+            .query("DEFINE FIELD created_at ON event VALUE time::now()")
+            .await?
+            .check()?;
+
+        Ok(())
+    }
+
     pub async fn connect() -> surrealdb::Result<Connection> {
         let path = create_local_path().join("twon.db");
         let db = surrealdb::Surreal::new::<surrealdb::engine::local::File>(format!(
@@ -19,29 +29,17 @@ pub mod database {
         .await?;
         db.use_ns("twon").use_db("twon").await?;
 
+        setup(&db).await?;
+
         Ok(db)
     }
 
-    #[derive(serde::Serialize)]
-    pub struct EventRow {
-        #[serde(flatten)]
-        pub inner: twon_core::Event,
-        pub created_at: u8,
-    }
-
-    #[derive(serde::Deserialize)]
-    pub struct Record {}
-
-    pub async fn add_event(
-        connection: &Connection,
-        event: twon_core::Event,
-        created_at: u8,
-    ) -> Result<()> {
-        let row = EventRow {
-            created_at,
-            inner: event,
-        };
-        let _: Vec<Record> = connection.create("event").content(row).await?;
+    pub async fn add_event(connection: &Connection, event: twon_core::Event) -> Result<()> {
+        connection
+            .query("CREATE event CONTENT $data")
+            .bind(("data", event))
+            .await?
+            .check()?;
 
         Ok(())
     }

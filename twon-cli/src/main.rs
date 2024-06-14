@@ -154,7 +154,7 @@ fn add_event(command: AddEvent) -> miette::Result<()> {
                 .await
                 .expect("Failed to connect");
 
-            twon_persistence::database::add_event(&db, event, 0)
+            twon_persistence::database::add_event(&db, event)
                 .await
                 .expect("Failed to add event");
         });
