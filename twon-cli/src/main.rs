@@ -13,6 +13,10 @@ enum Commands {
         #[command(subcommand)]
         commands: EventCommand,
     },
+    Snapshot {
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(clap::Subcommand)]
@@ -31,11 +35,21 @@ enum AddEvent {
         #[arg(short, long)]
         amount: Amount,
     },
+    Deduct {
+        #[arg(short, long)]
+        wallet_id: WalletId,
+        #[arg(short, long)]
+        amount: Amount,
+    },
     CreateWallet {
         #[arg(short, long)]
         wallet_id: WalletId,
         #[arg(short, long)]
         currency_id: u32,
+    },
+    DeleteWallet {
+        #[arg(short, long)]
+        wallet_id: WalletId,
     },
 }
 
@@ -47,6 +61,34 @@ fn main() -> miette::Result<()> {
                 add_event(commands)?;
             }
         },
+        Commands::Snapshot { output } => {
+            let snapshot_entry = {
+                let mut snapshot_io = twon_persistence::SnapshotIO::new();
+                snapshot_io.read().map_err(snapshot_read_diagnostic)?
+            };
+
+            match output {
+                Some(path) => {
+                    let Ok(mut file) = std::fs::File::create(&path) else {
+                        let diagnostic = miette::diagnostic!(
+                            severity = miette::Severity::Error,
+                            code = "io::Error",
+                            "Failed to create/open file: {}",
+                            path.display(),
+                        );
+
+                        return Err(diagnostic.into());
+                    };
+
+                    serde_json::to_writer(&mut file, &snapshot_entry.snapshot)
+                        .expect("Failed to write snapshot");
+                }
+                None => {
+                    serde_json::to_writer(std::io::stdout(), &snapshot_entry.snapshot)
+                        .expect("Failed to write snapshot");
+                }
+            }
+        }
     }
 
     Ok(())
@@ -102,31 +144,34 @@ mod json_diagnostic {
     }
 }
 
-fn add_event(command: AddEvent) -> miette::Result<()> {
+fn snapshot_read_diagnostic(error: twon_persistence::snapshot_io::read::Error) -> miette::Report {
     use twon_persistence::snapshot_io;
 
+    match error {
+        snapshot_io::read::Error::Io(err) => miette::diagnostic!(
+            severity = miette::Severity::Error,
+            code = "io::ReadError",
+            "{err}",
+        )
+        .into(),
+        snapshot_io::read::Error::Json(err) => {
+            let diagnostic: json_diagnostic::JsonDecodeDiagnostic = err.into();
+            diagnostic.into()
+        }
+    }
+}
+
+fn add_event(command: AddEvent) -> miette::Result<()> {
     let mut snapshot_io = twon_persistence::SnapshotIO::new();
     let mut snapshot_entry = match snapshot_io.read() {
         Ok(snapshot_entry) => snapshot_entry,
-        Err(why) => {
-            let diagnostic = match why {
-                snapshot_io::read::Error::Io(err) => miette::diagnostic!(
-                    severity = miette::Severity::Error,
-                    code = "io::ReadError",
-                    "{err}",
-                ),
-                snapshot_io::read::Error::Json(err) => {
-                    let diagnostic: json_diagnostic::JsonDecodeDiagnostic = err.into();
-                    return Err(diagnostic.into());
-                }
-            };
-
-            return Err(diagnostic.into());
-        }
+        Err(why) => return Err(snapshot_read_diagnostic(why)),
     };
 
     let event = match command {
         AddEvent::Deposit { wallet_id, amount } => twon_core::Event::Deposit { amount, wallet_id },
+        AddEvent::Deduct { wallet_id, amount } => twon_core::Event::Deduct { amount, wallet_id },
+        AddEvent::DeleteWallet { wallet_id } => twon_core::Event::DeleteWallet { wallet_id },
         AddEvent::CreateWallet {
             wallet_id,
             currency_id,
