@@ -32,7 +32,6 @@ mod snapshot_io {
     use std::{
         fs,
         io::{self, Read, Seek},
-        path::PathBuf,
     };
 
     use crate::create_local_path;
@@ -48,6 +47,12 @@ mod snapshot_io {
     pub struct SnapshotEntry {
         pub metadata: SnapshotMetadata,
         pub snapshot: twon_core::Snapshot,
+    }
+
+    impl Default for SnapshotIO {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl SnapshotIO {

@@ -170,9 +170,9 @@ impl Snapshot {
             Event::Deposit { id, amount } => {
                 if let Some(wallet) = self.wallets.get_mut(&id) {
                     wallet.balance += amount;
-                    return Ok(());
+                    Ok(())
                 } else {
-                    return Err(Error::WalletNotFound);
+                    Err(Error::WalletNotFound)
                 }
             }
             Event::Deduct { id, amount } => {
@@ -182,9 +182,9 @@ impl Snapshot {
                         .checked_sub(amount)
                         .ok_or(Error::CannotDeduct)?;
 
-                    return Ok(());
+                    Ok(())
                 } else {
-                    return Err(Error::WalletNotFound);
+                    Err(Error::WalletNotFound)
                 }
             }
             Event::CreateWallet { id, currency } => {
@@ -199,11 +199,11 @@ impl Snapshot {
                         currency,
                     },
                 );
-                return Ok(());
+                Ok(())
             }
             Event::DeleteWallet { id } => {
                 self.wallets.remove(&id);
-                return Ok(());
+                Ok(())
             }
         }
     }
