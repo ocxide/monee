@@ -17,6 +17,7 @@ enum Commands {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
+    Rebuild,
 }
 
 #[derive(clap::Subcommand)]
@@ -86,6 +87,34 @@ fn main() -> miette::Result<()> {
                 None => {
                     serde_json::to_writer(std::io::stdout(), &snapshot_entry.snapshot)
                         .expect("Failed to write snapshot");
+                }
+            }
+        }
+        Commands::Rebuild => {
+            let Err(why) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build tokio runtime")
+                .block_on(twon_persistence::ops::build::rebuild())
+            else {
+                return Ok(());
+            };
+
+            match why {
+                twon_persistence::ops::build::Error::Write => {
+                    let diagnostic = miette::diagnostic!(
+                        severity = miette::Severity::Error,
+                        code = "io::Error",
+                        "Failed to write snapshot",
+                    );
+                    return Err(diagnostic.into());
+                }
+                twon_persistence::ops::build::Error::Database => {
+                    panic!("Failed to connect to database")
+                }
+                twon_persistence::ops::build::Error::SnapshotApply(error) => {
+                    let diagnostic = apply_diagnostic(error);
+                    return Err(diagnostic.into());
                 }
             }
         }
@@ -161,6 +190,15 @@ fn snapshot_read_diagnostic(error: twon_persistence::snapshot_io::read::Error) -
     }
 }
 
+fn apply_diagnostic(why: twon_core::Error) -> miette::MietteDiagnostic {
+    let diagnostic = miette::diagnostic!(
+        severity = miette::Severity::Error,
+        code = "event::ApplyError",
+        "{why:?}",
+    );
+    diagnostic
+}
+
 fn add_event(command: AddEvent) -> miette::Result<()> {
     let mut snapshot_io = twon_persistence::SnapshotIO::new();
     let mut snapshot_entry = match snapshot_io.read() {
@@ -182,11 +220,7 @@ fn add_event(command: AddEvent) -> miette::Result<()> {
     };
 
     if let Err(why) = snapshot_entry.snapshot.apply(event.clone()) {
-        let diagnostic = miette::diagnostic!(
-            severity = miette::Severity::Error,
-            code = "event::ApplyError",
-            "{why:?}",
-        );
+        let diagnostic = apply_diagnostic(why);
         return Err(diagnostic.into());
     };
 
@@ -205,7 +239,7 @@ fn add_event(command: AddEvent) -> miette::Result<()> {
         });
 
     snapshot_io
-        .write(snapshot_entry)
+        .write(snapshot_entry.snapshot)
         .expect("Failed to write snapshot");
 
     Ok(())
