@@ -7,6 +7,49 @@ pub type Datetime = chrono::DateTime<chrono::Utc>;
 pub type Timezone = chrono::Utc;
 
 pub mod ops {
+    pub mod sync {
+        use crate::snapshot_io;
+
+        pub enum Error {
+            Database,
+            SnapshotApply(twon_core::Error),
+            Write,
+            Read(crate::snapshot_io::read::Error),
+        }
+
+        impl From<crate::ops::build::Error> for Error {
+            fn from(error: crate::ops::build::Error) -> Self {
+                match error {
+                    crate::ops::build::Error::Database => Self::Database,
+                    crate::ops::build::Error::SnapshotApply(error) => Self::SnapshotApply(error),
+                    crate::ops::build::Error::Write => Self::Write,
+                }
+            }
+        }
+
+        impl From<crate::snapshot_io::read::Error> for Error {
+            fn from(error: crate::snapshot_io::read::Error) -> Self {
+                Self::Read(error)
+            }
+        }
+
+        pub async fn sync() -> Result<(), Error> {
+            let entry = tokio::task::spawn_blocking(move || {
+                let mut snapshot_io = snapshot_io::SnapshotIO::new();
+                snapshot_io.read()
+            })
+            .await
+            .expect("To join read task")?;
+
+            let snapshot = entry.snapshot;
+            let min_date = entry.metadata.created_at;
+
+            crate::ops::build::build(snapshot, min_date).await?;
+
+            Ok(())
+        }
+    }
+
     pub mod build {
         use crate::{database, snapshot_io};
 
@@ -38,11 +81,11 @@ pub mod ops {
             pub event: twon_core::Event,
         }
 
-        pub async fn rebuild() -> Result<(), Error> {
+        pub(crate) async fn build(
+            mut snapshot: twon_core::Snapshot,
+            mut min_date: crate::Datetime,
+        ) -> Result<(), Error> {
             let connection = database::connect().await?;
-
-            let mut min_date = chrono::DateTime::<chrono::Utc>::MIN_UTC;
-            let mut snapshot = twon_core::Snapshot::default();
 
             loop {
                 let mut result = connection
@@ -73,6 +116,13 @@ pub mod ops {
             .expect("To join write task");
 
             Ok(())
+        }
+
+        pub async fn rebuild() -> Result<(), Error> {
+            let snapshot = twon_core::Snapshot::default();
+            let min_date = crate::Datetime::MIN_UTC;
+
+            build(snapshot, min_date).await
         }
     }
 }

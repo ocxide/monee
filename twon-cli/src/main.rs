@@ -18,6 +18,7 @@ enum Commands {
         output: Option<std::path::PathBuf>,
     },
     Rebuild,
+    Sync,
 }
 
 #[derive(clap::Subcommand)]
@@ -115,6 +116,38 @@ fn main() -> miette::Result<()> {
                 twon_persistence::ops::build::Error::SnapshotApply(error) => {
                     let diagnostic = apply_diagnostic(error);
                     return Err(diagnostic.into());
+                }
+            }
+        },
+        Commands::Sync => {
+            let Err(why) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build tokio runtime")
+                .block_on(twon_persistence::ops::sync::sync())
+            else {
+                return Ok(());
+            };
+
+            match why {
+                twon_persistence::ops::sync::Error::Write => {
+                    let diagnostic = miette::diagnostic!(
+                        severity = miette::Severity::Error,
+                        code = "io::Error",
+                        "Failed to write snapshot",
+                    );
+                    return Err(diagnostic.into());
+                }
+                twon_persistence::ops::sync::Error::Database => {
+                    panic!("Failed to connect to database")
+                }
+                twon_persistence::ops::sync::Error::SnapshotApply(error) => {
+                    let diagnostic = apply_diagnostic(error);
+                    return Err(diagnostic.into());
+                }
+                twon_persistence::ops::sync::Error::Read(error) => {
+                    let diagnostic = snapshot_read_diagnostic(error);
+                    return Err(diagnostic);
                 }
             }
         }
