@@ -6,6 +6,91 @@ pub use snapshot_io::SnapshotIO;
 pub type Datetime = chrono::DateTime<chrono::Utc>;
 pub type Timezone = chrono::Utc;
 
+pub mod actions {
+    pub mod create_wallet {
+        use surrealdb::sql::{self, Thing};
+        use twon_core::WalletId;
+
+        use crate::snapshot_io;
+
+        #[derive(Debug)]
+        pub enum Error {
+            Database(surrealdb::Error),
+            SnapshotApply(twon_core::Error),
+            Write,
+            Read,
+        }
+
+        impl From<surrealdb::Error> for Error {
+            fn from(e: surrealdb::Error) -> Self {
+                Self::Database(e)
+            }
+        }
+
+        impl From<twon_core::Error> for Error {
+            fn from(error: twon_core::Error) -> Self {
+                Self::SnapshotApply(error)
+            }
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+            currency_id: twon_core::CurrencyId,
+            name: Option<String>,
+        ) -> Result<WalletId, Error> {
+            let wallet_id = WalletId::new();
+
+            let Ok(mut snapshot_entry) = tokio::task::spawn_blocking(move || {
+                let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
+                snapshot_io.read()
+            })
+            .await
+            .expect("To join read task") else {
+                return Err(Error::Read);
+            };
+
+            let event = twon_core::Event::CreateWallet {
+                wallet_id,
+                currency: currency_id,
+            };
+            snapshot_entry.snapshot.apply(event.clone())?;
+
+            let wallet_resource = {
+                let id = sql::Id::String(wallet_id.to_string());
+                Thing::from(("wallet_metadata", id))
+            };
+
+            let response = connection
+                .query(sql::statements::BeginStatement)
+                .query(
+                    "
+CREATE event CONTENT $event;
+CREATE $wallet_resource SET name = $name;",
+                )
+                .bind(("event", event))
+                .bind(("wallet_resource", wallet_resource))
+                .bind(("name", name))
+                .query(sql::statements::CommitStatement)
+                .await?;
+
+            response.check()?;
+
+            let write = tokio::task::spawn_blocking(move || {
+                let mut snapshot_io = snapshot_io::SnapshotIO::new();
+                snapshot_io.write(snapshot_entry.snapshot)
+            })
+            .await
+            .expect("To join write task");
+
+            if write.is_err() {
+                return Err(Error::Write);
+            }
+
+            Ok(wallet_id)
+        }
+    }
+}
+
 pub mod ops {
     pub mod sync {
         use crate::snapshot_io;
@@ -145,7 +230,7 @@ pub mod database {
         connection
             .query("DEFINE TABLE wallet_metadata")
             .query("DEFINE FIELD id ON wallet_metadata TYPE int")
-            .query("DEFINE FIELD name ON wallet_metadata TYPE string")
+            .query("DEFINE FIELD name ON wallet_metadata TYPE option<string>")
             .await?
             .check()?;
 

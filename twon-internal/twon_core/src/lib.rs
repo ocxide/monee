@@ -46,6 +46,12 @@ mod wallet_id {
             Ok(Self(s.parse()?))
         }
     }
+
+    impl std::fmt::Display for WalletId {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            self.0.fmt(f)
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]

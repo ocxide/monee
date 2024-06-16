@@ -19,6 +19,20 @@ enum Commands {
     },
     Rebuild,
     Sync,
+    Do {
+        #[command(subcommand)]
+        command: ActionCommand,
+    },
+}
+
+#[derive(clap::Subcommand)]
+enum ActionCommand {
+    CreateWallet {
+        #[arg(short, long)]
+        currency_id: u32,
+        #[arg(short, long)]
+        name: Option<String>,
+    },
 }
 
 #[derive(clap::Subcommand)]
@@ -118,7 +132,7 @@ fn main() -> miette::Result<()> {
                     return Err(diagnostic.into());
                 }
             }
-        },
+        }
         Commands::Sync => {
             let Err(why) = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -151,6 +165,30 @@ fn main() -> miette::Result<()> {
                 }
             }
         }
+        Commands::Do { command: action } => match action {
+            ActionCommand::CreateWallet { currency_id, name } => {
+                let wallet_id = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime")
+                    .block_on(async move {
+                        let db = twon_persistence::database::connect().await.unwrap();
+                        let result = twon_persistence::actions::create_wallet::run(
+                            &db,
+                            twon_core::CurrencyId::new(currency_id),
+                            name,
+                        )
+                        .await;
+
+                        match result {
+                            Ok(wallet_id) => wallet_id,
+                            Err(e) => panic!("Failed to create wallet {e:?}"),
+                        }
+                    });
+
+                println!("Wallet `{}` created", wallet_id);
+            }
+        },
     }
 
     Ok(())
