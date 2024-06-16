@@ -133,19 +133,44 @@ pub mod database {
     pub use surrealdb::Result;
 
     pub type Connection = surrealdb::Surreal<Db>;
+    const DB_DIR: &str = "twon.db";
 
-    async fn setup(connection: &Connection) -> Result<()> {
+    async fn init(connection: &Connection) -> Result<()> {
         connection
             .query("DEFINE TABLE event")
             .query("DEFINE FIELD created_at ON event VALUE time::now()")
             .await?
             .check()?;
 
+        connection
+            .query("DEFINE TABLE wallet_metadata")
+            .query("DEFINE FIELD name ON wallet_metadata TYPE string")
+            .await?
+            .check()?;
+
         Ok(())
     }
 
+    async fn setup(connection: &Connection) -> Result<()> {
+        // Skip initialization if db exists
+        match tokio::fs::try_exists(create_local_path().join(DB_DIR)).await {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(_) => {
+                println!("WARNING: Failed to check if db exists");
+            }
+        };
+
+        let result = init(connection).await;
+        if result.is_err() {
+            println!("WARNING: Failed to initialize db");
+        }
+
+        result
+    }
+
     pub async fn connect() -> surrealdb::Result<Connection> {
-        let path = create_local_path().join("twon.db");
+        let path = create_local_path().join(DB_DIR);
         let db = surrealdb::Surreal::new::<surrealdb::engine::local::File>(format!(
             "file://{}",
             path.display()
@@ -173,7 +198,7 @@ fn create_local_path() -> PathBuf {
     let home = std::env::var("HOME").expect("To read $HOME");
     let path = PathBuf::from(home).join(".local/share/twon/");
 
-    fs::create_dir_all(&path).expect("To create snapshot directory");
+    fs::create_dir_all(&path).expect("To create twon data directory");
     path
 }
 
