@@ -144,6 +144,7 @@ pub mod database {
 
         connection
             .query("DEFINE TABLE wallet_metadata")
+            .query("DEFINE FIELD id ON wallet_metadata TYPE int")
             .query("DEFINE FIELD name ON wallet_metadata TYPE string")
             .await?
             .check()?;
