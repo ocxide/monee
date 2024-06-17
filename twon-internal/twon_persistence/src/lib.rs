@@ -108,26 +108,42 @@ pub mod error {
 }
 
 mod sql_id {
-    use serde::{de::DeserializeOwned, Deserialize};
+    mod custom_de {
+        macro_rules! impl_deserialize {
+            ($name:expr) => {
+                pub use de::deserialize;
 
-    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-    where
-        T: DeserializeOwned,
-        D: serde::Deserializer<'de>,
-    {
-        let thing = SqlThing::deserialize(deserializer)?;
-        Ok(thing.id.string)
+                mod de {
+                    use serde::{de::DeserializeOwned, Deserialize};
+
+                    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+                    where
+                        T: DeserializeOwned,
+                        D: serde::Deserializer<'de>,
+                    {
+                        let thing = SqlThing::deserialize(deserializer)?;
+                        Ok(thing.id.field)
+                    }
+
+                    #[derive(serde::Deserialize)]
+                    struct SqlThing<T> {
+                        pub id: SqlInnerId<T>,
+                    }
+
+                    #[derive(serde::Deserialize)]
+                    struct SqlInnerId<T> {
+                        #[serde(rename = $name)]
+                        pub field: T,
+                    }
+                }
+            };
+        }
+
+        pub(crate) use impl_deserialize;
     }
 
-    #[derive(serde::Deserialize)]
-    struct SqlThing<T> {
-        pub id: SqlInnerId<T>,
-    }
-
-    #[derive(serde::Deserialize)]
-    struct SqlInnerId<T> {
-        #[serde(rename = "String")]
-        pub string: T,
+    pub mod string {
+        super::custom_de::impl_deserialize!("String");
     }
 }
 
@@ -144,7 +160,7 @@ pub mod actions {
 
         #[derive(serde::Deserialize)]
         pub struct WalletSelect {
-            #[serde(with = "crate::sql_id")]
+            #[serde(with = "crate::sql_id::string")]
             pub id: twon_core::WalletId,
             pub name: Option<String>,
         }
