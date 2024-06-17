@@ -6,6 +6,7 @@ mod tiny_id;
 use std::collections::HashMap;
 
 pub use amount::Amount;
+pub use currency_id::CurrencyId;
 pub use wallet_id::WalletId;
 
 pub mod metadata {
@@ -54,6 +55,41 @@ mod wallet_id {
     }
 }
 
+mod currency_id {
+    use std::str::FromStr;
+
+    type Id = crate::tiny_id::TinyId<4>;
+
+    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
+    pub struct CurrencyId(Id);
+
+    impl CurrencyId {
+        pub fn new() -> Self {
+            Self(Id::new())
+        }
+    }
+
+    impl Default for CurrencyId {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl FromStr for CurrencyId {
+        type Err = <Id as FromStr>::Err;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            Ok(Self(s.parse()?))
+        }
+    }
+
+    impl std::fmt::Display for CurrencyId {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            self.0.fmt(f)
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Snapshot {
     pub wallets: HashMap<WalletId, Wallet>,
@@ -63,15 +99,6 @@ pub struct Snapshot {
 pub struct Wallet {
     pub balance: Amount,
     pub currency: CurrencyId,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub struct CurrencyId(u32);
-
-impl CurrencyId {
-    pub const fn new(id: u32) -> Self {
-        Self(id)
-    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]

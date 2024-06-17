@@ -52,6 +52,10 @@ enum Commands {
         #[command(subcommand)]
         command: commands::wallets::WalletCommand,
     },
+    Currencies {
+        #[command(subcommand)]
+        command: commands::currencies::CurrencyCommand,
+    }
 }
 
 fn main() -> miette::Result<()> {
@@ -79,6 +83,14 @@ fn main() -> miette::Result<()> {
         Commands::Wallets { command } => match command {
             commands::wallets::WalletCommand::List => {
                 commands::wallets::list()?;
+            }
+        },
+        Commands::Currencies { command } => match command {
+            commands::currencies::CurrencyCommand::List => {
+                commands::currencies::list()?;
+            }
+            commands::currencies::CurrencyCommand::Create { name, symbol, code } => {
+                commands::currencies::create(name, symbol, code)?;
             }
         },
     }

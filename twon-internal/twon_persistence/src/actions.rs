@@ -1,3 +1,56 @@
+pub mod create_currency {
+    #[derive(thiserror::Error, Debug)]
+    pub enum Error {
+        #[error("Currency already exists")]
+        AlreadyExists,
+        #[error(transparent)]
+        Database(#[from] crate::database::Error),
+    }
+
+    pub async fn run(
+        connection: &crate::database::Connection,
+        name: String,
+        symbol: String,
+        code: String,
+    ) -> Result<twon_core::CurrencyId, Error> {
+        let id = twon_core::CurrencyId::new();
+        let response = connection
+            .query("CREATE ONLY currency SET id=$id, name = $name, symbol = $symbol, code = $code")
+            .bind(("id", id))
+            .bind(("name", name))
+            .bind(("symbol", symbol))
+            .bind(("code", code))
+            .await?
+            .check();
+
+        match response {
+            Err(crate::database::Error::Db(surrealdb::error::Db::IndexExists { .. })) => {
+                Err(Error::AlreadyExists)
+            }
+            Err(e) => Err(e.into()),
+            Ok(_) => Ok(id),
+        }
+    }
+}
+
+pub mod list_currencies {
+    #[derive(serde::Deserialize)]
+    pub struct CurrencyRow {
+        #[serde(with = "crate::sql_id::string")]
+        pub id: twon_core::CurrencyId,
+        pub name: String,
+        pub symbol: String,
+        pub code: String,
+    }
+
+    pub async fn run(
+        connection: &crate::database::Connection,
+    ) -> Result<Vec<CurrencyRow>, crate::database::Error> {
+        let response: Vec<CurrencyRow> = connection.select("currency").await?;
+        Ok(response)
+    }
+}
+
 pub mod list_wallets {
     pub use crate::error::SnapshotReadError as Error;
 
@@ -9,23 +62,20 @@ pub mod list_wallets {
     }
 
     #[derive(serde::Deserialize)]
-    pub struct WalletSelect {
+    struct WalletSelect {
         #[serde(with = "crate::sql_id::string")]
         pub id: twon_core::WalletId,
         pub name: Option<String>,
     }
 
-    pub async fn run(
-        connection: &crate::database::Connection,
-    ) -> Result<Vec<WalletRow>, Error> {
+    pub async fn run(connection: &crate::database::Connection) -> Result<Vec<WalletRow>, Error> {
         let snapshot_fut = tokio::task::spawn_blocking(move || {
             let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
             snapshot_io.read()
         });
 
         let metadatas = async move {
-            let result: Result<Vec<WalletSelect>, _> =
-                connection.select("wallet_metadata").await;
+            let result: Result<Vec<WalletSelect>, _> = connection.select("wallet_metadata").await;
             result
         };
 
@@ -111,4 +161,3 @@ CREATE $wallet_resource SET name = $name;",
         Ok(wallet_id)
     }
 }
-

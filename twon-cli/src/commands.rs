@@ -47,6 +47,84 @@ pub fn sync() -> miette::Result<()> {
     Err(crate::diagnostics::snapshot_opt_diagnostic(why))
 }
 
+pub mod currencies {
+    #[derive(clap::Subcommand)]
+    pub enum CurrencyCommand {
+        #[command(alias = "ls")]
+        List,
+        #[command(alias = "c")]
+        Create {
+            #[arg(short, long)]
+            symbol: String,
+            #[arg(short, long)]
+            name: String,
+            #[arg(short, long)]
+            code: String,
+        },
+    }
+
+    pub fn create(name: String, symbol: String, code: String) -> miette::Result<()> {
+        use twon_persistence::actions::create_currency;
+
+        let result = crate::tasks::block_single({
+            let code = code.clone();
+            async move {
+                let con = match twon_persistence::database::connect().await {
+                    Ok(con) => con,
+                    Err(why) => twon_persistence::log::database(why),
+                };
+
+                twon_persistence::actions::create_currency::run(&con, name, symbol, code).await
+            }
+        });
+
+        let currency_id = match result {
+            Ok(currency_id) => currency_id,
+            Err(why) => match why {
+                create_currency::Error::Database(err) => twon_persistence::log::database(err),
+                create_currency::Error::AlreadyExists => {
+                    let diagnostic = miette::diagnostic!(
+                        severity = miette::Severity::Error,
+                        code = "currency::AlreadyExists",
+                        "Currency with code `{}` already exists",
+                        code
+                    );
+
+                    return Err(diagnostic.into());
+                }
+            },
+        };
+
+        println!("Currency `{}` created", currency_id);
+        Ok(())
+    }
+
+    pub fn list() -> miette::Result<()> {
+        let result = crate::tasks::block_multi(async move {
+            let con = match twon_persistence::database::connect().await {
+                Ok(con) => con,
+                Err(why) => twon_persistence::log::database(why),
+            };
+
+            twon_persistence::actions::list_currencies::run(&con).await
+        });
+
+        let currencies = match result {
+            Ok(currencies) => currencies,
+            Err(err) => twon_persistence::log::database(err),
+        };
+
+        for currency in currencies {
+            println!(
+                "{} `{}` {} {}",
+                currency.id, currency.name, currency.symbol, currency.code
+            );
+        }
+
+        Ok(())
+    }
+}
+
 pub mod wallets {
     #[derive(clap::Subcommand)]
     pub enum WalletCommand {
@@ -62,7 +140,8 @@ pub mod wallets {
             };
 
             twon_persistence::actions::list_wallets::run(&con).await
-        }).map_err(crate::diagnostics::snapshot_r_diagnostic)?;
+        })
+        .map_err(crate::diagnostics::snapshot_r_diagnostic)?;
 
         for wallet in wallets.iter() {
             match &wallet.name {
@@ -81,23 +160,18 @@ pub mod actions {
     pub enum ActionCommand {
         CreateWallet {
             #[arg(short, long)]
-            currency_id: u32,
+            currency_id: twon_core::CurrencyId,
             #[arg(short, long)]
             name: Option<String>,
         },
     }
 
     async fn do_create_wallet(
-        currency_id: u32,
+        currency_id: twon_core::CurrencyId,
         name: Option<String>,
     ) -> miette::Result<twon_core::WalletId> {
         let db = twon_persistence::database::connect().await.unwrap();
-        let result = twon_persistence::actions::create_wallet::run(
-            &db,
-            twon_core::CurrencyId::new(currency_id),
-            name,
-        )
-        .await;
+        let result = twon_persistence::actions::create_wallet::run(&db, currency_id, name).await;
 
         match result {
             Ok(wallet_id) => Ok(wallet_id),
@@ -105,7 +179,10 @@ pub mod actions {
         }
     }
 
-    pub fn create_wallet(currency_id: u32, name: Option<String>) -> miette::Result<()> {
+    pub fn create_wallet(
+        currency_id: twon_core::CurrencyId,
+        name: Option<String>,
+    ) -> miette::Result<()> {
         let wallet_id = crate::tasks::block_single(do_create_wallet(currency_id, name))?;
 
         println!("Wallet `{}` created", wallet_id);
@@ -114,7 +191,7 @@ pub mod actions {
 }
 
 pub mod event {
-    use twon_core::{Amount, CurrencyId, WalletId};
+    use twon_core::{Amount, WalletId};
 
     use crate::diagnostics::{apply_diagnostic, snapshot_read_diagnostic};
 
@@ -144,7 +221,7 @@ pub mod event {
             #[arg(short, long)]
             wallet_id: WalletId,
             #[arg(short, long)]
-            currency_id: u32,
+            currency_id: twon_core::CurrencyId,
         },
         DeleteWallet {
             #[arg(short, long)]
@@ -172,7 +249,7 @@ pub mod event {
                 currency_id,
             } => twon_core::Event::CreateWallet {
                 wallet_id,
-                currency: CurrencyId::new(currency_id),
+                currency: currency_id,
             },
         };
 
