@@ -107,10 +107,32 @@ pub mod error {
     }
 }
 
+mod sql_id {
+    use serde::{de::DeserializeOwned, Deserialize};
+
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+    where
+        T: DeserializeOwned,
+        D: serde::Deserializer<'de>,
+    {
+        let thing = SqlThing::deserialize(deserializer)?;
+        Ok(thing.id.string)
+    }
+
+    #[derive(serde::Deserialize)]
+    struct SqlThing<T> {
+        pub id: SqlInnerId<T>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct SqlInnerId<T> {
+        #[serde(rename = "String")]
+        pub string: T,
+    }
+}
+
 pub mod actions {
     pub mod list_wallets {
-        use twon_core::metadata::WalletMetadata;
-
         pub use crate::error::SnapshotReadError as Error;
 
         pub struct WalletRow {
@@ -118,6 +140,13 @@ pub mod actions {
             pub name: Option<String>,
             pub currency: twon_core::CurrencyId,
             pub balance: twon_core::Amount,
+        }
+
+        #[derive(serde::Deserialize)]
+        pub struct WalletSelect {
+            #[serde(with = "crate::sql_id")]
+            pub id: twon_core::WalletId,
+            pub name: Option<String>,
         }
 
         pub async fn run(
@@ -129,7 +158,7 @@ pub mod actions {
             });
 
             let metadatas = async move {
-                let result: Result<Vec<WalletMetadata>, _> =
+                let result: Result<Vec<WalletSelect>, _> =
                     connection.select("wallet_metadata").await;
                 result
             };
@@ -150,7 +179,7 @@ pub mod actions {
                     name: metadatas
                         .iter()
                         .find(|w| w.id == id)
-                        .map(|w| w.name.clone()),
+                        .and_then(|w| w.name.clone()),
                 })
                 .collect();
 
