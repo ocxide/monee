@@ -145,10 +145,16 @@ pub mod wallets {
 
         for wallet in wallets.iter() {
             match &wallet.name {
-                Some(name) => println!("{}({}):", name, wallet.id),
-                None => println!("`{}`:", wallet.id),
+                Some(name) => print!("{}({}):", name, wallet.id),
+                None => print!("`{}`:", wallet.id),
             }
-            println!("{:?} {}\n", wallet.currency, wallet.balance);
+
+            match &wallet.currency {
+                Some(currency) => print!("{} {}", currency.code, currency.symbol),
+                None => print!("`Unknown currency`"),
+            }
+
+            println!(" {}\n", wallet.balance);
         }
 
         Ok(())

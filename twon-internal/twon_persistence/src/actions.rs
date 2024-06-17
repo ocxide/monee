@@ -34,7 +34,7 @@ pub mod create_currency {
 }
 
 pub mod list_currencies {
-    #[derive(serde::Deserialize)]
+    #[derive(serde::Deserialize, Clone)]
     pub struct CurrencyRow {
         #[serde(with = "crate::sql_id::string")]
         pub id: twon_core::CurrencyId,
@@ -57,7 +57,7 @@ pub mod list_wallets {
     pub struct WalletRow {
         pub id: twon_core::WalletId,
         pub name: Option<String>,
-        pub currency: twon_core::CurrencyId,
+        pub currency: Option<crate::actions::list_currencies::CurrencyRow>,
         pub balance: twon_core::Amount,
     }
 
@@ -79,10 +79,13 @@ pub mod list_wallets {
             result
         };
 
-        let (join, metadatas) = tokio::join!(snapshot_fut, metadatas);
+        let curriencies = crate::actions::list_currencies::run(connection);
+
+        let (join, metadatas, curriencies) = tokio::join!(snapshot_fut, metadatas, curriencies);
 
         let snapshot_entry = join.expect("To join read task")?;
         let metadatas = metadatas?;
+        let curriencies = curriencies?;
 
         let wallets = snapshot_entry
             .snapshot
@@ -90,7 +93,7 @@ pub mod list_wallets {
             .into_iter()
             .map(|(id, v)| WalletRow {
                 id,
-                currency: v.currency,
+                currency: curriencies.iter().find(|c| c.id == v.currency).cloned(),
                 balance: v.balance,
                 name: metadatas
                     .iter()
