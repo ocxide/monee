@@ -16,7 +16,6 @@ async fn init(connection: &Connection) -> Result<()> {
 
     connection
         .query("DEFINE TABLE wallet_metadata")
-        .query("DEFINE FIELD id ON wallet_metadata TYPE string")
         .query("DEFINE FIELD name ON wallet_metadata TYPE option<string>")
         .await?
         .check()?;
@@ -24,7 +23,6 @@ async fn init(connection: &Connection) -> Result<()> {
     println!("Setting up database");
     connection
         .query("DEFINE TABLE currency")
-        .query("DEFINE FIELD id ON currency TYPE string")
         .query("DEFINE FIELD name ON currency TYPE string")
         .query("DEFINE FIELD symbol ON currency TYPE string")
         .query("DEFINE FIELD code ON currency TYPE string")
