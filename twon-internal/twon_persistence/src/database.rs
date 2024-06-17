@@ -20,7 +20,6 @@ async fn init(connection: &Connection) -> Result<()> {
         .await?
         .check()?;
 
-    println!("Setting up database");
     connection
         .query("DEFINE TABLE currency")
         .query("DEFINE FIELD name ON currency TYPE string")

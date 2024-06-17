@@ -19,7 +19,7 @@ fn write_error_log<E: std::error::Error>(error: E) {
     let now = crate::Timezone::now();
     let result = writeln!(
         file,
-        "ERROR {} - {} {}:{} - {error:?}",
+        "ERROR {} - {} {}:{} - {error} - {error:?}",
         now.format("%d/%m/%Y %H:%M"),
         file!(),
         line!(),
