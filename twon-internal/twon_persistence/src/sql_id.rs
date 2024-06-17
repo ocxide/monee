@@ -35,4 +35,3 @@ mod custom_de {
 pub mod string {
     super::custom_de::impl_deserialize!("String");
 }
-
