@@ -130,6 +130,13 @@ pub mod wallets {
     pub enum WalletCommand {
         #[command(alias = "ls")]
         List,
+        #[command(alias = "c")]
+        Create {
+            #[arg(short, long)]
+            currency_id: twon_core::CurrencyId,
+            #[arg(short, long)]
+            name: Option<String>,
+        },
     }
 
     pub fn list() -> miette::Result<()> {
@@ -159,37 +166,16 @@ pub mod wallets {
 
         Ok(())
     }
-}
 
-pub mod actions {
-    #[derive(clap::Subcommand)]
-    pub enum ActionCommand {
-        CreateWallet {
-            #[arg(short, long)]
-            currency_id: twon_core::CurrencyId,
-            #[arg(short, long)]
-            name: Option<String>,
-        },
-    }
-
-    async fn do_create_wallet(
-        currency_id: twon_core::CurrencyId,
-        name: Option<String>,
-    ) -> miette::Result<twon_core::WalletId> {
-        let db = twon_persistence::database::connect().await.unwrap();
-        let result = twon_persistence::actions::create_wallet::run(&db, currency_id, name).await;
-
-        match result {
-            Ok(wallet_id) => Ok(wallet_id),
-            Err(e) => Err(crate::diagnostics::snapshot_opt_diagnostic(e)),
-        }
-    }
-
-    pub fn create_wallet(
-        currency_id: twon_core::CurrencyId,
-        name: Option<String>,
-    ) -> miette::Result<()> {
-        let wallet_id = crate::tasks::block_single(do_create_wallet(currency_id, name))?;
+    pub fn create(currency_id: twon_core::CurrencyId, name: Option<String>) -> miette::Result<()> {
+        let wallet_id = crate::tasks::block_single(async move {
+            let con = match twon_persistence::database::connect().await {
+                Ok(con) => con,
+                Err(why) => twon_persistence::log::database(why),
+            };
+            twon_persistence::actions::create_wallet::run(&con, currency_id, name).await
+        })
+        .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
 
         println!("Wallet `{}` created", wallet_id);
         Ok(())

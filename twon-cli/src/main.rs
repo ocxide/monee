@@ -44,10 +44,6 @@ enum Commands {
     },
     Rebuild,
     Sync,
-    Do {
-        #[command(subcommand)]
-        command: commands::actions::ActionCommand,
-    },
     Wallets {
         #[command(subcommand)]
         command: commands::wallets::WalletCommand,
@@ -55,7 +51,7 @@ enum Commands {
     Currencies {
         #[command(subcommand)]
         command: commands::currencies::CurrencyCommand,
-    }
+    },
 }
 
 fn main() -> miette::Result<()> {
@@ -75,12 +71,10 @@ fn main() -> miette::Result<()> {
         Commands::Sync => {
             commands::sync()?;
         }
-        Commands::Do { command: action } => match action {
-            commands::actions::ActionCommand::CreateWallet { currency_id, name } => {
-                commands::actions::create_wallet(currency_id, name)?;
-            }
-        },
         Commands::Wallets { command } => match command {
+            commands::wallets::WalletCommand::Create { currency_id, name } => {
+                commands::wallets::create(currency_id, name)?;
+            }
             commands::wallets::WalletCommand::List => {
                 commands::wallets::list()?;
             }
