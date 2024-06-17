@@ -29,10 +29,37 @@ impl AddAssign for Amount {
     }
 }
 
+impl std::fmt::Display for Amount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut digits = (self.0 as f32).log10() as u32;
+        while digits > DECIMALS {
+            write!(f, "{}", self.0 / 10_u64.pow(digits - 1))?;
+            digits -= 1;
+        }
+
+        if digits != DECIMALS {
+            return Ok(());
+        }
+
+        write!(f, ".")?;
+        for d in (digits..0)
+            .map(|d| self.0 / 10_u64.pow(d))
+            .take_while(|d| *d != 0)
+        {
+            write!(f, "{}", d)?;
+        }
+
+        Ok(())
+    }
+}
+
+const DECIMALS: u32 = 4;
+const MULTIPLIER: u64 = 10_u64.pow(DECIMALS);
+
 pub mod from_str {
     use std::str::FromStr;
 
-    use super::Amount;
+    use super::{Amount, DECIMALS, MULTIPLIER};
 
     #[derive(Debug)]
     pub enum Error {
@@ -58,9 +85,6 @@ pub mod from_str {
     }
 
     impl std::error::Error for Error {}
-
-    const DECIMALS: u32 = 4;
-    const MULTIPLIER: u64 = 10_u64.pow(DECIMALS);
 
     impl FromStr for Amount {
         type Err = Error;
@@ -105,4 +129,3 @@ pub mod from_str {
         }
     }
 }
-

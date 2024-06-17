@@ -93,9 +93,71 @@ pub mod error {
             }
         }
     }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum SnapshotReadError {
+        #[error(transparent)]
+        Database(#[from] surrealdb::Error),
+
+        #[error(transparent)]
+        SnapshotApply(#[from] twon_core::Error),
+
+        #[error(transparent)]
+        Read(#[from] crate::snapshot_io::read::Error),
+    }
 }
 
 pub mod actions {
+    pub mod list_wallets {
+        use twon_core::metadata::WalletMetadata;
+
+        pub use crate::error::SnapshotReadError as Error;
+
+        pub struct WalletRow {
+            pub id: twon_core::WalletId,
+            pub name: Option<String>,
+            pub currency: twon_core::CurrencyId,
+            pub balance: twon_core::Amount,
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+        ) -> Result<Vec<WalletRow>, Error> {
+            let snapshot_fut = tokio::task::spawn_blocking(move || {
+                let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
+                snapshot_io.read()
+            });
+
+            let metadatas = async move {
+                let result: Result<Vec<WalletMetadata>, _> =
+                    connection.select("wallet_metadata").await;
+                result
+            };
+
+            let (join, metadatas) = tokio::join!(snapshot_fut, metadatas);
+
+            let snapshot_entry = join.expect("To join read task")?;
+            let metadatas = metadatas?;
+
+            let wallets = snapshot_entry
+                .snapshot
+                .wallets
+                .into_iter()
+                .map(|(id, v)| WalletRow {
+                    id,
+                    currency: v.currency,
+                    balance: v.balance,
+                    name: metadatas
+                        .iter()
+                        .find(|w| w.id == id)
+                        .map(|w| w.name.clone()),
+                })
+                .collect();
+
+            Ok(wallets)
+        }
+    }
+
     pub mod create_wallet {
         use surrealdb::sql::{self, Thing};
         use twon_core::WalletId;

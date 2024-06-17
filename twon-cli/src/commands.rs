@@ -1,4 +1,4 @@
-use crate::diagnostics::{apply_diagnostic, snapshot_read_diagnostic};
+use crate::diagnostics::snapshot_read_diagnostic;
 
 pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
     let snapshot_entry = {
@@ -54,8 +54,25 @@ pub mod wallets {
         List,
     }
 
-    fn list() -> miette::Result<()> {
-        todo!()
+    pub fn list() -> miette::Result<()> {
+        let wallets = crate::tasks::block_multi(async move {
+            let con = match twon_persistence::database::connect().await {
+                Ok(con) => con,
+                Err(why) => twon_persistence::log::database(why),
+            };
+
+            twon_persistence::actions::list_wallets::run(&con).await
+        }).map_err(crate::diagnostics::snapshot_r_diagnostic)?;
+
+        for wallet in wallets.iter() {
+            match &wallet.name {
+                Some(name) => println!("{}({}):", name, wallet.id),
+                None => println!("`{}`:", wallet.id),
+            }
+            println!("{:?} {}\n", wallet.currency, wallet.balance);
+        }
+
+        Ok(())
     }
 }
 

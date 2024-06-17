@@ -26,6 +26,16 @@ pub fn apply_diagnostic(why: twon_core::Error) -> miette::MietteDiagnostic {
     diagnostic
 }
 
+pub fn snapshot_r_diagnostic(err: twon_persistence::error::SnapshotReadError) -> miette::Report {
+    use twon_persistence::error::SnapshotReadError as Error;
+
+    match err {
+        Error::Read(e) => crate::diagnostics::snapshot_read_diagnostic(e),
+        Error::SnapshotApply(e) => apply_diagnostic(e).into(),
+        Error::Database(e) => twon_persistence::log::database(e),
+    }
+}
+
 pub fn snapshot_opt_diagnostic(err: twon_persistence::error::SnapshotOptError) -> miette::Report {
     use twon_persistence::error::SnapshotOptError as Error;
 

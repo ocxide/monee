@@ -14,6 +14,14 @@ mod tasks {
             .expect("Failed to build tokio runtime")
             .block_on(fut)
     }
+
+    pub fn block_multi<F: Future>(fut: F) -> F::Output {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to build tokio runtime")
+            .block_on(fut)
+    }
 }
 
 use clap::Parser;
@@ -40,6 +48,10 @@ enum Commands {
         #[command(subcommand)]
         command: commands::actions::ActionCommand,
     },
+    Wallets {
+        #[command(subcommand)]
+        command: commands::wallets::WalletCommand,
+    },
 }
 
 fn main() -> miette::Result<()> {
@@ -62,6 +74,11 @@ fn main() -> miette::Result<()> {
         Commands::Do { command: action } => match action {
             commands::actions::ActionCommand::CreateWallet { currency_id, name } => {
                 commands::actions::create_wallet(currency_id, name)?;
+            }
+        },
+        Commands::Wallets { command } => match command {
+            commands::wallets::WalletCommand::List => {
+                commands::wallets::list()?;
             }
         },
     }

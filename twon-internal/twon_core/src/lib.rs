@@ -56,13 +56,13 @@ mod wallet_id {
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Snapshot {
-    wallets: HashMap<WalletId, Wallet>,
+    pub wallets: HashMap<WalletId, Wallet>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Wallet {
-    balance: Amount,
-    currency: CurrencyId,
+    pub balance: Amount,
+    pub currency: CurrencyId,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
