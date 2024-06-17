@@ -1,6 +1,6 @@
 use std::ops::{AddAssign, Sub, SubAssign};
 
-#[derive(Default, Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Amount(u64);
 
 impl Amount {
@@ -31,22 +31,20 @@ impl AddAssign for Amount {
 
 impl std::fmt::Display for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut digits = (self.0 as f32).log10() as u32;
-        while digits > DECIMALS {
-            write!(f, "{}", self.0 / 10_u64.pow(digits - 1))?;
-            digits -= 1;
-        }
+        let int = self.0 / MULTIPLIER;
+        write!(f, "{}", int)?;
 
-        if digits != DECIMALS {
+        let mut floating = self.0 - (int * MULTIPLIER);
+        if floating == 0 {
             return Ok(());
         }
 
         write!(f, ".")?;
-        for d in (digits..0)
-            .map(|d| self.0 / 10_u64.pow(d))
-            .take_while(|d| *d != 0)
-        {
-            write!(f, "{}", d)?;
+
+        while floating != 0 {
+            floating *= 10;
+            write!(f, "{}", floating / MULTIPLIER)?;
+            floating %= MULTIPLIER;
         }
 
         Ok(())
@@ -127,5 +125,41 @@ pub mod from_str {
 
             Ok(Self(real + decimal_part))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_normal() {
+        assert_eq!(Amount(1234567).to_string(), "123.4567");
+    }
+
+    #[test]
+    fn display_zero() {
+        assert_eq!(Amount(0).to_string(), "0");
+    }
+
+    #[test]
+    fn donot_display_decimal() {
+        assert_eq!(Amount(10000).to_string(), "1");
+    }
+
+
+    #[test]
+    fn donot_display_trailing() {
+        assert_eq!(Amount(1234500).to_string(), "123.45");
+    }
+
+    #[test]
+    fn displays_intermidiat_zeros() {
+        assert_eq!(Amount(1230045).to_string(), "123.0045");
+    }
+
+    #[test]
+    fn from_str() {
+        assert_eq!(Amount(1234567), "123.4567".parse().unwrap());
     }
 }
