@@ -102,6 +102,18 @@ pub enum Error {
     CannotDeduct,
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WalletAlreadyExists => write!(f, "Wallet already exists"),
+            Self::WalletNotFound => write!(f, "Wallet not found"),
+            Self::CannotDeduct => write!(f, "Cannot deduct"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
 impl Snapshot {
     pub fn apply(&mut self, event: Event) -> Result<(), Error> {
         match event {

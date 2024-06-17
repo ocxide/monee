@@ -6,6 +6,56 @@ pub use snapshot_io::SnapshotIO;
 pub type Datetime = chrono::DateTime<chrono::Utc>;
 pub type Timezone = chrono::Utc;
 
+pub mod log {
+    use std::io::Write;
+
+    const FILE: &str = "twon.log";
+
+    fn write_error_log<E: std::error::Error>(error: E) {
+        let path = crate::create_local_path().join(FILE);
+        let mut file = match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            Ok(file) => file,
+            Err(e) => {
+                println!("WARNING - Unable to open log file: {}", e);
+                return;
+            }
+        };
+
+        let now = crate::Timezone::now();
+        let result = writeln!(
+            file,
+            "ERROR {} - {} {}:{} - {error:?}",
+            now.format("%d/%m/%Y %H:%M"),
+            file!(),
+            line!(),
+            column!()
+        );
+
+        if let Err(e) = result {
+            println!("WARNING - Unable to write to log file: {}", e);
+        }
+    }
+
+    pub fn database(error: surrealdb::Error) -> ! {
+        write_error_log(error);
+        panic!("Error: Database error, aborting...");
+    }
+
+    pub fn snapshot_read(error: std::io::Error) -> ! {
+        write_error_log(error);
+        panic!("Error: Snapshot read error, aborting...");
+    }
+
+    pub fn snapshot_write(error: std::io::Error) -> ! {
+        write_error_log(error);
+        panic!("Error: Snapshot write error, aborting...");
+    }
+}
+
 pub mod actions {
     pub mod create_wallet {
         use surrealdb::sql::{self, Thing};
@@ -13,24 +63,19 @@ pub mod actions {
 
         use crate::snapshot_io;
 
-        #[derive(Debug)]
+        #[derive(Debug, thiserror::Error)]
         pub enum Error {
-            Database(surrealdb::Error),
-            SnapshotApply(twon_core::Error),
-            Write,
-            Read,
-        }
+            #[error(transparent)]
+            Database(#[from] surrealdb::Error),
 
-        impl From<surrealdb::Error> for Error {
-            fn from(e: surrealdb::Error) -> Self {
-                Self::Database(e)
-            }
-        }
+            #[error(transparent)]
+            SnapshotApply(#[from] twon_core::Error),
 
-        impl From<twon_core::Error> for Error {
-            fn from(error: twon_core::Error) -> Self {
-                Self::SnapshotApply(error)
-            }
+            #[error(transparent)]
+            Write(#[from] std::io::Error),
+
+            #[error(transparent)]
+            Read(#[from] snapshot_io::read::Error),
         }
 
         pub async fn run(
@@ -40,14 +85,12 @@ pub mod actions {
         ) -> Result<WalletId, Error> {
             let wallet_id = WalletId::new();
 
-            let Ok(mut snapshot_entry) = tokio::task::spawn_blocking(move || {
+            let mut snapshot_entry = tokio::task::spawn_blocking(move || {
                 let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
                 snapshot_io.read()
             })
             .await
-            .expect("To join read task") else {
-                return Err(Error::Read);
-            };
+            .expect("To join read task")?;
 
             let event = twon_core::Event::CreateWallet {
                 wallet_id,
@@ -75,16 +118,12 @@ CREATE $wallet_resource SET name = $name;",
 
             response.check()?;
 
-            let write = tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(move || {
                 let mut snapshot_io = snapshot_io::SnapshotIO::new();
                 snapshot_io.write(snapshot_entry.snapshot)
             })
             .await
-            .expect("To join write task");
-
-            if write.is_err() {
-                return Err(Error::Write);
-            }
+            .expect("To join write task")?;
 
             Ok(wallet_id)
         }
@@ -323,11 +362,16 @@ pub mod snapshot_io {
 
         use super::{SnapshotEntry, SnapshotIO, SnapshotMetadata};
 
+        #[derive(Debug, thiserror::Error)]
         pub enum Error {
+            #[error("Could not read snapshot file : {0}")]
             Io(io::Error),
+            #[error("Could not decode snapshot file : {0}")]
             Json(JsonDecodeError),
         }
 
+        #[derive(Debug, thiserror::Error)]
+        #[error("{error}")]
         pub struct JsonDecodeError {
             pub error: serde_json::Error,
             pub json: String,

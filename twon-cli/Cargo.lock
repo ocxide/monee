@@ -4070,6 +4070,7 @@ dependencies = [
  "serde",
  "serde_json",
  "surrealdb",
+ "thiserror",
  "tokio",
  "twon_core",
 ]

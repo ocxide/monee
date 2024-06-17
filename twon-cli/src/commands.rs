@@ -84,6 +84,8 @@ pub fn sync() -> miette::Result<()> {
 }
 
 pub mod actions {
+    use crate::diagnostics::apply_diagnostic;
+
     #[derive(clap::Subcommand)]
     pub enum ActionCommand {
         CreateWallet {
@@ -94,21 +96,40 @@ pub mod actions {
         },
     }
 
-    pub fn create_wallet(currency_id: u32, name: Option<String>) -> miette::Result<()> {
-        let wallet_id = crate::tasks::block_single(async move {
-            let db = twon_persistence::database::connect().await.unwrap();
-            let result = twon_persistence::actions::create_wallet::run(
-                &db,
-                twon_core::CurrencyId::new(currency_id),
-                name,
-            )
-            .await;
+    async fn do_create_wallet(
+        currency_id: u32,
+        name: Option<String>,
+    ) -> miette::Result<twon_core::WalletId> {
+        use twon_persistence::actions::create_wallet;
 
-            match result {
-                Ok(wallet_id) => wallet_id,
-                Err(e) => panic!("Failed to create wallet {e:?}"),
+        let db = twon_persistence::database::connect().await.unwrap();
+        let result = twon_persistence::actions::create_wallet::run(
+            &db,
+            twon_core::CurrencyId::new(currency_id),
+            name,
+        )
+        .await;
+
+        let err = match result {
+            Ok(wallet_id) => return Ok(wallet_id),
+            Err(e) => e,
+        };
+
+        match err {
+            create_wallet::Error::Read(e) => {
+                Err(crate::diagnostics::snapshot_read_diagnostic(e))
             }
-        });
+            create_wallet::Error::Write(e) => twon_persistence::log::snapshot_write(e),
+            create_wallet::Error::Database(e) => twon_persistence::log::database(e),
+            create_wallet::Error::SnapshotApply(e) => {
+                let diagnostic = apply_diagnostic(e);
+                Err(diagnostic.into())
+            }
+        }
+    }
+
+    pub fn create_wallet(currency_id: u32, name: Option<String>) -> miette::Result<()> {
+        let wallet_id = crate::tasks::block_single(do_create_wallet(currency_id, name))?;
 
         println!("Wallet `{}` created", wallet_id);
         Ok(())
