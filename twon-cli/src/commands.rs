@@ -36,23 +36,7 @@ pub fn rebuild() -> miette::Result<()> {
         return Ok(());
     };
 
-    match why {
-        twon_persistence::ops::build::Error::Write => {
-            let diagnostic = miette::diagnostic!(
-                severity = miette::Severity::Error,
-                code = "io::Error",
-                "Failed to write snapshot",
-            );
-            Err(diagnostic.into())
-        }
-        twon_persistence::ops::build::Error::Database => {
-            panic!("Failed to connect to database")
-        }
-        twon_persistence::ops::build::Error::SnapshotApply(error) => {
-            let diagnostic = apply_diagnostic(error);
-            Err(diagnostic.into())
-        }
-    }
+    Err(crate::diagnostics::snapshot_write_diagnostic(why))
 }
 
 pub fn sync() -> miette::Result<()> {
@@ -60,32 +44,22 @@ pub fn sync() -> miette::Result<()> {
         return Ok(());
     };
 
-    match why {
-        twon_persistence::ops::sync::Error::Write => {
-            let diagnostic = miette::diagnostic!(
-                severity = miette::Severity::Error,
-                code = "io::Error",
-                "Failed to write snapshot",
-            );
-            Err(diagnostic.into())
-        }
-        twon_persistence::ops::sync::Error::Database => {
-            panic!("Failed to connect to database")
-        }
-        twon_persistence::ops::sync::Error::SnapshotApply(error) => {
-            let diagnostic = apply_diagnostic(error);
-            Err(diagnostic.into())
-        }
-        twon_persistence::ops::sync::Error::Read(error) => {
-            let diagnostic = snapshot_read_diagnostic(error);
-            Err(diagnostic)
-        }
+    Err(crate::diagnostics::snapshot_opt_diagnostic(why))
+}
+
+pub mod wallets {
+    #[derive(clap::Subcommand)]
+    pub enum WalletCommand {
+        #[command(alias = "ls")]
+        List,
+    }
+
+    fn list() -> miette::Result<()> {
+        todo!()
     }
 }
 
 pub mod actions {
-    use crate::diagnostics::apply_diagnostic;
-
     #[derive(clap::Subcommand)]
     pub enum ActionCommand {
         CreateWallet {
@@ -100,8 +74,6 @@ pub mod actions {
         currency_id: u32,
         name: Option<String>,
     ) -> miette::Result<twon_core::WalletId> {
-        use twon_persistence::actions::create_wallet;
-
         let db = twon_persistence::database::connect().await.unwrap();
         let result = twon_persistence::actions::create_wallet::run(
             &db,
@@ -110,21 +82,9 @@ pub mod actions {
         )
         .await;
 
-        let err = match result {
-            Ok(wallet_id) => return Ok(wallet_id),
-            Err(e) => e,
-        };
-
-        match err {
-            create_wallet::Error::Read(e) => {
-                Err(crate::diagnostics::snapshot_read_diagnostic(e))
-            }
-            create_wallet::Error::Write(e) => twon_persistence::log::snapshot_write(e),
-            create_wallet::Error::Database(e) => twon_persistence::log::database(e),
-            create_wallet::Error::SnapshotApply(e) => {
-                let diagnostic = apply_diagnostic(e);
-                Err(diagnostic.into())
-            }
+        match result {
+            Ok(wallet_id) => Ok(wallet_id),
+            Err(e) => Err(crate::diagnostics::snapshot_opt_diagnostic(e)),
         }
     }
 

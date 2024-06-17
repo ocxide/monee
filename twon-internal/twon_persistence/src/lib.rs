@@ -56,6 +56,45 @@ pub mod log {
     }
 }
 
+pub mod error {
+    #[derive(Debug, thiserror::Error)]
+    pub enum SnapshotOptError {
+        #[error(transparent)]
+        Database(#[from] surrealdb::Error),
+
+        #[error(transparent)]
+        SnapshotApply(#[from] twon_core::Error),
+
+        #[error(transparent)]
+        Write(#[from] std::io::Error),
+
+        #[error(transparent)]
+        Read(#[from] crate::snapshot_io::read::Error),
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum SnapshotWriteError {
+        #[error(transparent)]
+        Database(#[from] surrealdb::Error),
+
+        #[error(transparent)]
+        SnapshotApply(#[from] twon_core::Error),
+
+        #[error(transparent)]
+        Write(#[from] std::io::Error),
+    }
+
+    impl From<SnapshotWriteError> for SnapshotOptError {
+        fn from(value: SnapshotWriteError) -> Self {
+            match value {
+                SnapshotWriteError::Database(error) => Self::Database(error),
+                SnapshotWriteError::SnapshotApply(error) => Self::SnapshotApply(error),
+                SnapshotWriteError::Write(error) => Self::Write(error),
+            }
+        }
+    }
+}
+
 pub mod actions {
     pub mod create_wallet {
         use surrealdb::sql::{self, Thing};
@@ -63,20 +102,7 @@ pub mod actions {
 
         use crate::snapshot_io;
 
-        #[derive(Debug, thiserror::Error)]
-        pub enum Error {
-            #[error(transparent)]
-            Database(#[from] surrealdb::Error),
-
-            #[error(transparent)]
-            SnapshotApply(#[from] twon_core::Error),
-
-            #[error(transparent)]
-            Write(#[from] std::io::Error),
-
-            #[error(transparent)]
-            Read(#[from] snapshot_io::read::Error),
-        }
+        pub use crate::error::SnapshotOptError as Error;
 
         pub async fn run(
             connection: &crate::database::Connection,
@@ -134,28 +160,7 @@ pub mod ops {
     pub mod sync {
         use crate::snapshot_io;
 
-        pub enum Error {
-            Database,
-            SnapshotApply(twon_core::Error),
-            Write,
-            Read(crate::snapshot_io::read::Error),
-        }
-
-        impl From<crate::ops::build::Error> for Error {
-            fn from(error: crate::ops::build::Error) -> Self {
-                match error {
-                    crate::ops::build::Error::Database => Self::Database,
-                    crate::ops::build::Error::SnapshotApply(error) => Self::SnapshotApply(error),
-                    crate::ops::build::Error::Write => Self::Write,
-                }
-            }
-        }
-
-        impl From<crate::snapshot_io::read::Error> for Error {
-            fn from(error: crate::snapshot_io::read::Error) -> Self {
-                Self::Read(error)
-            }
-        }
+        pub use crate::error::SnapshotOptError as Error;
 
         pub async fn sync() -> Result<(), Error> {
             let entry = tokio::task::spawn_blocking(move || {
@@ -177,23 +182,7 @@ pub mod ops {
     pub mod build {
         use crate::{database, snapshot_io};
 
-        pub enum Error {
-            Database,
-            SnapshotApply(twon_core::Error),
-            Write,
-        }
-
-        impl From<surrealdb::Error> for Error {
-            fn from(_: surrealdb::Error) -> Self {
-                Self::Database
-            }
-        }
-
-        impl From<twon_core::Error> for Error {
-            fn from(error: twon_core::Error) -> Self {
-                Self::SnapshotApply(error)
-            }
-        }
+        pub use crate::error::SnapshotWriteError as Error;
 
         const STEP_SIZE: usize = 1000;
 
@@ -234,10 +223,10 @@ pub mod ops {
             tokio::task::spawn_blocking(move || {
                 let mut snapshot_io = snapshot_io::SnapshotIO::new();
 
-                snapshot_io.write(snapshot).unwrap();
+                snapshot_io.write(snapshot)
             })
             .await
-            .expect("To join write task");
+            .expect("To join write task")?;
 
             Ok(())
         }
