@@ -72,8 +72,8 @@ fn main() -> miette::Result<()> {
             commands::sync()?;
         }
         Commands::Wallets { command } => match command {
-            commands::wallets::WalletCommand::Create { currency: currency_id, name } => {
-                commands::wallets::create(currency_id, name)?;
+            commands::wallets::WalletCommand::Create { currency: currency_id, name, yes } => {
+                commands::wallets::create(currency_id, name, yes)?;
             }
             commands::wallets::WalletCommand::List => {
                 commands::wallets::list()?;

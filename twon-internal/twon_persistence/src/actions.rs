@@ -18,13 +18,13 @@ pub mod currency_id_from_code {
         }
 
         let mut response = connection
-            .query("SELECT id FROM currency WHERE code = $code ONLY")
+            .query("SELECT id FROM currency WHERE code = $code")
             .bind(("code", code))
             .await?
             .check()?;
 
-        let select: Option<CurrencyIdSelect> = response.take(0)?;
-        let Some(select) = select else {
+        let select: Vec<CurrencyIdSelect> = response.take(0)?;
+        let Some(select) = select.into_iter().next() else {
             return Err(Error::NotFound);
         };
 
@@ -37,13 +37,16 @@ pub mod check_currency_id {
         connection: &crate::database::Connection,
         id: twon_core::CurrencyId,
     ) -> Result<bool, crate::database::Error> {
+        #[derive(serde::Deserialize)]
+        struct Empty {}
+
         let mut response = connection
-            .query("SELECT 1 FROM type::thing(currency, $id) ONLY")
+            .query("SELECT 1 FROM type::thing(currency, $id)")
             .bind(("id", id))
             .await?
             .check()?;
 
-        let data: Option<i32> = response.take(0)?;
+        let data: Option<Empty> = response.take(0)?;
         Ok(data.is_some())
     }
 }

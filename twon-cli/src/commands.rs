@@ -136,6 +136,8 @@ pub mod wallets {
             currency: IdOrCode,
             #[arg(short, long)]
             name: Option<String>,
+            #[arg(short, long, default_value = "false")]
+            yes: bool,
         },
     }
 
@@ -216,7 +218,7 @@ pub mod wallets {
         answer.is_empty() || answer == "y" || answer == "yes"
     }
 
-    pub fn create(currency: IdOrCode, name: Option<String>) -> miette::Result<()> {
+    pub fn create(currency: IdOrCode, name: Option<String>, yes: bool) -> miette::Result<()> {
         let result = crate::tasks::block_single(async move {
             let con = match twon_persistence::database::connect().await {
                 Ok(con) => con,
@@ -233,8 +235,15 @@ pub mod wallets {
                             Err(err) => twon_persistence::log::database(err),
                         };
 
-                    if !exists {
-                        print!("Currency `{}` not found, continue? (Y/n) ", currency_id);
+                    if !exists && !yes {
+                        use tokio::io::AsyncWriteExt;
+
+                        let buf = format!("Currency `{}` not found, continue? (Y/n) ", currency_id);
+
+                        let mut stdout = tokio::io::stdout();
+                        stdout.write_all(buf.as_bytes()).await.expect("To write");
+                        stdout.flush().await.expect("To flush");
+
                         let should_continue = confirm_continue().await;
 
                         if !should_continue {
