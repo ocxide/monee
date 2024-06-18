@@ -4049,6 +4049,7 @@ dependencies = [
  "clap",
  "miette 7.2.0",
  "serde_json",
+ "thiserror",
  "tokio",
  "twon_core",
  "twon_persistence",

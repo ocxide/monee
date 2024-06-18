@@ -1,3 +1,53 @@
+pub mod currency_id_from_code {
+    #[derive(thiserror::Error, Debug)]
+    pub enum Error {
+        #[error("Currency code not found")]
+        NotFound,
+        #[error(transparent)]
+        Database(#[from] crate::database::Error),
+    }
+
+    pub async fn run(
+        connection: &crate::database::Connection,
+        code: String,
+    ) -> Result<twon_core::CurrencyId, Error> {
+        #[derive(serde::Deserialize)]
+        struct CurrencyIdSelect {
+            #[serde(with = "crate::sql_id::string")]
+            id: twon_core::CurrencyId,
+        }
+
+        let mut response = connection
+            .query("SELECT id FROM currency WHERE code = $code ONLY")
+            .bind(("code", code))
+            .await?
+            .check()?;
+
+        let select: Option<CurrencyIdSelect> = response.take(0)?;
+        let Some(select) = select else {
+            return Err(Error::NotFound);
+        };
+
+        Ok(select.id)
+    }
+}
+
+pub mod check_currency_id {
+    pub async fn run(
+        connection: &crate::database::Connection,
+        id: twon_core::CurrencyId,
+    ) -> Result<bool, crate::database::Error> {
+        let mut response = connection
+            .query("SELECT 1 FROM type::thing(currency, $id) ONLY")
+            .bind(("id", id))
+            .await?
+            .check()?;
+
+        let data: Option<i32> = response.take(0)?;
+        Ok(data.is_some())
+    }
+}
+
 pub mod create_currency {
     #[derive(thiserror::Error, Debug)]
     pub enum Error {
