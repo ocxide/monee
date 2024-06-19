@@ -34,10 +34,6 @@ struct CliParser {
 
 #[derive(clap::Subcommand)]
 enum Commands {
-    Events {
-        #[command(subcommand)]
-        commands: commands::event::EventCommand,
-    },
     Snapshot {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
@@ -57,11 +53,6 @@ enum Commands {
 fn main() -> miette::Result<()> {
     let cli = CliParser::parse();
     match cli.command {
-        Commands::Events { commands } => match commands {
-            commands::event::EventCommand::Add { commands } => {
-                commands::event::add_event(commands)?;
-            }
-        },
         Commands::Snapshot { output } => {
             commands::snapshot(output)?;
         }
@@ -72,11 +63,21 @@ fn main() -> miette::Result<()> {
             commands::sync()?;
         }
         Commands::Wallets { command } => match command {
-            commands::wallets::WalletCommand::Create { currency: currency_id, name, yes } => {
+            commands::wallets::WalletCommand::Create {
+                currency: currency_id,
+                name,
+                yes,
+            } => {
                 commands::wallets::create(currency_id, name, yes)?;
             }
             commands::wallets::WalletCommand::List => {
                 commands::wallets::list()?;
+            }
+            commands::wallets::WalletCommand::Deduct { wallet_id, amount } => {
+                commands::wallets::deduct(wallet_id, amount)?;
+            }
+            commands::wallets::WalletCommand::Deposit { wallet_id, amount } => {
+                commands::wallets::deposit(wallet_id, amount)?;
             }
         },
         Commands::Currencies { command } => match command {

@@ -139,6 +139,20 @@ pub mod wallets {
             #[arg(short, long, default_value = "false")]
             yes: bool,
         },
+
+        Deduct {
+            #[arg(short, long)]
+            wallet_id: twon_core::WalletId,
+            #[arg(short, long)]
+            amount: twon_core::Amount,
+        },
+
+        Deposit {
+            #[arg(short, long)]
+            wallet_id: twon_core::WalletId,
+            #[arg(short, long)]
+            amount: twon_core::Amount,
+        },
     }
 
     use id_or_code::IdOrCode;
@@ -175,6 +189,39 @@ pub mod wallets {
                 Err(Error::InvalidLength)
             }
         }
+    }
+
+    pub fn deposit(
+        wallet_id: twon_core::WalletId,
+        amount: twon_core::Amount,
+    ) -> miette::Result<()> {
+        let event = twon_core::Event::Wallet(twon_core::WalletEvent::Deposit { wallet_id, amount });
+        add_event(event)
+    }
+
+    pub fn deduct(
+        wallet_id: twon_core::WalletId,
+        amount: twon_core::Amount,
+    ) -> miette::Result<()> {
+        let event = twon_core::Event::Wallet(twon_core::WalletEvent::Deduct { wallet_id, amount });
+        add_event(event)
+    }
+
+    fn add_event(event: twon_core::Event) -> miette::Result<()> {
+        let response = crate::tasks::block_single(async {
+            let con = match twon_persistence::database::connect().await {
+                Ok(con) => con,
+                Err(why) => twon_persistence::log::database(why),
+            };
+
+            twon_persistence::database::add_event(&con, event).await
+        });
+
+        if let Err(why) = response {
+            twon_persistence::log::database(why);
+        }
+
+        Ok(())
     }
 
     pub fn list() -> miette::Result<()> {
@@ -290,92 +337,6 @@ pub mod wallets {
         };
 
         println!("Wallet `{}` created", wallet_id);
-        Ok(())
-    }
-}
-
-pub mod event {
-    use twon_core::{Amount, WalletId};
-
-    use crate::diagnostics::{apply_diagnostic, snapshot_read_diagnostic};
-
-    #[derive(clap::Subcommand)]
-    pub enum EventCommand {
-        Add {
-            #[command(subcommand)]
-            commands: AddEvent,
-        },
-    }
-
-    #[derive(clap::Subcommand)]
-    pub enum AddEvent {
-        Deposit {
-            #[arg(short, long)]
-            wallet_id: WalletId,
-            #[arg(short, long)]
-            amount: Amount,
-        },
-        Deduct {
-            #[arg(short, long)]
-            wallet_id: WalletId,
-            #[arg(short, long)]
-            amount: Amount,
-        },
-        CreateWallet {
-            #[arg(short, long)]
-            wallet_id: WalletId,
-            #[arg(short, long)]
-            currency_id: twon_core::CurrencyId,
-        },
-        DeleteWallet {
-            #[arg(short, long)]
-            wallet_id: WalletId,
-        },
-    }
-
-    pub fn add_event(command: AddEvent) -> miette::Result<()> {
-        let mut snapshot_io = twon_persistence::SnapshotIO::new();
-        let mut snapshot_entry = match snapshot_io.read() {
-            Ok(snapshot_entry) => snapshot_entry,
-            Err(why) => return Err(snapshot_read_diagnostic(why)),
-        };
-
-        let event = match command {
-            AddEvent::Deposit { wallet_id, amount } => {
-                twon_core::Event::Deposit { amount, wallet_id }
-            }
-            AddEvent::Deduct { wallet_id, amount } => {
-                twon_core::Event::Deduct { amount, wallet_id }
-            }
-            AddEvent::DeleteWallet { wallet_id } => twon_core::Event::DeleteWallet { wallet_id },
-            AddEvent::CreateWallet {
-                wallet_id,
-                currency_id,
-            } => twon_core::Event::CreateWallet {
-                wallet_id,
-                currency: currency_id,
-            },
-        };
-
-        if let Err(why) = snapshot_entry.snapshot.apply(event.clone()) {
-            let diagnostic = apply_diagnostic(why);
-            return Err(diagnostic.into());
-        };
-
-        crate::tasks::block_single(async {
-            let db = twon_persistence::database::connect()
-                .await
-                .expect("Failed to connect");
-
-            twon_persistence::database::add_event(&db, event)
-                .await
-                .expect("Failed to add event");
-        });
-
-        snapshot_io
-            .write(snapshot_entry.snapshot)
-            .expect("Failed to write snapshot");
-
         Ok(())
     }
 }
