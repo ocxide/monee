@@ -181,10 +181,10 @@ pub mod create_wallet {
         .await
         .expect("To join read task")?;
 
-        let event = twon_core::Event::WalletCreate {
+        let event = twon_core::Event::Wallet(twon_core::WalletEvent::Create {
             wallet_id,
             currency: currency_id,
-        };
+        });
         snapshot_entry.snapshot.apply(event.clone())?;
 
         let wallet_resource = {
