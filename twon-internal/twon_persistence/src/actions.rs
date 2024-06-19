@@ -181,7 +181,7 @@ pub mod create_wallet {
         .await
         .expect("To join read task")?;
 
-        let event = twon_core::Event::CreateWallet {
+        let event = twon_core::Event::WalletCreate {
             wallet_id,
             currency: currency_id,
         };
