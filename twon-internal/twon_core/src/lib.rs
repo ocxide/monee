@@ -6,8 +6,8 @@ mod tiny_id;
 pub use amount::Amount;
 pub use currency_id::CurrencyId;
 pub use debt_id::DebtId;
-pub use wallet_id::WalletId;
 pub use money_record::{MoneyRecord, MoneyStorage};
+pub use wallet_id::WalletId;
 
 pub mod metadata {
     use crate::WalletId;
@@ -84,19 +84,10 @@ mod id_utils {
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Snapshot {
     pub wallets: money_record::MoneyRecord<WalletId>,
-    pub debts: money_record::MoneyRecord<DebtId>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Debt {
-    pub amount: Amount,
-    pub currency: CurrencyId,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Wallet {
-    pub balance: Amount,
-    pub currency: CurrencyId,
+    /// Debts that I should pay
+    pub in_debts: money_record::MoneyRecord<DebtId>,
+    /// Debts that should be payed to me
+    pub out_debts: money_record::MoneyRecord<DebtId>,
 }
 
 pub mod money_record {
@@ -225,28 +216,44 @@ sub_action!(DebtEvent -> debt_id: DebtId; { Incur, Forget, Accumulate, Amortize 
 #[serde(tag = "group", rename_all = "snake_case")]
 pub enum Event {
     Wallet(WalletEvent),
-    Debt(DebtEvent),
+    OutDebt(DebtEvent),
+    InDebt(DebtEvent),
 }
 
 #[derive(Debug)]
 pub enum Error {
     Wallet(money_record::Error),
-    Debt(money_record::Error),
+    InDebt(money_record::Error),
+    OutDebt(money_record::Error),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn print_debt_err(
+            e: &money_record::Error,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            match e {
+                money_record::Error::NotFound => write!(f, "debt not found"),
+                money_record::Error::CannotSub => write!(f, "debt amortize overflow"),
+                money_record::Error::AlreadyExists => write!(f, "debt already exists"),
+            }
+        }
+
         match self {
             Error::Wallet(e) => match e {
                 money_record::Error::NotFound => write!(f, "wallet not found"),
                 money_record::Error::CannotSub => write!(f, "cannot deduct from wallet"),
                 money_record::Error::AlreadyExists => write!(f, "wallet already exists"),
             },
-            Error::Debt(e) => match e {
-                money_record::Error::NotFound => write!(f, "debt not found"),
-                money_record::Error::CannotSub => write!(f, "debt amortize overflow"),
-                money_record::Error::AlreadyExists => write!(f, "debt already exists"),
-            },
+            Error::InDebt(e) => {
+                write!(f, "in ")?;
+                print_debt_err(e, f)
+            }
+            Error::OutDebt(e) => {
+                write!(f, "out ")?;
+                print_debt_err(e, f)
+            }
         }
     }
 }
@@ -255,6 +262,21 @@ impl std::error::Error for Error {}
 
 impl Snapshot {
     pub fn apply(&mut self, event: Event) -> Result<(), Error> {
+        fn extract_action(event: DebtEvent) -> (DebtId, money_record::Action) {
+            match event {
+                DebtEvent::Incur { debt_id, currency } => {
+                    (debt_id, money_record::Action::Create(currency))
+                }
+                DebtEvent::Forget { debt_id } => (debt_id, money_record::Action::Remove),
+                DebtEvent::Accumulate { debt_id, amount } => {
+                    (debt_id, money_record::Action::Add(amount))
+                }
+                DebtEvent::Amortize { debt_id, amount } => {
+                    (debt_id, money_record::Action::Sub(amount))
+                }
+            }
+        }
+
         match event {
             Event::Wallet(event) => {
                 let (wallet_id, action) = match event {
@@ -274,21 +296,13 @@ impl Snapshot {
                 self.wallets.apply(wallet_id, action).map_err(Error::Wallet)
             }
 
-            Event::Debt(event) => {
-                let (debt_id, action) = match event {
-                    DebtEvent::Incur { debt_id, currency } => {
-                        (debt_id, money_record::Action::Create(currency))
-                    }
-                    DebtEvent::Forget { debt_id } => (debt_id, money_record::Action::Remove),
-                    DebtEvent::Accumulate { debt_id, amount } => {
-                        (debt_id, money_record::Action::Add(amount))
-                    }
-                    DebtEvent::Amortize { debt_id, amount } => {
-                        (debt_id, money_record::Action::Sub(amount))
-                    }
-                };
-
-                self.debts.apply(debt_id, action).map_err(Error::Debt)
+            Event::InDebt(event) => {
+                let (debt_id, action) = extract_action(event);
+                self.in_debts.apply(debt_id, action).map_err(Error::InDebt)
+            }
+            Event::OutDebt(event) => {
+                let (debt_id, action) = extract_action(event);
+                self.out_debts.apply(debt_id, action).map_err(Error::OutDebt)
             }
         }
     }
