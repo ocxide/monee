@@ -15,8 +15,15 @@ pub type Datetime = chrono::DateTime<chrono::Utc>;
 pub type Timezone = chrono::Utc;
 
 fn create_local_path() -> PathBuf {
-    let home = std::env::var("HOME").expect("To read $HOME");
-    let path = PathBuf::from(home).join(".local/share/twon/");
+    let share_dir = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|home| PathBuf::from(home).join(".local/share"))
+        }).expect("To get share directory");
+    let path = share_dir.join("twon");
 
     fs::create_dir_all(&path).expect("To create twon data directory");
     path
