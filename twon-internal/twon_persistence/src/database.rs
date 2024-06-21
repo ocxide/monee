@@ -1,7 +1,7 @@
 pub use surrealdb::Result;
 
 #[cfg(feature = "file")]
-pub type Connection  = surrealdb::Surreal<surrealdb::engine::local::Db>;
+pub type Connection = surrealdb::Surreal<surrealdb::engine::local::Db>;
 #[cfg(feature = "remote")]
 pub type Connection = surrealdb::Surreal<surrealdb::engine::remote::ws::Client>;
 
@@ -32,6 +32,18 @@ async fn init(connection: &Connection) -> Result<()> {
         .await?
         .check()?;
 
+    connection
+        .query("DEFINE TABLE procedure")
+        .query("DEFINE FIELD created_at ON procedure VALUE time::now()")
+        .await?
+        .check()?;
+
+    connection
+        .query("DEFINE TABLE actor")
+        .query("DEFINE FIELD name ON actor TYPE string")
+        .await?
+        .check()?;
+
     Ok(())
 }
 
@@ -56,7 +68,8 @@ async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
 
 #[cfg(feature = "remote")]
 async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
-    let db: Connection = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>("0.0.0.0:6767").await?;
+    let db: Connection =
+        surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>("0.0.0.0:6767").await?;
     Ok((db, false))
 }
 
