@@ -9,6 +9,8 @@ pub use debt_id::DebtId;
 pub use money_record::{MoneyRecord, MoneyStorage};
 pub use wallet_id::WalletId;
 
+pub mod actor;
+
 pub mod metadata {
     use crate::WalletId;
 

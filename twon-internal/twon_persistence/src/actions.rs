@@ -1,3 +1,20 @@
+pub mod create_actor {
+    pub async fn run(
+        connection: &crate::database::Connection,
+        actor: twon_core::actor::Actor,
+    ) -> Result<twon_core::actor::ActorId, crate::database::Error> {
+        let id = twon_core::actor::ActorId::new();
+        connection
+            .query("CREATE type::thing('actor', $id) CONTENT $data")
+            .bind(("id", id))
+            .bind(("data", actor))
+            .await?
+            .check()?;
+
+        Ok(id)
+    }
+}
+
 pub mod currency_id_from_code {
     #[derive(thiserror::Error, Debug)]
     pub enum Error {
