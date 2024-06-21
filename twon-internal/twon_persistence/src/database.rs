@@ -41,6 +41,9 @@ async fn init(connection: &Connection) -> Result<()> {
     connection
         .query("DEFINE TABLE actor")
         .query("DEFINE FIELD name ON actor TYPE string")
+        .query("DEFINE FIELD type ON actor TYPE string")
+        .query("DEFINE FIELD alias ON actor TYPE option<string>")
+        .query("DEFINE INDEX actor_alias ON actor FIELDS alias UNIQUE")
         .await?
         .check()?;
 

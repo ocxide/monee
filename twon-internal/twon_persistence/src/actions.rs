@@ -1,17 +1,53 @@
 pub mod create_actor {
+    #[derive(thiserror::Error, Debug)]
+    pub enum Error {
+        #[error("Actor already exists")]
+        AlreadyExists,
+        #[error(transparent)]
+        Database(#[from] crate::database::Error),
+    }
+
     pub async fn run(
         connection: &crate::database::Connection,
         actor: twon_core::actor::Actor,
-    ) -> Result<twon_core::actor::ActorId, crate::database::Error> {
+    ) -> Result<twon_core::actor::ActorId, Error> {
         let id = twon_core::actor::ActorId::new();
-        connection
+        println!("Creating actor id: {:?}", id);
+
+        let result = connection
             .query("CREATE type::thing('actor', $id) CONTENT $data")
             .bind(("id", id))
             .bind(("data", actor))
             .await?
-            .check()?;
+            .check();
 
-        Ok(id)
+        match result {
+            Err(
+                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+            ) => Err(Error::AlreadyExists),
+            Err(e) => Err(e.into()),
+            Ok(_) => Ok(id),
+        }
+    }
+}
+
+pub mod list_actors {
+    #[derive(serde::Deserialize)]
+    pub struct ActorRow {
+        #[serde(with = "crate::sql_id::string")]
+        pub id: twon_core::actor::ActorId,
+        #[serde(flatten)]
+        pub data: twon_core::actor::Actor,
+    }
+
+    pub async fn run(
+        connection: &crate::database::Connection,
+    ) -> Result<Vec<ActorRow>, crate::database::Error> {
+        let mut response = connection.query("SELECT * FROM actor").await?.check()?;
+
+        let actors: Vec<ActorRow> = response.take(0)?;
+        Ok(actors)
     }
 }
 
@@ -94,9 +130,10 @@ pub mod create_currency {
             .check();
 
         match response {
-            Err(crate::database::Error::Db(surrealdb::error::Db::IndexExists { .. })) => {
-                Err(Error::AlreadyExists)
-            }
+            Err(
+                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+            ) => Err(Error::AlreadyExists),
             Err(e) => Err(e.into()),
             Ok(_) => Ok(id),
         }

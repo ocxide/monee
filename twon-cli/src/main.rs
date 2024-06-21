@@ -1,3 +1,4 @@
+mod date;
 mod commands;
 mod diagnostics;
 mod json_diagnostic;
@@ -21,6 +22,13 @@ mod tasks {
             .build()
             .expect("Failed to build tokio runtime")
             .block_on(fut)
+    }
+
+    pub async fn use_db() -> twon_persistence::database::Connection {
+        match twon_persistence::database::connect().await {
+            Ok(conn) => conn,
+            Err(e) => twon_persistence::log::database(e),
+        }
     }
 }
 
@@ -47,6 +55,10 @@ enum Commands {
     Currencies {
         #[command(subcommand)]
         command: commands::currencies::CurrencyCommand,
+    },
+    Actors {
+        #[command(subcommand)]
+        command: commands::actors::ActorsCommand,
     },
     Do(crate::commands::do_command::DoCommand),
 }
@@ -91,6 +103,9 @@ fn main() -> miette::Result<()> {
         },
         Commands::Do(command) => {
             crate::commands::do_command::handle(command)?;
+        }
+        Commands::Actors { command } => {
+            commands::actors::handle(command)?;
         }
     }
 

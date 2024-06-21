@@ -1,3 +1,107 @@
+pub mod actors {
+    #[derive(clap::Subcommand)]
+    pub enum ActorsCommand {
+        #[command(alias = "ls")]
+        List,
+        #[command(alias = "c")]
+        Create {
+            #[arg(short, long)]
+            name: String,
+            #[arg(short = 't', long = "type")]
+            actor_type: twon_core::actor::ActorType,
+            #[arg(short, long)]
+            alias: Option<String>,
+        },
+    }
+
+    pub fn handle(command: ActorsCommand) -> miette::Result<()> {
+        match command {
+            ActorsCommand::List => list(),
+            ActorsCommand::Create {
+                name,
+                actor_type,
+                alias,
+            } => create(name, actor_type, alias),
+        }
+    }
+
+    fn list() -> miette::Result<()> {
+        let result = crate::tasks::block_single(async move {
+            let db = crate::tasks::use_db().await;
+            twon_persistence::actions::list_actors::run(&db).await
+        });
+
+        let actors = match result {
+            Ok(actors) => actors,
+            Err(why) => twon_persistence::log::database(why),
+        };
+
+        for actor in actors.iter() {
+            let twon_persistence::actions::list_actors::ActorRow { data: actor, id } = actor;
+
+            println!(
+                "{} - `{}` {} {}",
+                match actor.actor_type {
+                    twon_core::actor::ActorType::Natural => "Natural",
+                    twon_core::actor::ActorType::Business => "Business",
+                    twon_core::actor::ActorType::FinancialEntity => "Financial Entity",
+                },
+                id,
+                actor.name,
+                match actor.alias {
+                    Some(ref alias) => alias,
+                    None => "(no alias)",
+                }
+            );
+        }
+
+        Ok(())
+    }
+
+    fn create(
+        name: String,
+        actor_type: twon_core::actor::ActorType,
+        alias: Option<String>,
+    ) -> miette::Result<()> {
+        let result = crate::tasks::block_single(async {
+            let db = crate::tasks::use_db().await;
+            twon_persistence::actions::create_actor::run(
+                &db,
+                twon_core::actor::Actor {
+                    name,
+                    actor_type,
+                    alias: alias.clone(),
+                },
+            )
+            .await
+        });
+
+        let err = match result {
+            Ok(id) => {
+                println!("Actor `{}` created", id);
+                return Ok(());
+            }
+            Err(why) => why,
+        };
+
+        match err {
+            twon_persistence::actions::create_actor::Error::AlreadyExists => {
+                let diagnostic = miette::diagnostic!(
+                    severity = miette::Severity::Error,
+                    code = "actor::AlreadyExists",
+                    "Actor with alias `{}` already exists",
+                    alias.as_deref().unwrap_or_default()
+                );
+
+                Err(diagnostic.into())
+            }
+            twon_persistence::actions::create_actor::Error::Database(err) => {
+                twon_persistence::log::database(err)
+            }
+        }
+    }
+}
+
 pub mod do_command {
     #[derive(clap::Args)]
     pub struct DoCommand {
@@ -16,6 +120,16 @@ pub mod do_command {
             #[arg(short, long)]
             amount: twon_core::Amount,
         },
+        RegisterInDebt {
+            #[arg(short, long)]
+            amount: twon_core::Amount,
+            #[arg(short, long)]
+            currency: twon_core::CurrencyId,
+            #[arg(short, long)]
+            actor_id: twon_core::actor::ActorId,
+            #[arg(short, long)]
+            payment_promise: Option<crate::date::PaymentPromise>,
+        },
     }
 
     pub fn handle(
@@ -24,29 +138,85 @@ pub mod do_command {
             description,
         }: DoCommand,
     ) -> miette::Result<()> {
-        use twon_persistence::procedures;
-
         match command {
             DoDetailCommand::RegisterBalance { wallet_id, amount } => {
-                crate::tasks::block_single(async move {
-                    let con = match twon_persistence::database::connect().await {
-                        Ok(con) => con,
-                        Err(why) => twon_persistence::log::database(why),
-                    };
-
-                    twon_persistence::procedures::register_balance(
-                        &con,
-                        procedures::CreateProcedure { description },
-                        procedures::RegisterBalance { wallet_id, amount },
-                    )
-                    .await
-                })
-                .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
-
-                println!("Done!");
+                register_balance(wallet_id, amount, description)
             }
+            DoDetailCommand::RegisterInDebt {
+                amount,
+                currency,
+                actor_id,
+                payment_promise,
+            } => register_in_debt(amount, currency, actor_id, payment_promise, description),
         }
+    }
 
+    fn register_balance(
+        wallet_id: twon_core::WalletId,
+        amount: twon_core::Amount,
+        description: Option<String>,
+    ) -> miette::Result<()> {
+        use twon_persistence::procedures;
+
+        crate::tasks::block_single(async move {
+            let con = match twon_persistence::database::connect().await {
+                Ok(con) => con,
+                Err(why) => twon_persistence::log::database(why),
+            };
+
+            twon_persistence::procedures::register_balance(
+                &con,
+                procedures::CreateProcedure { description },
+                procedures::RegisterBalance { wallet_id, amount },
+            )
+            .await
+        })
+        .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
+
+        println!("Done!");
+
+        Ok(())
+    }
+
+    mod payment_promise {}
+
+    fn register_in_debt(
+        amount: twon_core::Amount,
+        currency: twon_core::CurrencyId,
+        actor_id: twon_core::actor::ActorId,
+        payment_promise: Option<crate::date::PaymentPromise>,
+        description: Option<String>,
+    ) -> miette::Result<()> {
+        use twon_persistence::procedures;
+
+        let payment_promise = payment_promise.map(|date| match date {
+            crate::date::PaymentPromise::Datetime(datetime) => datetime,
+            crate::date::PaymentPromise::Delta(delta) => {
+                let mut target = twon_persistence::Timezone::now();
+                delta.add(&mut target);
+
+                target
+            }
+        });
+
+        crate::tasks::block_single(async move {
+            let db = crate::tasks::use_db().await;
+
+            twon_persistence::procedures::register_in_debt(
+                &db,
+                procedures::CreateProcedure { description },
+                procedures::RegisterInDebt {
+                    amount,
+                    currency,
+                    actor_id,
+                    payment_promise,
+                },
+            )
+            .await
+        })
+        .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
+
+        println!("Done!");
         Ok(())
     }
 }

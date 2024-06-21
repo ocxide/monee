@@ -3551,6 +3551,7 @@ dependencies = [
 name = "twon-cli"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "miette 7.2.0",
  "serde_json",

@@ -112,11 +112,10 @@ pub async fn register_balance(
 }
 
 pub struct RegisterInDebt {
-    pub debt_id: twon_core::DebtId,
     pub amount: twon_core::Amount,
     pub currency: twon_core::CurrencyId,
     pub actor_id: twon_core::actor::ActorId,
-    pub payment_promise: crate::Datetime,
+    pub payment_promise: Option<crate::Datetime>,
 }
 
 pub async fn register_in_debt(
@@ -124,13 +123,15 @@ pub async fn register_in_debt(
     procedure: CreateProcedure,
     plan: RegisterInDebt,
 ) -> Result<(), crate::error::SnapshotOptError> {
+    let debt_id = twon_core::DebtId::new();
+
     let events = [
         twon_core::Event::InDebt(twon_core::DebtEvent::Incur {
             currency: plan.currency,
-            debt_id: plan.debt_id,
+            debt_id,
         }),
         twon_core::Event::InDebt(twon_core::DebtEvent::Accumulate {
-            debt_id: plan.debt_id,
+            debt_id,
             amount: plan.amount,
         }),
     ];
