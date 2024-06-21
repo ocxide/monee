@@ -1,3 +1,52 @@
+pub mod do_command {
+    #[derive(clap::Args)]
+    pub struct DoCommand {
+        #[command(subcommand)]
+        pub command: DoDetailCommand,
+
+        #[arg(short, long)]
+        pub description: Option<String>,
+    }
+
+    #[derive(clap::Subcommand)]
+    pub enum DoDetailCommand {
+        RegisterBalance {
+            #[arg(short, long)]
+            wallet_id: twon_core::WalletId,
+            #[arg(short, long)]
+            amount: twon_core::Amount,
+        },
+    }
+
+    pub fn handle(
+        DoCommand {
+            command,
+            description,
+        }: DoCommand,
+    ) -> miette::Result<()> {
+        match command {
+            DoDetailCommand::RegisterBalance { wallet_id, amount } => {
+                crate::tasks::block_single(async move {
+                    let con = match twon_persistence::database::connect().await {
+                        Ok(con) => con,
+                        Err(why) => twon_persistence::log::database(why),
+                    };
+
+                    twon_persistence::procedures::balance_register(
+                        &con,
+                        twon_persistence::procedures::CreateProcedure { description },
+                        twon_persistence::procedures::BalanceRegister { wallet_id, amount },
+                    ).await
+                }).map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
+
+                println!("Done!");
+            }
+        }
+
+        Ok(())
+    }
+}
+
 use crate::diagnostics::snapshot_read_diagnostic;
 
 pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
@@ -199,10 +248,7 @@ pub mod wallets {
         add_event(event)
     }
 
-    pub fn deduct(
-        wallet_id: twon_core::WalletId,
-        amount: twon_core::Amount,
-    ) -> miette::Result<()> {
+    pub fn deduct(wallet_id: twon_core::WalletId, amount: twon_core::Amount) -> miette::Result<()> {
         let event = twon_core::Event::Wallet(twon_core::WalletEvent::Deduct { wallet_id, amount });
         add_event(event)
     }

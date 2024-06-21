@@ -6,6 +6,89 @@ pub mod error;
 pub mod log;
 pub mod ops;
 
+pub mod procedures {
+    pub struct BalanceRegister {
+        pub wallet_id: twon_core::WalletId,
+        pub amount: twon_core::Amount,
+    }
+
+    #[derive(serde::Serialize)]
+    pub struct CreateProcedure {
+        pub description: Option<String>,
+    }
+
+    pub enum CreateProcedureType {
+        BalanceRegister {},
+    }
+
+    /// Stateless mirror of CreateProcedureType
+    #[derive(serde::Serialize)]
+    pub enum ProcedureType {
+        BalanceRegister,
+    }
+
+    pub async fn balance_register(
+        connection: &crate::database::Connection,
+        procedure: CreateProcedure,
+        kind: BalanceRegister,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        let crate::snapshot_io::SnapshotEntry { mut snapshot, .. } =
+            tokio::task::spawn_blocking(move || {
+                let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
+                snapshot_io.read()
+            })
+            .await
+            .expect("to join read task")?;
+
+        let event = twon_core::Event::Wallet(twon_core::WalletEvent::Deposit {
+            wallet_id: kind.wallet_id,
+            amount: kind.amount,
+        });
+        snapshot.apply(event.clone())?;
+
+        let mut response = connection
+            .query("CREATE procedure SET description = $description, type = $type RETURN id")
+            .bind(procedure)
+            .bind(("type", ProcedureType::BalanceRegister))
+            .await?
+            .check()?;
+
+        let procedure_id: surrealdb::sql::Thing = response
+            .take::<Vec<_>>("id")?
+            .into_iter()
+            .next()
+            .expect("to get id");
+
+        let mut response = connection
+            .query("CREATE event CONTENT $data RETURN id")
+            .bind(("data", event))
+            .await?
+            .check()?;
+
+        let event_id: surrealdb::sql::Thing = response
+            .take::<Vec<_>>("id")?
+            .into_iter()
+            .next()
+            .expect("to get id");
+
+        connection
+            .query("RELATE $procedure->generated->$event")
+            .bind(("procedure", procedure_id))
+            .bind(("event", event_id))
+            .await?
+            .check()?;
+
+        tokio::task::spawn_blocking(move || {
+            let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
+            snapshot_io.write(snapshot)
+        })
+        .await
+        .expect("to join write task")?;
+
+        Ok(())
+    }
+}
+
 use std::{fs, path::PathBuf};
 
 pub use database::connect;
@@ -22,7 +105,8 @@ fn create_local_path() -> PathBuf {
             std::env::var("HOME")
                 .ok()
                 .map(|home| PathBuf::from(home).join(".local/share"))
-        }).expect("To get share directory");
+        })
+        .expect("To get share directory");
     let path = share_dir.join("twon");
 
     fs::create_dir_all(&path).expect("To create twon data directory");

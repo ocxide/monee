@@ -48,6 +48,7 @@ enum Commands {
         #[command(subcommand)]
         command: commands::currencies::CurrencyCommand,
     },
+    Do(crate::commands::do_command::DoCommand),
 }
 
 fn main() -> miette::Result<()> {
@@ -88,6 +89,9 @@ fn main() -> miette::Result<()> {
                 commands::currencies::create(name, symbol, code)?;
             }
         },
+        Commands::Do(command) => {
+            crate::commands::do_command::handle(command)?;
+        }
     }
 
     Ok(())
