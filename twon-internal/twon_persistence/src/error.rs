@@ -35,6 +35,16 @@ impl From<SnapshotWriteError> for SnapshotOptError {
     }
 }
 
+impl From<SnapshotReadError> for SnapshotOptError {
+    fn from(value: SnapshotReadError) -> Self {
+        match value {
+            SnapshotReadError::Database(error) => Self::Database(error),
+            SnapshotReadError::SnapshotApply(error) => Self::SnapshotApply(error),
+            SnapshotReadError::Read(error) => Self::Read(error),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum SnapshotReadError {
     #[error(transparent)]

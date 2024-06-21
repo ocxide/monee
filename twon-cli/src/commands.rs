@@ -24,6 +24,8 @@ pub mod do_command {
             description,
         }: DoCommand,
     ) -> miette::Result<()> {
+        use twon_persistence::procedures;
+
         match command {
             DoDetailCommand::RegisterBalance { wallet_id, amount } => {
                 crate::tasks::block_single(async move {
@@ -32,12 +34,14 @@ pub mod do_command {
                         Err(why) => twon_persistence::log::database(why),
                     };
 
-                    twon_persistence::procedures::balance_register(
+                    twon_persistence::procedures::register_balance(
                         &con,
-                        twon_persistence::procedures::CreateProcedure { description },
-                        twon_persistence::procedures::BalanceRegister { wallet_id, amount },
-                    ).await
-                }).map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
+                        procedures::CreateProcedure { description },
+                        procedures::RegisterBalance { wallet_id, amount },
+                    )
+                    .await
+                })
+                .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
 
                 println!("Done!");
             }
