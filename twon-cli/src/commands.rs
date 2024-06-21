@@ -292,11 +292,11 @@ pub mod wallets {
             }
 
             match &wallet.currency {
-                Some(currency) => print!("{} {}", currency.code, currency.symbol),
+                Some(currency) => print!(" {} {}", currency.code, currency.symbol),
                 None => print!("`Unknown currency`"),
             }
 
-            println!(" {}\n", wallet.balance);
+            println!("{}\n", wallet.balance);
         }
 
         Ok(())
