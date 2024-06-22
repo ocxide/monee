@@ -2,6 +2,7 @@ mod date;
 mod commands;
 mod diagnostics;
 mod json_diagnostic;
+mod args;
 mod tasks {
     use std::future::Future;
 

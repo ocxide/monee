@@ -121,12 +121,12 @@ pub mod do_command {
             amount: twon_core::Amount,
         },
         RegisterInDebt {
-            #[arg(short, long)]
+            #[arg(long)]
             amount: twon_core::Amount,
             #[arg(short, long)]
-            currency: twon_core::CurrencyId,
-            #[arg(short, long)]
-            actor_id: twon_core::actor::ActorId,
+            currency: crate::args::CurrencyIdOrCode,
+            #[arg(long)]
+            actor: twon_core::actor::ActorId,
             #[arg(short, long)]
             payment_promise: Option<crate::date::PaymentPromise>,
         },
@@ -145,9 +145,9 @@ pub mod do_command {
             DoDetailCommand::RegisterInDebt {
                 amount,
                 currency,
-                actor_id,
+                actor,
                 payment_promise,
-            } => register_in_debt(amount, currency, actor_id, payment_promise, description),
+            } => register_in_debt(amount, currency, actor, payment_promise, description),
         }
     }
 
@@ -178,11 +178,9 @@ pub mod do_command {
         Ok(())
     }
 
-    mod payment_promise {}
-
     fn register_in_debt(
         amount: twon_core::Amount,
-        currency: twon_core::CurrencyId,
+        currency: crate::args::CurrencyIdOrCode,
         actor_id: twon_core::actor::ActorId,
         payment_promise: Option<crate::date::PaymentPromise>,
         description: Option<String>,
@@ -199,24 +197,32 @@ pub mod do_command {
             }
         });
 
-        crate::tasks::block_single(async move {
+        let created: miette::Result<bool> = crate::tasks::block_single(async move {
             let db = crate::tasks::use_db().await;
+            let Some(currency_id) = crate::args::get_currency(&db, currency, false).await? else {
+                return Ok(false);
+            };
 
             twon_persistence::procedures::register_in_debt(
                 &db,
                 procedures::CreateProcedure { description },
                 procedures::RegisterInDebt {
                     amount,
-                    currency,
+                    currency: currency_id,
                     actor_id,
                     payment_promise,
                 },
             )
             .await
-        })
-        .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
+            .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
 
-        println!("Done!");
+            Ok(true)
+        });
+
+        if created? {
+            println!("Done!");
+        }
+
         Ok(())
     }
 }
@@ -349,6 +355,8 @@ pub mod currencies {
 }
 
 pub mod wallets {
+    use crate::args::CurrencyIdOrCode;
+
     #[derive(clap::Subcommand)]
     pub enum WalletCommand {
         #[command(alias = "ls")]
@@ -356,7 +364,7 @@ pub mod wallets {
         #[command(alias = "c")]
         Create {
             #[arg(short, long)]
-            currency: IdOrCode,
+            currency: CurrencyIdOrCode,
             #[arg(short, long)]
             name: Option<String>,
             #[arg(short, long, default_value = "false")]
@@ -376,42 +384,6 @@ pub mod wallets {
             #[arg(short, long)]
             amount: twon_core::Amount,
         },
-    }
-
-    use id_or_code::IdOrCode;
-    mod id_or_code {
-        use std::str::FromStr;
-
-        #[derive(Clone)]
-        pub enum IdOrCode {
-            Id(twon_core::CurrencyId),
-            Code(String),
-        }
-
-        #[derive(Debug, thiserror::Error)]
-        pub enum Error {
-            #[error(transparent)]
-            InvalidId(<twon_core::CurrencyId as FromStr>::Err),
-            #[error("Length must be 3 or 4")]
-            InvalidLength,
-        }
-
-        impl FromStr for IdOrCode {
-            type Err = Error;
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                if s.len() == 4 {
-                    let id = twon_core::CurrencyId::from_str(s).map_err(Error::InvalidId)?;
-                    return Ok(IdOrCode::Id(id));
-                }
-
-                if s.len() == 3 {
-                    return Ok(IdOrCode::Code(s.to_owned()));
-                }
-
-                Err(Error::InvalidLength)
-            }
-        }
     }
 
     pub fn deposit(
@@ -472,75 +444,17 @@ pub mod wallets {
         Ok(())
     }
 
-    async fn confirm_continue() -> bool {
-        use tokio::io::AsyncBufReadExt;
-        let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
-        let mut line = String::new();
-
-        if let Err(why) = stdin.read_line(&mut line).await {
-            panic!("Failed to read line: {}", why);
-        }
-
-        let answer = line.trim().to_lowercase();
-        answer.is_empty() || answer == "y" || answer == "yes"
-    }
-
-    pub fn create(currency: IdOrCode, name: Option<String>, yes: bool) -> miette::Result<()> {
+    pub fn create(
+        currency: CurrencyIdOrCode,
+        name: Option<String>,
+        yes: bool,
+    ) -> miette::Result<()> {
         let result = crate::tasks::block_single(async move {
-            let con = match twon_persistence::database::connect().await {
-                Ok(con) => con,
-                Err(why) => twon_persistence::log::database(why),
-            };
-
-            let currency_id = match currency {
-                IdOrCode::Id(currency_id) => {
-                    let exists =
-                        match twon_persistence::actions::check_currency_id::run(&con, currency_id)
-                            .await
-                        {
-                            Ok(exists) => exists,
-                            Err(err) => twon_persistence::log::database(err),
-                        };
-
-                    if !exists && !yes {
-                        use tokio::io::AsyncWriteExt;
-
-                        let buf = format!("Currency `{}` not found, continue? (Y/n) ", currency_id);
-
-                        let mut stdout = tokio::io::stdout();
-                        stdout.write_all(buf.as_bytes()).await.expect("To write");
-                        stdout.flush().await.expect("To flush");
-
-                        let should_continue = confirm_continue().await;
-
-                        if !should_continue {
-                            return None;
-                        }
-                    }
-
-                    currency_id
-                }
-                IdOrCode::Code(code) => {
-                    use twon_persistence::actions::currency_id_from_code;
-                    match twon_persistence::actions::currency_id_from_code::run(&con, code.clone())
-                        .await
-                    {
-                        Ok(id) => id,
-                        Err(currency_id_from_code::Error::NotFound) => {
-                            let diagnostic = miette::diagnostic!(
-                                severity = miette::Severity::Error,
-                                code = "currency::NotFound",
-                                "Currency with code `{}` not found",
-                                code
-                            );
-
-                            return Some(Err(diagnostic.into()));
-                        }
-                        Err(currency_id_from_code::Error::Database(error)) => {
-                            twon_persistence::log::database(error)
-                        }
-                    }
-                }
+            let con = crate::tasks::use_db().await;
+            let currency_id = match crate::args::get_currency(&con, currency, yes).await {
+                Ok(Some(currency_id)) => currency_id,
+                Ok(None) => return None,
+                Err(why) => return Some(Err(why)),
             };
 
             let result = twon_persistence::actions::create_wallet::run(&con, currency_id, name)
