@@ -1,6 +1,6 @@
 use std::{ops::AddAssign, str::FromStr};
 
-use chrono::{Datelike, NaiveDateTime, TimeZone, Timelike};
+use chrono::{Datelike, Timelike};
 
 #[derive(Debug, Clone)]
 pub enum PaymentPromise {
@@ -118,8 +118,98 @@ impl DurationDelta {
     pub fn add(self, target: &mut twon_persistence::Datetime) {
         let mode = self.2;
 
-        match mode {
-            DurationDeltaMode::EndOfDate => {}
+        #[derive(Debug)]
+        struct NaiveDuration(chrono::Months, chrono::Days, chrono::Duration);
+
+        const N_PARTS: usize = 6;
+        let set_max: [fn(&mut twon_persistence::Datetime); N_PARTS] = [
+            |_| {},
+            |naive| {
+                *naive = naive.with_month(12).expect("To set months");
+            },
+            |naive| {
+                const FEBRUARY: u32 = 2;
+                let max_day = match naive.month() {
+                    FEBRUARY => match naive.year() % 4 == 0 {
+                        true => 29,
+                        false => 28,
+                    },
+                    4 | 6 | 9 | 11 => 30,
+                    _ => 31,
+                };
+
+                *naive = naive.with_day(max_day).expect("To set days");
+            },
+            |naive| {
+                *naive = naive.with_hour(23).expect("To set hours");
+            },
+            |naive| {
+                *naive = naive.with_minute(59).expect("To set minutes");
+            },
+            |naive| {
+                *naive = naive.with_second(59).expect("To set seconds");
+            },
+        ];
+
+        let (naive_duration, to_set_max) = match mode {
+            DurationDeltaMode::EndOfDate => {
+                let mut naive_duration = NaiveDuration(
+                    chrono::Months::new(0),
+                    chrono::Days::new(0),
+                    chrono::Duration::default(),
+                );
+
+                struct PartDescicion {
+                    pub value: Option<u32>,
+                    pub add: fn(&mut NaiveDuration, u32),
+                }
+
+                let parts: [PartDescicion; N_PARTS] = [
+                    PartDescicion {
+                        value: self.1.years,
+                        add: |naive, v| {
+                            naive.0 = chrono::Months::new(12 * v + naive.0.as_u32());
+                        },
+                    },
+                    PartDescicion {
+                        value: self.1.months,
+                        add: |naive, v| {
+                            naive.0 = chrono::Months::new(v + naive.0.as_u32());
+                        },
+                    },
+                    PartDescicion {
+                        value: self.1.days,
+                        add: |naive, v| {
+                            naive.1 = chrono::Days::new(v as u64);
+                        },
+                    },
+                    PartDescicion {
+                        value: self.1.hours,
+                        add: |naive, v| naive.2.add_assign(chrono::Duration::hours(v as i64)),
+                    },
+                    PartDescicion {
+                        value: self.1.minutes,
+                        add: |naive, v| naive.2.add_assign(chrono::Duration::minutes(v as i64)),
+                    },
+                    PartDescicion {
+                        value: self.1.seconds,
+                        add: |naive, v| naive.2.add_assign(chrono::Duration::seconds(v as i64)),
+                    },
+                ];
+
+                let part = parts
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, part)| part.value.is_some())
+                    .last()
+                    .expect("To contain at least one part with value");
+
+                for part in &parts[..part.0 + 1] {
+                    (part.add)(&mut naive_duration, part.value.unwrap_or(0));
+                }
+
+                (naive_duration, &set_max[part.0 + 1..])
+            }
             DurationDeltaMode::Exact => {
                 let parts = self.1;
                 let months =
@@ -137,111 +227,31 @@ impl DurationDelta {
                     duration += chrono::Duration::seconds(seconds as i64);
                 }
 
-                match self.0 {
-                    Sign::Plus => {
-                        target.checked_add_months(months).expect("To add months");
-                        target.checked_add_days(days).expect("To add days");
-                        *target += duration;
-                    }
-                    Sign::Minus => {
-                        target.checked_sub_months(months).expect("To sub months");
-                        target.checked_sub_days(days).expect("To sub days");
-                        *target -= duration;
-                    }
-                }
-
-                return;
+                (
+                    NaiveDuration(months, days, duration),
+                    #[allow(clippy::out_of_bounds_indexing)]
+                    &set_max[N_PARTS + 1..],
+                )
             }
+        };
+
+        let NaiveDuration(months, days, duration) = naive_duration;
+        match self.0 {
+            Sign::Plus => {
+                *target = target.checked_add_months(months).expect("To add months");
+                *target = target.checked_add_days(days).expect("To add days");
+                *target += duration;
+            }
+            Sign::Minus => {
+                *target = target.checked_sub_months(months).expect("To sub months");
+                *target = target.checked_sub_days(days).expect("To sub days");
+                *target -= duration;
+            }
+        };
+
+        for set_max in to_set_max {
+            (set_max)(target);
         }
-
-        struct PartDescicion {
-            pub value: Option<u32>,
-            pub set_max: fn(&mut NaiveDateTime),
-            pub add: fn(&mut NaiveDateTime, u32),
-        }
-
-        let mut naive = target.naive_utc();
-
-        let parts: [PartDescicion; 6] = [
-            PartDescicion {
-                value: self.1.years,
-                set_max: |naive| {},
-                add: |naive, v| {
-                    *naive = naive
-                        .checked_add_months(chrono::Months::new(12 * v))
-                        .expect("To add years");
-                },
-            },
-            PartDescicion {
-                value: self.1.months,
-                set_max: |naive| {
-                    *naive = naive.with_month(12).expect("To set months");
-                },
-                add: |naive, v| {
-                    *naive = naive
-                        .checked_add_months(chrono::Months::new(v))
-                        .expect("To add months");
-                },
-            },
-            PartDescicion {
-                value: self.1.days,
-                set_max: |naive| {
-                    const FEBRUARY: u32 = 2;
-                    let max_day = match naive.month() {
-                        FEBRUARY => match naive.year() % 4 == 0 {
-                            true => 29,
-                            false => 28,
-                        },
-                        4 | 6 | 9 | 11 => 30,
-                        _ => 31,
-                    };
-
-                    *naive = naive.with_day(max_day).expect("To set days");
-                },
-                add: |naive, v| naive.add_assign(chrono::Duration::days(v as i64)),
-            },
-            PartDescicion {
-                value: self.1.hours,
-                set_max: |naive| {
-                    *naive = naive.with_hour(23).expect("To set hours");
-                },
-                add: |naive, v| naive.add_assign(chrono::Duration::hours(v as i64)),
-            },
-            PartDescicion {
-                value: self.1.minutes,
-                set_max: |naive| {
-                    *naive = naive.with_minute(59).expect("To set minutes");
-                },
-                add: |naive, v| naive.add_assign(chrono::Duration::minutes(v as i64)),
-            },
-            PartDescicion {
-                value: self.1.seconds,
-                set_max: |naive| {
-                    *naive = naive.with_second(59).expect("To set seconds");
-                },
-                add: |naive, v| naive.add_assign(chrono::Duration::seconds(v as i64)),
-            },
-        ];
-
-        let part = parts
-            .iter()
-            .enumerate()
-            .filter(|(_, part)| part.value.is_some())
-            .last()
-            .expect("To contain at least one part with value");
-
-        dbg!(part.0);
-
-        let (to_add, to_set) = parts.split_at(part.0 + 1);
-        for part in to_add {
-            (part.add)(&mut naive, part.value.unwrap_or(0));
-        }
-
-        for part in to_set {
-            (part.set_max)(&mut naive);
-        }
-
-        *target = target.timezone().from_utc_datetime(&naive);
     }
 
     fn from_parts(sign: Sign, parts: DurationParts, mode: DurationDeltaMode) -> Self {
@@ -393,6 +403,23 @@ mod tests {
         assert_eq!(
             date,
             twon_persistence::Datetime::from_str("2020-12-31T23:59:59Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn subs_until_eod() {
+        let mut date = twon_persistence::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let s = "-1y eod";
+
+        let payment: PaymentPromise = s.parse().unwrap();
+        match payment {
+            PaymentPromise::Datetime(_) => unreachable!(),
+            PaymentPromise::Delta(delta) => delta.add(&mut date),
+        }
+
+        assert_eq!(
+            date,
+            twon_persistence::Datetime::from_str("2019-12-31T23:59:59Z").unwrap()
         );
     }
 }
