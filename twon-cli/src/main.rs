@@ -1,8 +1,8 @@
-mod date;
+mod args;
 mod commands;
+mod date;
 mod diagnostics;
 mod json_diagnostic;
-mod args;
 mod tasks {
     use std::future::Future;
 
@@ -61,6 +61,10 @@ enum Commands {
         #[command(subcommand)]
         command: commands::actors::ActorsCommand,
     },
+    Debts {
+        #[command(subcommand)]
+        command: commands::debts::DebtsCommand,
+    },
     Do(crate::commands::do_command::DoCommand),
 }
 
@@ -102,6 +106,9 @@ fn main() -> miette::Result<()> {
                 commands::currencies::create(name, symbol, code)?;
             }
         },
+        Commands::Debts { command } => {
+            commands::debts::handle(command)?;
+        }
         Commands::Do(command) => {
             crate::commands::do_command::handle(command)?;
         }

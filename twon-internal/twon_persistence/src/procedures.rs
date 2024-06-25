@@ -145,8 +145,9 @@ pub async fn register_in_debt(
     .await?;
 
     connection
-        .query("RELATE type::thing('actor', $actor_id) -> $procedure SET payment_promise = $payment_promise")
+        .query("LET $actor = type::thing('actor', $actor_id)")
         .bind(("actor_id", plan.actor_id))
+        .query("RELATE $actor -> in_debt_on -> $procedure SET payment_promise = $payment_promise")
         .bind(("procedure", response.procedure_id))
         .bind(("payment_promise", plan.payment_promise))
         .await?

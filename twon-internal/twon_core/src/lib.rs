@@ -108,10 +108,8 @@ pub mod money_record {
         }
     }
 
-    impl<K: Eq + std::hash::Hash + std::ops::Deref> std::ops::Deref for MoneyRecord<K> {
-        type Target = HashMap<K, MoneyStorage>;
-
-        fn deref(&self) -> &Self::Target {
+    impl<K: std::hash::Hash + Eq> AsRef<HashMap<K, MoneyStorage>> for MoneyRecord<K> {
+        fn as_ref(&self) -> &HashMap<K, MoneyStorage> {
             &self.0
         }
     }
@@ -304,7 +302,9 @@ impl Snapshot {
             }
             Event::OutDebt(event) => {
                 let (debt_id, action) = extract_action(event);
-                self.out_debts.apply(debt_id, action).map_err(Error::OutDebt)
+                self.out_debts
+                    .apply(debt_id, action)
+                    .map_err(Error::OutDebt)
             }
         }
     }

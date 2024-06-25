@@ -1,3 +1,141 @@
+pub mod debts {
+    use twon_persistence::{actions::debts::list::DebtItem, snapshot_io::SnapshotEntry};
+
+    #[derive(clap::Subcommand)]
+    pub enum DebtsCommand {
+        #[command(alias = "ls")]
+        List {
+            #[arg(short, long, value_enum, default_value = "both")]
+            show: ShowMode,
+        },
+    }
+
+    #[derive(Clone, Debug, clap::ValueEnum)]
+    pub enum ShowMode {
+        In,
+        Out,
+        Both,
+    }
+
+    macro_rules! get_debts {
+        ($run_list:expr) => {{
+            let result: Result<_, miette::Error> = crate::tasks::block_multi(async {
+                let db = crate::tasks::use_db();
+                let snapshot = tokio::task::spawn_blocking(move || {
+                    twon_persistence::snapshot_io::SnapshotIO::new().read()
+                });
+
+                let (db, snapshot) = tokio::join!(db, snapshot);
+                let snapshot_entry = snapshot
+                    .expect("to join read task")
+                    .map_err(crate::diagnostics::snapshot_read_diagnostic)?;
+
+                let result = ($run_list)(&db, snapshot_entry).await;
+
+                match result {
+                    Ok(debts) => Ok(debts),
+                    Err(why) => twon_persistence::log::database(why),
+                }
+            });
+
+            result
+        }};
+    }
+
+    fn list_debts(debts: &[DebtItem]) {
+        for twon_persistence::actions::debts::list::DebtItem {
+            debt_id,
+            debt,
+            actors,
+            currency,
+        } in debts
+        {
+            print!("{} - ", debt_id);
+
+            let mut actors = actors.iter().peekable();
+            while let Some(actor) = actors.next() {
+                print!("{}", actor.name);
+                if let Some(alias) = actor.alias.as_deref() {
+                    print!("({})", alias);
+                }
+
+                if actors.peek().is_some() {
+                    print!(", ");
+                }
+            }
+
+            print!(" - ");
+            match currency {
+                Some(currency) => print!("{} {}", currency.code, currency.symbol),
+                None => print!("(Unknown currency)"),
+            }
+            println!("{}", debt.balance);
+        }
+    }
+
+    pub fn handle(command: DebtsCommand) -> miette::Result<()> {
+        match command {
+            DebtsCommand::List { show } => match show {
+                ShowMode::In => {
+                    let debts = get_debts!(|db, snapshot: SnapshotEntry| {
+                        twon_persistence::actions::debts::list::run_in(
+                            db,
+                            snapshot.snapshot.in_debts,
+                        )
+                    })?;
+
+                    println!("In debts:");
+                    list_debts(&debts);
+
+                    Ok(())
+                }
+                ShowMode::Out => {
+                    let debts = get_debts!(|db, snapshot: SnapshotEntry| {
+                        twon_persistence::actions::debts::list::run_out(
+                            db,
+                            snapshot.snapshot.out_debts,
+                        )
+                    })?;
+
+                    println!("Out debts:");
+                    list_debts(&debts);
+
+                    Ok(())
+                }
+                ShowMode::Both => {
+                    let result = get_debts!(|db, snapshot: SnapshotEntry| async move {
+                        let debts = tokio::try_join!(
+                            twon_persistence::actions::debts::list::run_in(
+                                db,
+                                snapshot.snapshot.in_debts,
+                            ),
+                            twon_persistence::actions::debts::list::run_out(
+                                db,
+                                snapshot.snapshot.out_debts,
+                            )
+                        );
+
+                        Ok(debts)
+                    })?;
+
+                    let (in_debts, out_debts) = match result {
+                        Ok((in_debts, out_debts)) => (in_debts, out_debts),
+                        Err(why) => twon_persistence::log::database(why),
+                    };
+
+                    println!("In debts:");
+                    list_debts(&in_debts);
+
+                    println!("\nOut debts:");
+                    list_debts(&out_debts);
+
+                    Ok(())
+                }
+            },
+        }
+    }
+}
+
 pub mod actors {
     #[derive(clap::Subcommand)]
     pub enum ActorsCommand {

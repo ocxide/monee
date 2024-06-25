@@ -1,3 +1,77 @@
+pub mod debts {
+    pub mod list {
+        use core::panic;
+        use std::future::IntoFuture;
+
+        #[derive(serde::Deserialize)]
+        struct QueryResult {
+            actors: Vec<twon_core::actor::Actor>,
+            debt_id: twon_core::DebtId,
+        }
+
+        pub struct DebtItem {
+            pub debt_id: twon_core::DebtId,
+            pub debt: twon_core::MoneyStorage,
+            pub actors: Vec<twon_core::actor::Actor>,
+            pub currency: Option<crate::actions::list_currencies::CurrencyRow>,
+        }
+
+        async fn run(
+            connection: &crate::database::Connection,
+            debt_relation: &'static str,
+            group: &'static str,
+            debts: twon_core::MoneyRecord<twon_core::DebtId>,
+        ) -> Result<Vec<DebtItem>, crate::database::Error> {
+            let debts_req = connection
+                .query(format!("SELECT id, <-generated<-procedure<-{debt_relation}<-actor.* as actors, debt_id, currency_id FROM event WHERE group = $group AND type = 'incur'"))
+                .bind(("group", group)).into_future();
+
+            let currencies = crate::actions::list_currencies::run(connection);
+            let (debts_req, currencies) = tokio::try_join!(debts_req, currencies)?;
+
+            let mut response = debts_req.check()?;
+
+            let results: Vec<QueryResult> = response.take(0)?;
+
+            let response: Vec<_> = debts
+                .into_iter()
+                .map(|(debt_id, money)| {
+                    let Some(debt) = results.iter().find(|r| r.debt_id == debt_id) else {
+                        panic!("Missing debt {}", debt_id)
+                    };
+
+                    let currency = currencies.iter().find(|c| c.id == money.currency).cloned();
+
+                    DebtItem {
+                        debt_id,
+                        debt: money,
+                        actors: debt.actors.clone(),
+                        currency,
+                    }
+                })
+                .collect();
+
+            Ok(response)
+        }
+
+        pub async fn run_in(
+            connection: &crate::database::Connection,
+            debts: twon_core::MoneyRecord<twon_core::DebtId>,
+        ) -> Result<Vec<DebtItem>, crate::database::Error> {
+            let response = run(connection, "in_debt_on", "in_debt", debts).await?;
+            Ok(response)
+        }
+
+        pub async fn run_out(
+            connection: &crate::database::Connection,
+            debts: twon_core::MoneyRecord<twon_core::DebtId>,
+        ) -> Result<Vec<DebtItem>, crate::database::Error> {
+            let response = run(connection, "out_debt_on", "out_debt", debts).await?;
+            Ok(response)
+        }
+    }
+}
+
 pub mod create_actor {
     #[derive(thiserror::Error, Debug)]
     pub enum Error {

@@ -34,7 +34,7 @@ pub mod actor_type_from_str {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Actor {
     pub name: String,
     #[serde(rename = "type")]
