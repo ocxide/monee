@@ -16,7 +16,7 @@ fn write_error_log<E: std::error::Error>(error: E) {
         }
     };
 
-    let now = crate::Timezone::now();
+    let now = crate::date::Timezone::now();
     let result = writeln!(
         file,
         "ERROR {} - {} {}:{} - {error} - {error:?}",

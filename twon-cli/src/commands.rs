@@ -310,7 +310,7 @@ pub mod do_command {
         let payment_promise = payment_promise.map(|date| match date {
             crate::date::PaymentPromise::Datetime(datetime) => datetime,
             crate::date::PaymentPromise::Delta(delta) => {
-                let mut target = twon::Timezone::now();
+                let mut target = twon::date::Timezone::now();
                 delta.add(&mut target);
 
                 target

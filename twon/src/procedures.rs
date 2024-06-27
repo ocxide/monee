@@ -101,7 +101,7 @@ pub struct RegisterInDebt {
     pub amount: twon_core::Amount,
     pub currency: twon_core::CurrencyId,
     pub actor_id: twon_core::actor::ActorId,
-    pub payment_promise: Option<crate::Datetime>,
+    pub payment_promise: Option<crate::date::Datetime>,
 }
 
 pub async fn register_in_debt(

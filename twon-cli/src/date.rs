@@ -4,7 +4,7 @@ use chrono::{Datelike, Timelike};
 
 #[derive(Debug, Clone)]
 pub enum PaymentPromise {
-    Datetime(twon::Datetime),
+    Datetime(twon::date::Datetime),
     Delta(DurationDelta),
 }
 
@@ -25,11 +25,11 @@ pub enum Error {
     DataPostMode,
 
     #[error(transparent)]
-    Datetime(<twon::Datetime as FromStr>::Err),
+    Datetime(<twon::date::Datetime as FromStr>::Err),
 }
 
 impl From<chrono::ParseError> for Error {
-    fn from(v: <twon::Datetime as FromStr>::Err) -> Self {
+    fn from(v: <twon::date::Datetime as FromStr>::Err) -> Self {
         Self::Datetime(v)
     }
 }
@@ -115,14 +115,14 @@ impl DurationParts {
 pub struct DurationDelta(Sign, DurationParts, DurationDeltaMode);
 
 impl DurationDelta {
-    pub fn add(self, target: &mut twon::Datetime) {
+    pub fn add(self, target: &mut twon::date::Datetime) {
         let mode = self.2;
 
         #[derive(Debug)]
         struct NaiveDuration(chrono::Months, chrono::Days, chrono::Duration);
 
         const N_PARTS: usize = 6;
-        let set_max: [fn(&mut twon::Datetime); N_PARTS] = [
+        let set_max: [fn(&mut twon::date::Datetime); N_PARTS] = [
             |_| {},
             |naive| {
                 *naive = naive.with_month(12).expect("To set months");
@@ -324,7 +324,7 @@ impl FromStr for PaymentPromise {
             return Ok(PaymentPromise::Delta(delta));
         };
 
-        let datetime = twon::Datetime::from_str(s)?;
+        let datetime = twon::date::Datetime::from_str(s)?;
         Ok(PaymentPromise::Datetime(datetime))
     }
 }
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn adds_until_eod() {
-        let mut date = twon::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = twon::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "1d eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -385,13 +385,13 @@ mod tests {
 
         assert_eq!(
             date,
-            twon::Datetime::from_str("2020-04-11T23:59:59Z").unwrap()
+            twon::date::Datetime::from_str("2020-04-11T23:59:59Z").unwrap()
         );
     }
 
     #[test]
     fn adds_untils_this() {
-        let mut date = twon::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = twon::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "0y eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -402,13 +402,13 @@ mod tests {
 
         assert_eq!(
             date,
-            twon::Datetime::from_str("2020-12-31T23:59:59Z").unwrap()
+            twon::date::Datetime::from_str("2020-12-31T23:59:59Z").unwrap()
         );
     }
 
     #[test]
     fn subs_until_eod() {
-        let mut date = twon::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = twon::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "-1y eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -419,7 +419,7 @@ mod tests {
 
         assert_eq!(
             date,
-            twon::Datetime::from_str("2019-12-31T23:59:59Z").unwrap()
+            twon::date::Datetime::from_str("2019-12-31T23:59:59Z").unwrap()
         );
     }
 }

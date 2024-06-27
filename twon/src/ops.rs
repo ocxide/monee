@@ -30,7 +30,7 @@ pub mod build {
 
     pub(crate) async fn build(
         mut snapshot: twon_core::Snapshot,
-        mut min_date: crate::Datetime,
+        mut min_date: crate::date::Datetime,
     ) -> Result<(), Error> {
         let connection = database::connect().await?;
 
@@ -62,7 +62,7 @@ pub mod build {
 
     pub async fn rebuild() -> Result<(), Error> {
         let snapshot = twon_core::Snapshot::default();
-        let min_date = crate::Datetime::MIN_UTC;
+        let min_date = crate::date::Datetime::MIN_UTC;
 
         build(snapshot, min_date).await
     }
