@@ -150,7 +150,7 @@ pub mod actors {
     fn list() -> miette::Result<()> {
         let result = crate::tasks::block_single(async move {
             let db = crate::tasks::use_db().await;
-            twon::actions::list_actors::run(&db).await
+            twon::actions::actors::list::run(&db).await
         });
 
         let actors = match result {
@@ -159,7 +159,7 @@ pub mod actors {
         };
 
         for actor in actors.iter() {
-            let twon::actions::list_actors::ActorRow { data: actor, id } = actor;
+            let twon::actions::actors::list::ActorRow { data: actor, id } = actor;
 
             println!(
                 "{} - `{}` {} {}",
@@ -187,7 +187,7 @@ pub mod actors {
     ) -> miette::Result<()> {
         let result = crate::tasks::block_single(async {
             let db = crate::tasks::use_db().await;
-            twon::actions::create_actor::run(
+            twon::actions::actors::create::run(
                 &db,
                 twon_core::actor::Actor {
                     name,
@@ -207,7 +207,7 @@ pub mod actors {
         };
 
         match err {
-            twon::actions::create_actor::Error::AlreadyExists => {
+            twon::actions::actors::create::Error::AlreadyExists => {
                 let diagnostic = miette::diagnostic!(
                     severity = miette::Severity::Error,
                     code = "actor::AlreadyExists",
@@ -217,7 +217,7 @@ pub mod actors {
 
                 Err(diagnostic.into())
             }
-            twon::actions::create_actor::Error::Database(err) => twon::log::database(err),
+            twon::actions::actors::create::Error::Database(err) => twon::log::database(err),
         }
     }
 }
@@ -410,7 +410,7 @@ pub mod currencies {
     }
 
     pub fn create(name: String, symbol: String, code: String) -> miette::Result<()> {
-        use twon::actions::create_currency;
+        use twon::actions::currencies;
 
         let result = crate::tasks::block_single({
             let code = code.clone();
@@ -420,15 +420,15 @@ pub mod currencies {
                     Err(why) => twon::log::database(why),
                 };
 
-                twon::actions::create_currency::run(&con, name, symbol, code).await
+                twon::actions::currencies::create::run(&con, name, symbol, code).await
             }
         });
 
         let currency_id = match result {
             Ok(currency_id) => currency_id,
             Err(why) => match why {
-                create_currency::Error::Database(err) => twon::log::database(err),
-                create_currency::Error::AlreadyExists => {
+                currencies::create::Error::Database(err) => twon::log::database(err),
+                currencies::create::Error::AlreadyExists => {
                     let diagnostic = miette::diagnostic!(
                         severity = miette::Severity::Error,
                         code = "currency::AlreadyExists",
@@ -452,7 +452,7 @@ pub mod currencies {
                 Err(why) => twon::log::database(why),
             };
 
-            twon::actions::list_currencies::run(&con).await
+            twon::actions::currencies::list::run(&con).await
         });
 
         let currencies = match result {
@@ -537,7 +537,7 @@ pub mod wallets {
                 Err(why) => twon::log::database(why),
             };
 
-            twon::actions::list_wallets::run(&con).await
+            twon::actions::wallets::list::run(&con).await
         })
         .map_err(crate::diagnostics::snapshot_r_diagnostic)?;
 
@@ -571,7 +571,7 @@ pub mod wallets {
                 Err(why) => return Some(Err(why)),
             };
 
-            let result = twon::actions::create_wallet::run(&con, currency_id, name)
+            let result = twon::actions::wallets::create::run(&con, currency_id, name)
                 .await
                 .map_err(crate::diagnostics::snapshot_opt_diagnostic);
 

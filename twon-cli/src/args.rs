@@ -55,7 +55,7 @@ pub async fn get_currency(
     let currency_id = match currency {
         CurrencyIdOrCode::Id(currency_id) => {
             let exists =
-                match twon::actions::check_currency_id::run(con, currency_id).await {
+                match twon::actions::currencies::check::run(con, currency_id).await {
                     Ok(exists) => exists,
                     Err(err) => twon::log::database(err),
                 };
@@ -79,10 +79,10 @@ pub async fn get_currency(
             currency_id
         }
         CurrencyIdOrCode::Code(code) => {
-            use twon::actions::currency_id_from_code;
-            match twon::actions::currency_id_from_code::run(con, code.clone()).await {
+            use twon::actions::currencies::from_code;
+            match from_code::run(con, code.clone()).await {
                 Ok(id) => id,
-                Err(currency_id_from_code::Error::NotFound) => {
+                Err(from_code::Error::NotFound) => {
                     let diagnostic = miette::diagnostic!(
                         severity = miette::Severity::Error,
                         code = "currency::NotFound",
@@ -92,7 +92,7 @@ pub async fn get_currency(
 
                     return Err(diagnostic.into());
                 }
-                Err(currency_id_from_code::Error::Database(error)) => {
+                Err(from_code::Error::Database(error)) => {
                     twon::log::database(error)
                 }
             }

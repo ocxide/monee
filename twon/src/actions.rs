@@ -31,7 +31,7 @@ pub mod debts {
             pub debt_id: twon_core::DebtId,
             pub debt: twon_core::MoneyStorage,
             pub actors: Vec<twon_core::actor::Actor>,
-            pub currency: Option<crate::actions::list_currencies::CurrencyRow>,
+            pub currency: Option<crate::actions::currencies::list::CurrencyRow>,
         }
 
         async fn run(
@@ -44,7 +44,7 @@ pub mod debts {
                 .query(format!("SELECT id, <-generated<-procedure<-{debt_relation}<-actor.* as actors, debt_id, currency_id FROM event WHERE group = $group AND type = 'incur'"))
                 .bind(("group", group)).into_future();
 
-            let currencies = crate::actions::list_currencies::run(connection);
+            let currencies = crate::actions::currencies::list::run(connection);
             let (debts_req, currencies) = tokio::try_join!(debts_req, currencies)?;
 
             let mut response = debts_req.check()?;
@@ -90,259 +90,272 @@ pub mod debts {
     }
 }
 
-pub mod create_actor {
-    #[derive(thiserror::Error, Debug)]
-    pub enum Error {
-        #[error("Actor already exists")]
-        AlreadyExists,
-        #[error(transparent)]
-        Database(#[from] crate::database::Error),
-    }
-
-    pub async fn run(
-        connection: &crate::database::Connection,
-        actor: twon_core::actor::Actor,
-    ) -> Result<twon_core::actor::ActorId, Error> {
-        let id = twon_core::actor::ActorId::new();
-        println!("Creating actor id: {:?}", id);
-
-        let result = connection
-            .query("CREATE type::thing('actor', $id) CONTENT $data")
-            .bind(("id", id))
-            .bind(("data", actor))
-            .await?
-            .check();
-
-        match result {
-            Err(
-                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
-                | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-            ) => Err(Error::AlreadyExists),
-            Err(e) => Err(e.into()),
-            Ok(_) => Ok(id),
-        }
-    }
-}
-
-pub mod list_actors {
-    #[derive(serde::Deserialize)]
-    pub struct ActorRow {
-        #[serde(with = "crate::sql_id::string")]
-        pub id: twon_core::actor::ActorId,
-        #[serde(flatten)]
-        pub data: twon_core::actor::Actor,
-    }
-
-    pub async fn run(
-        connection: &crate::database::Connection,
-    ) -> Result<Vec<ActorRow>, crate::database::Error> {
-        let mut response = connection.query("SELECT * FROM actor").await?.check()?;
-
-        let actors: Vec<ActorRow> = response.take(0)?;
-        Ok(actors)
-    }
-}
-
-pub mod currency_id_from_code {
-    #[derive(thiserror::Error, Debug)]
-    pub enum Error {
-        #[error("Currency code not found")]
-        NotFound,
-        #[error(transparent)]
-        Database(#[from] crate::database::Error),
-    }
-
-    pub async fn run(
-        connection: &crate::database::Connection,
-        code: String,
-    ) -> Result<twon_core::CurrencyId, Error> {
+pub mod actors {
+    pub mod list {
         #[derive(serde::Deserialize)]
-        struct CurrencyIdSelect {
+        pub struct ActorRow {
             #[serde(with = "crate::sql_id::string")]
+            pub id: twon_core::actor::ActorId,
+            #[serde(flatten)]
+            pub data: twon_core::actor::Actor,
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+        ) -> Result<Vec<ActorRow>, crate::database::Error> {
+            let mut response = connection.query("SELECT * FROM actor").await?.check()?;
+
+            let actors: Vec<ActorRow> = response.take(0)?;
+            Ok(actors)
+        }
+    }
+
+    pub mod create {
+        use twon_core::actor;
+
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Actor already exists")]
+            AlreadyExists,
+            #[error(transparent)]
+            Database(#[from] crate::database::Error),
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+            actor: actor::Actor,
+        ) -> Result<actor::ActorId, Error> {
+            let id = actor::ActorId::new();
+            println!("Creating actor id: {:?}", id);
+
+            let result = connection
+                .query("CREATE type::thing('actor', $id) CONTENT $data")
+                .bind(("id", id))
+                .bind(("data", actor))
+                .await?
+                .check();
+
+            match result {
+                Err(
+                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                ) => Err(Error::AlreadyExists),
+                Err(e) => Err(e.into()),
+                Ok(_) => Ok(id),
+            }
+        }
+    }
+}
+
+pub mod currencies {
+    pub mod from_code {
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Currency code not found")]
+            NotFound,
+            #[error(transparent)]
+            Database(#[from] crate::database::Error),
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+            code: String,
+        ) -> Result<twon_core::CurrencyId, Error> {
+            #[derive(serde::Deserialize)]
+            struct CurrencyIdSelect {
+                #[serde(with = "crate::sql_id::string")]
+                id: twon_core::CurrencyId,
+            }
+
+            let mut response = connection
+                .query("SELECT id FROM currency WHERE code = $code")
+                .bind(("code", code))
+                .await?
+                .check()?;
+
+            let select: Vec<CurrencyIdSelect> = response.take(0)?;
+            let Some(select) = select.into_iter().next() else {
+                return Err(Error::NotFound);
+            };
+
+            Ok(select.id)
+        }
+    }
+
+    pub mod check {
+        pub async fn run(
+            connection: &crate::database::Connection,
             id: twon_core::CurrencyId,
+        ) -> Result<bool, crate::database::Error> {
+            #[derive(serde::Deserialize)]
+            struct Empty {}
+
+            let mut response = connection
+                .query("SELECT 1 FROM type::thing(currency, $id)")
+                .bind(("id", id))
+                .await?
+                .check()?;
+
+            let data: Option<Empty> = response.take(0)?;
+            Ok(data.is_some())
+        }
+    }
+
+    pub mod create {
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Currency already exists")]
+            AlreadyExists,
+            #[error(transparent)]
+            Database(#[from] crate::database::Error),
         }
 
-        let mut response = connection
-            .query("SELECT id FROM currency WHERE code = $code")
-            .bind(("code", code))
-            .await?
-            .check()?;
+        pub async fn run(
+            connection: &crate::database::Connection,
+            name: String,
+            symbol: String,
+            code: String,
+        ) -> Result<twon_core::CurrencyId, Error> {
+            let id = twon_core::CurrencyId::new();
+            let response = connection
+                .query(
+                    "CREATE ONLY currency SET id=$id, name = $name, symbol = $symbol, code = $code",
+                )
+                .bind(("id", id))
+                .bind(("name", name))
+                .bind(("symbol", symbol))
+                .bind(("code", code))
+                .await?
+                .check();
 
-        let select: Vec<CurrencyIdSelect> = response.take(0)?;
-        let Some(select) = select.into_iter().next() else {
-            return Err(Error::NotFound);
-        };
+            match response {
+                Err(
+                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                ) => Err(Error::AlreadyExists),
+                Err(e) => Err(e.into()),
+                Ok(_) => Ok(id),
+            }
+        }
+    }
 
-        Ok(select.id)
+    pub mod list {
+        #[derive(serde::Deserialize, Clone)]
+        pub struct CurrencyRow {
+            #[serde(with = "crate::sql_id::string")]
+            pub id: twon_core::CurrencyId,
+            pub name: String,
+            pub symbol: String,
+            pub code: String,
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+        ) -> Result<Vec<CurrencyRow>, crate::database::Error> {
+            let response: Vec<CurrencyRow> = connection.select("currency").await?;
+            Ok(response)
+        }
     }
 }
 
-pub mod check_currency_id {
-    pub async fn run(
-        connection: &crate::database::Connection,
-        id: twon_core::CurrencyId,
-    ) -> Result<bool, crate::database::Error> {
+pub mod wallets {
+    pub mod list {
+        pub use crate::error::SnapshotReadError as Error;
+
+        pub struct WalletRow {
+            pub id: twon_core::WalletId,
+            pub name: Option<String>,
+            pub currency: Option<crate::actions::currencies::list::CurrencyRow>,
+            pub balance: twon_core::Amount,
+        }
+
         #[derive(serde::Deserialize)]
-        struct Empty {}
+        struct WalletSelect {
+            #[serde(with = "crate::sql_id::string")]
+            pub id: twon_core::WalletId,
+            pub name: Option<String>,
+        }
 
-        let mut response = connection
-            .query("SELECT 1 FROM type::thing(currency, $id)")
-            .bind(("id", id))
-            .await?
-            .check()?;
+        pub async fn run(
+            connection: &crate::database::Connection,
+        ) -> Result<Vec<WalletRow>, Error> {
+            let snapshot_fut = crate::snapshot_io::read();
+            let metadatas = async move {
+                let result: Result<Vec<WalletSelect>, _> =
+                    connection.select("wallet_metadata").await;
+                result
+            };
 
-        let data: Option<Empty> = response.take(0)?;
-        Ok(data.is_some())
-    }
-}
+            let curriencies = crate::actions::currencies::list::run(connection);
 
-pub mod create_currency {
-    #[derive(thiserror::Error, Debug)]
-    pub enum Error {
-        #[error("Currency already exists")]
-        AlreadyExists,
-        #[error(transparent)]
-        Database(#[from] crate::database::Error),
-    }
+            let (snapshot_entry, metadatas, curriencies) =
+                tokio::join!(snapshot_fut, metadatas, curriencies);
 
-    pub async fn run(
-        connection: &crate::database::Connection,
-        name: String,
-        symbol: String,
-        code: String,
-    ) -> Result<twon_core::CurrencyId, Error> {
-        let id = twon_core::CurrencyId::new();
-        let response = connection
-            .query("CREATE ONLY currency SET id=$id, name = $name, symbol = $symbol, code = $code")
-            .bind(("id", id))
-            .bind(("name", name))
-            .bind(("symbol", symbol))
-            .bind(("code", code))
-            .await?
-            .check();
+            let metadatas = metadatas?;
+            let curriencies = curriencies?;
+            let snapshot_entry = snapshot_entry?;
 
-        match response {
-            Err(
-                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
-                | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-            ) => Err(Error::AlreadyExists),
-            Err(e) => Err(e.into()),
-            Ok(_) => Ok(id),
+            let wallets = snapshot_entry
+                .snapshot
+                .wallets
+                .into_iter()
+                .map(|(id, v)| WalletRow {
+                    id,
+                    currency: curriencies.iter().find(|c| c.id == v.currency).cloned(),
+                    balance: v.balance,
+                    name: metadatas
+                        .iter()
+                        .find(|w| w.id == id)
+                        .and_then(|w| w.name.clone()),
+                })
+                .collect();
+
+            Ok(wallets)
         }
     }
-}
 
-pub mod list_currencies {
-    #[derive(serde::Deserialize, Clone)]
-    pub struct CurrencyRow {
-        #[serde(with = "crate::sql_id::string")]
-        pub id: twon_core::CurrencyId,
-        pub name: String,
-        pub symbol: String,
-        pub code: String,
-    }
+    pub mod create {
+        use surrealdb::sql::{self, Thing};
+        use twon_core::WalletId;
 
-    pub async fn run(
-        connection: &crate::database::Connection,
-    ) -> Result<Vec<CurrencyRow>, crate::database::Error> {
-        let response: Vec<CurrencyRow> = connection.select("currency").await?;
-        Ok(response)
-    }
-}
+        pub use crate::error::SnapshotOptError as Error;
 
-pub mod list_wallets {
-    pub use crate::error::SnapshotReadError as Error;
+        pub async fn run(
+            connection: &crate::database::Connection,
+            currency_id: twon_core::CurrencyId,
+            name: Option<String>,
+        ) -> Result<WalletId, Error> {
+            let wallet_id = WalletId::new();
 
-    pub struct WalletRow {
-        pub id: twon_core::WalletId,
-        pub name: Option<String>,
-        pub currency: Option<crate::actions::list_currencies::CurrencyRow>,
-        pub balance: twon_core::Amount,
-    }
+            let mut snapshot_entry = crate::snapshot_io::read().await?;
+            let event = twon_core::Event::Wallet(twon_core::WalletEvent::Create {
+                wallet_id,
+                currency: currency_id,
+            });
+            snapshot_entry.snapshot.apply(event.clone())?;
 
-    #[derive(serde::Deserialize)]
-    struct WalletSelect {
-        #[serde(with = "crate::sql_id::string")]
-        pub id: twon_core::WalletId,
-        pub name: Option<String>,
-    }
+            let wallet_resource = {
+                let id = sql::Id::String(wallet_id.to_string());
+                Thing::from(("wallet_metadata", id))
+            };
 
-    pub async fn run(connection: &crate::database::Connection) -> Result<Vec<WalletRow>, Error> {
-        let snapshot_fut = crate::snapshot_io::read();
-        let metadatas = async move {
-            let result: Result<Vec<WalletSelect>, _> = connection.select("wallet_metadata").await;
-            result
-        };
-
-        let curriencies = crate::actions::list_currencies::run(connection);
-
-        let (snapshot_entry, metadatas, curriencies) =
-            tokio::join!(snapshot_fut, metadatas, curriencies);
-
-        let metadatas = metadatas?;
-        let curriencies = curriencies?;
-        let snapshot_entry = snapshot_entry?;
-
-        let wallets = snapshot_entry
-            .snapshot
-            .wallets
-            .into_iter()
-            .map(|(id, v)| WalletRow {
-                id,
-                currency: curriencies.iter().find(|c| c.id == v.currency).cloned(),
-                balance: v.balance,
-                name: metadatas
-                    .iter()
-                    .find(|w| w.id == id)
-                    .and_then(|w| w.name.clone()),
-            })
-            .collect();
-
-        Ok(wallets)
-    }
-}
-
-pub mod create_wallet {
-    use surrealdb::sql::{self, Thing};
-    use twon_core::WalletId;
-
-    pub use crate::error::SnapshotOptError as Error;
-
-    pub async fn run(
-        connection: &crate::database::Connection,
-        currency_id: twon_core::CurrencyId,
-        name: Option<String>,
-    ) -> Result<WalletId, Error> {
-        let wallet_id = WalletId::new();
-
-        let mut snapshot_entry = crate::snapshot_io::read().await?;
-        let event = twon_core::Event::Wallet(twon_core::WalletEvent::Create {
-            wallet_id,
-            currency: currency_id,
-        });
-        snapshot_entry.snapshot.apply(event.clone())?;
-
-        let wallet_resource = {
-            let id = sql::Id::String(wallet_id.to_string());
-            Thing::from(("wallet_metadata", id))
-        };
-
-        let response = connection
-            .query(sql::statements::BeginStatement)
-            .query(
-                "
+            let response = connection
+                .query(sql::statements::BeginStatement)
+                .query(
+                    "
 CREATE event CONTENT $event;
 CREATE $wallet_resource SET name = $name;",
-            )
-            .bind(("event", event))
-            .bind(("wallet_resource", wallet_resource))
-            .bind(("name", name))
-            .query(sql::statements::CommitStatement)
-            .await?;
+                )
+                .bind(("event", event))
+                .bind(("wallet_resource", wallet_resource))
+                .bind(("name", name))
+                .query(sql::statements::CommitStatement)
+                .await?;
 
-        response.check()?;
+            response.check()?;
 
-        crate::snapshot_io::write(snapshot_entry.snapshot).await?;
-        Ok(wallet_id)
+            crate::snapshot_io::write(snapshot_entry.snapshot).await?;
+            Ok(wallet_id)
+        }
     }
 }
