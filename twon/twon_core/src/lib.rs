@@ -4,7 +4,7 @@ mod amount;
 mod tiny_id;
 
 pub use amount::Amount;
-pub use currency_id::CurrencyId;
+pub use currency::CurrencyId;
 pub use debt_id::DebtId;
 pub use money_record::{MoneyRecord, MoneyStorage};
 pub use wallet_id::WalletId;
@@ -12,22 +12,30 @@ pub use wallet_id::WalletId;
 pub mod actor;
 
 pub mod currency {
+    pub use currency_id::CurrencyId;
+
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     pub struct Currency {
         pub name: String,
         pub symbol: String,
         pub code: String,
     }
+
+    mod currency_id {
+        type Id = crate::tiny_id::TinyId<4>;
+
+        #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
+        pub struct CurrencyId(Id);
+
+        crate::id_utils::impl_id!(CurrencyId, Id);
+    }
 }
 
 pub mod metadata {
-    use crate::WalletId;
-
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(rename_all = "snake_case")]
     pub struct WalletMetadata {
-        pub id: WalletId,
-        pub name: String,
+        pub name: Option<String>,
     }
 }
 
@@ -38,15 +46,6 @@ mod wallet_id {
     pub struct WalletId(Id);
 
     crate::id_utils::impl_id!(WalletId, Id);
-}
-
-mod currency_id {
-    type Id = crate::tiny_id::TinyId<4>;
-
-    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
-    pub struct CurrencyId(Id);
-
-    crate::id_utils::impl_id!(CurrencyId, Id);
 }
 
 mod debt_id {

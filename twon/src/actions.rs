@@ -58,7 +58,7 @@ pub mod debts {
                         panic!("Missing debt {}", debt_id)
                     };
 
-                    let currency = currencies.iter().find(|c| c.id == money.currency).cloned();
+                    let currency = currencies.iter().find(|c| c.0 == money.currency).cloned();
 
                     DebtItem {
                         debt_id,
@@ -92,13 +92,8 @@ pub mod debts {
 
 pub mod actors {
     pub mod list {
-        #[derive(serde::Deserialize)]
-        pub struct ActorRow {
-            #[serde(with = "crate::sql_id::string")]
-            pub id: twon_core::actor::ActorId,
-            #[serde(flatten)]
-            pub data: twon_core::actor::Actor,
-        }
+        pub type ActorRow =
+            crate::database::Entity<twon_core::actor::ActorId, twon_core::actor::Actor>;
 
         pub async fn run(
             connection: &crate::database::Connection,
@@ -240,38 +235,17 @@ pub mod currencies {
     }
 
     pub mod list {
-        #[derive(serde::Deserialize, Clone)]
-        pub struct CurrencyRow {
-            #[serde(with = "crate::sql_id::string")]
-            pub id: twon_core::CurrencyId,
-            pub name: String,
-            pub symbol: String,
-            pub code: String,
-        }
+        use twon_core::currency;
+
+        pub type CurrencyRow = crate::database::Entity<currency::CurrencyId, currency::Currency>;
 
         pub async fn run(
             connection: &crate::database::Connection,
         ) -> Result<Vec<CurrencyRow>, crate::database::Error> {
-            let response: Vec<
-                crate::database::entity::Entity<
-                    twon_core::CurrencyId,
-                    twon_core::currency::Currency,
-                >,
-            > = connection.select("currency").await?;
-
-            Ok(response
-                .into_iter()
-                .map(|currency| CurrencyRow {
-                    id: currency.0,
-                    name: currency.1.name,
-                    symbol: currency.1.symbol,
-                    code: currency.1.code,
-                })
-                .collect())
+            let response: Vec<CurrencyRow> = connection.select("currency").await?;
+            Ok(response)
         }
     }
-
-    pub mod list_many {}
 }
 
 pub mod wallets {
@@ -285,20 +259,15 @@ pub mod wallets {
             pub balance: twon_core::Amount,
         }
 
-        #[derive(serde::Deserialize)]
-        struct WalletSelect {
-            #[serde(with = "crate::sql_id::string")]
-            pub id: twon_core::WalletId,
-            pub name: Option<String>,
-        }
-
         pub async fn run(
             connection: &crate::database::Connection,
         ) -> Result<Vec<WalletRow>, Error> {
             let snapshot_fut = crate::snapshot_io::read();
             let metadatas = async move {
-                let result: Result<Vec<WalletSelect>, _> =
-                    connection.select("wallet_metadata").await;
+                let result: Result<
+                    Vec<crate::Entity<twon_core::WalletId, twon_core::metadata::WalletMetadata>>,
+                    _,
+                > = connection.select("wallet_metadata").await;
                 result
             };
 
@@ -317,12 +286,12 @@ pub mod wallets {
                 .into_iter()
                 .map(|(id, v)| WalletRow {
                     id,
-                    currency: curriencies.iter().find(|c| c.id == v.currency).cloned(),
+                    currency: curriencies.iter().find(|c| c.0 == v.currency).cloned(),
                     balance: v.balance,
                     name: metadatas
                         .iter()
-                        .find(|w| w.id == id)
-                        .and_then(|w| w.name.clone()),
+                        .find(|w| w.0 == id)
+                        .and_then(|crate::Entity(_, w)| w.name.clone()),
                 })
                 .collect();
 

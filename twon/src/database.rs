@@ -87,11 +87,19 @@ pub async fn connect() -> surrealdb::Result<Connection> {
     Ok(db)
 }
 
+pub use entity::Entity;
+
 pub(crate) mod entity {
     use serde::Deserialize;
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Entity<K, T>(pub K, pub T);
+
+    impl<K, T> Entity<K, T> {
+        pub fn into_inner(self) -> (K, T) {
+            (self.0, self.1)
+        }
+    }
 
     trait SqlId: Sized + serde::de::DeserializeOwned {
         fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D)
@@ -134,12 +142,21 @@ pub(crate) mod entity {
         }
     }
 
-    impl SqlId for twon_core::CurrencyId {
-        fn deserialize<'de, D: serde::Deserializer<'de>>(
-            deserializer: D,
-        ) -> Result<Self, D::Error> {
-            let id = sql_inner_id::SqlStringId::<Self>::deserialize(deserializer)?;
-            Ok(id.field)
-        }
+    macro_rules! impl_str_de {
+        ($name:path) => {
+            impl SqlId for $name {
+                fn deserialize<'de, D: serde::Deserializer<'de>>(
+                    deserializer: D,
+                ) -> Result<Self, D::Error> {
+                    let id = sql_inner_id::SqlStringId::<Self>::deserialize(deserializer)?;
+                    Ok(id.field)
+                }
+            }
+        };
     }
+
+    impl_str_de!(twon_core::DebtId);
+    impl_str_de!(twon_core::WalletId);
+    impl_str_de!(twon_core::CurrencyId);
+    impl_str_de!(twon_core::actor::ActorId);
 }

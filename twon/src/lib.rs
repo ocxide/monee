@@ -34,3 +34,5 @@ fn create_local_path() -> PathBuf {
     fs::create_dir_all(&path).expect("To create twon data directory");
     path
 }
+
+pub use database::Entity;

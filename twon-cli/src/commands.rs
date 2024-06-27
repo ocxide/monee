@@ -62,7 +62,7 @@ pub mod debts {
 
             print!(" - ");
             match currency {
-                Some(currency) => print!("{} {}", currency.code, currency.symbol),
+                Some(twon::Entity(_, currency)) => print!("{} {}", currency.code, currency.symbol),
                 None => print!("(Unknown currency)"),
             }
             println!("{}", debt.balance);
@@ -158,9 +158,7 @@ pub mod actors {
             Err(why) => twon::log::database(why),
         };
 
-        for actor in actors.iter() {
-            let twon::actions::actors::list::ActorRow { data: actor, id } = actor;
-
+        for twon::Entity(id, actor) in actors.iter() {
             println!(
                 "{} - `{}` {} {}",
                 match actor.actor_type {
@@ -460,10 +458,10 @@ pub mod currencies {
             Err(err) => twon::log::database(err),
         };
 
-        for currency in currencies {
+        for twon::Entity(id, currency) in currencies {
             println!(
                 "{} `{}` {} {}",
-                currency.id, currency.name, currency.symbol, currency.code
+                id, currency.name, currency.symbol, currency.code
             );
         }
 
@@ -548,7 +546,7 @@ pub mod wallets {
             }
 
             match &wallet.currency {
-                Some(currency) => print!(" {} {}", currency.code, currency.symbol),
+                Some(twon::Entity(_, currency)) => print!(" {} {}", currency.code, currency.symbol),
                 None => print!("`Unknown currency`"),
             }
 
