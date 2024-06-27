@@ -86,3 +86,60 @@ pub async fn connect() -> surrealdb::Result<Connection> {
 
     Ok(db)
 }
+
+pub(crate) mod entity {
+    use serde::Deserialize;
+
+    #[derive(Debug)]
+    pub struct Entity<K, T>(pub K, pub T);
+
+    trait SqlId: Sized + serde::de::DeserializeOwned {
+        fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D)
+            -> Result<Self, D::Error>;
+    }
+
+    impl<'de, K, T> Deserialize<'de> for Entity<K, T>
+    where
+        K: SqlId,
+        T: Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let builder = EntityBuilder::<K, T>::deserialize(deserializer)?;
+            Ok(Self(builder.id.id, builder.value))
+        }
+    }
+
+    #[derive(Deserialize)]
+    struct EntityBuilder<K: SqlId, T> {
+        #[serde(deserialize_with = "<ThindId<K>>::deserialize")]
+        id: ThindId<K>,
+        #[serde(flatten)]
+        value: T,
+    }
+
+    #[derive(Deserialize)]
+    struct ThindId<IK: SqlId> {
+        #[serde(deserialize_with = "<IK as SqlId>::deserialize")]
+        id: IK,
+    }
+
+    mod sql_inner_id {
+        #[derive(serde::Deserialize)]
+        pub struct SqlStringId<K> {
+            #[serde(rename = "String")]
+            pub field: K,
+        }
+    }
+
+    impl SqlId for twon_core::CurrencyId {
+        fn deserialize<'de, D: serde::Deserializer<'de>>(
+            deserializer: D,
+        ) -> Result<Self, D::Error> {
+            let id = sql_inner_id::SqlStringId::<Self>::deserialize(deserializer)?;
+            Ok(id.field)
+        }
+    }
+}

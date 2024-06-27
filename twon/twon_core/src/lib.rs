@@ -11,6 +11,15 @@ pub use wallet_id::WalletId;
 
 pub mod actor;
 
+pub mod currency {
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    pub struct Currency {
+        pub name: String,
+        pub symbol: String,
+        pub code: String,
+    }
+}
+
 pub mod metadata {
     use crate::WalletId;
 

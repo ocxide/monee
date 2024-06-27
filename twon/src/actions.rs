@@ -252,10 +252,26 @@ pub mod currencies {
         pub async fn run(
             connection: &crate::database::Connection,
         ) -> Result<Vec<CurrencyRow>, crate::database::Error> {
-            let response: Vec<CurrencyRow> = connection.select("currency").await?;
-            Ok(response)
+            let response: Vec<
+                crate::database::entity::Entity<
+                    twon_core::CurrencyId,
+                    twon_core::currency::Currency,
+                >,
+            > = connection.select("currency").await?;
+
+            Ok(response
+                .into_iter()
+                .map(|currency| CurrencyRow {
+                    id: currency.0,
+                    name: currency.1.name,
+                    symbol: currency.1.symbol,
+                    code: currency.1.code,
+                })
+                .collect())
         }
     }
+
+    pub mod list_many {}
 }
 
 pub mod wallets {
