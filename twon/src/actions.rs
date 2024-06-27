@@ -1,3 +1,21 @@
+pub mod events {
+    pub async fn add(
+        connection: &crate::database::Connection,
+        event: twon_core::Event,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        let mut snapshot_entry = crate::snapshot_io::read().await?;
+        snapshot_entry.snapshot.apply(event.clone())?;
+
+        connection
+            .query("CREATE event CONTENT $data")
+            .bind(("data", event))
+            .await?;
+
+        crate::snapshot_io::write(snapshot_entry.snapshot).await?;
+        Ok(())
+    }
+}
+
 pub mod debts {
     pub mod list {
         use core::panic;

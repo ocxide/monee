@@ -86,13 +86,3 @@ pub async fn connect() -> surrealdb::Result<Connection> {
 
     Ok(db)
 }
-
-pub async fn add_event(connection: &Connection, event: twon_core::Event) -> Result<()> {
-    connection
-        .query("CREATE event CONTENT $data")
-        .bind(("data", event))
-        .await?
-        .check()?;
-
-    Ok(())
-}

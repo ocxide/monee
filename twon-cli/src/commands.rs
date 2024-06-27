@@ -23,8 +23,8 @@ pub mod debts {
                 let db = crate::tasks::use_db();
                 let snapshot = twon::snapshot_io::read();
                 let (db, snapshot) = tokio::join!(db, snapshot);
-                let snapshot_entry = snapshot
-                    .map_err(crate::diagnostics::snapshot_read_diagnostic)?;
+                let snapshot_entry =
+                    snapshot.map_err(crate::diagnostics::snapshot_read_diagnostic)?;
 
                 let result = ($run_list)(&db, snapshot_entry).await;
 
@@ -518,16 +518,13 @@ pub mod wallets {
 
     fn add_event(event: twon_core::Event) -> miette::Result<()> {
         let response = crate::tasks::block_single(async {
-            let con = match twon::database::connect().await {
-                Ok(con) => con,
-                Err(why) => twon::log::database(why),
-            };
-
-            twon::database::add_event(&con, event).await
+            let con = crate::tasks::use_db().await;
+            twon::actions::events::add(&con, event).await
         });
 
         if let Err(why) = response {
-            twon::log::database(why);
+            let report = crate::diagnostics::snapshot_opt_diagnostic(why);
+            return Err(report);
         }
 
         Ok(())
