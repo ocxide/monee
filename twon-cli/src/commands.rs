@@ -1,5 +1,5 @@
 pub mod debts {
-    use twon_persistence::{actions::debts::list::DebtItem, snapshot_io::SnapshotEntry};
+    use twon::{actions::debts::list::DebtItem, snapshot_io::SnapshotEntry};
 
     #[derive(clap::Subcommand)]
     pub enum DebtsCommand {
@@ -22,7 +22,7 @@ pub mod debts {
             let result: Result<_, miette::Error> = crate::tasks::block_multi(async {
                 let db = crate::tasks::use_db();
                 let snapshot = tokio::task::spawn_blocking(move || {
-                    twon_persistence::snapshot_io::SnapshotIO::new().read()
+                    twon::snapshot_io::SnapshotIO::new().read()
                 });
 
                 let (db, snapshot) = tokio::join!(db, snapshot);
@@ -34,7 +34,7 @@ pub mod debts {
 
                 match result {
                     Ok(debts) => Ok(debts),
-                    Err(why) => twon_persistence::log::database(why),
+                    Err(why) => twon::log::database(why),
                 }
             });
 
@@ -43,7 +43,7 @@ pub mod debts {
     }
 
     fn list_debts(debts: &[DebtItem]) {
-        for twon_persistence::actions::debts::list::DebtItem {
+        for twon::actions::debts::list::DebtItem {
             debt_id,
             debt,
             actors,
@@ -78,7 +78,7 @@ pub mod debts {
             DebtsCommand::List { show } => match show {
                 ShowMode::In => {
                     let debts = get_debts!(|db, snapshot: SnapshotEntry| {
-                        twon_persistence::actions::debts::list::run_in(
+                        twon::actions::debts::list::run_in(
                             db,
                             snapshot.snapshot.in_debts,
                         )
@@ -91,7 +91,7 @@ pub mod debts {
                 }
                 ShowMode::Out => {
                     let debts = get_debts!(|db, snapshot: SnapshotEntry| {
-                        twon_persistence::actions::debts::list::run_out(
+                        twon::actions::debts::list::run_out(
                             db,
                             snapshot.snapshot.out_debts,
                         )
@@ -105,11 +105,11 @@ pub mod debts {
                 ShowMode::Both => {
                     let result = get_debts!(|db, snapshot: SnapshotEntry| async move {
                         let debts = tokio::try_join!(
-                            twon_persistence::actions::debts::list::run_in(
+                            twon::actions::debts::list::run_in(
                                 db,
                                 snapshot.snapshot.in_debts,
                             ),
-                            twon_persistence::actions::debts::list::run_out(
+                            twon::actions::debts::list::run_out(
                                 db,
                                 snapshot.snapshot.out_debts,
                             )
@@ -120,7 +120,7 @@ pub mod debts {
 
                     let (in_debts, out_debts) = match result {
                         Ok((in_debts, out_debts)) => (in_debts, out_debts),
-                        Err(why) => twon_persistence::log::database(why),
+                        Err(why) => twon::log::database(why),
                     };
 
                     println!("In debts:");
@@ -166,16 +166,16 @@ pub mod actors {
     fn list() -> miette::Result<()> {
         let result = crate::tasks::block_single(async move {
             let db = crate::tasks::use_db().await;
-            twon_persistence::actions::list_actors::run(&db).await
+            twon::actions::list_actors::run(&db).await
         });
 
         let actors = match result {
             Ok(actors) => actors,
-            Err(why) => twon_persistence::log::database(why),
+            Err(why) => twon::log::database(why),
         };
 
         for actor in actors.iter() {
-            let twon_persistence::actions::list_actors::ActorRow { data: actor, id } = actor;
+            let twon::actions::list_actors::ActorRow { data: actor, id } = actor;
 
             println!(
                 "{} - `{}` {} {}",
@@ -203,7 +203,7 @@ pub mod actors {
     ) -> miette::Result<()> {
         let result = crate::tasks::block_single(async {
             let db = crate::tasks::use_db().await;
-            twon_persistence::actions::create_actor::run(
+            twon::actions::create_actor::run(
                 &db,
                 twon_core::actor::Actor {
                     name,
@@ -223,7 +223,7 @@ pub mod actors {
         };
 
         match err {
-            twon_persistence::actions::create_actor::Error::AlreadyExists => {
+            twon::actions::create_actor::Error::AlreadyExists => {
                 let diagnostic = miette::diagnostic!(
                     severity = miette::Severity::Error,
                     code = "actor::AlreadyExists",
@@ -233,8 +233,8 @@ pub mod actors {
 
                 Err(diagnostic.into())
             }
-            twon_persistence::actions::create_actor::Error::Database(err) => {
-                twon_persistence::log::database(err)
+            twon::actions::create_actor::Error::Database(err) => {
+                twon::log::database(err)
             }
         }
     }
@@ -294,15 +294,15 @@ pub mod do_command {
         amount: twon_core::Amount,
         description: Option<String>,
     ) -> miette::Result<()> {
-        use twon_persistence::procedures;
+        use twon::procedures;
 
         crate::tasks::block_single(async move {
-            let con = match twon_persistence::database::connect().await {
+            let con = match twon::database::connect().await {
                 Ok(con) => con,
-                Err(why) => twon_persistence::log::database(why),
+                Err(why) => twon::log::database(why),
             };
 
-            twon_persistence::procedures::register_balance(
+            twon::procedures::register_balance(
                 &con,
                 procedures::CreateProcedure { description },
                 procedures::RegisterBalance { wallet_id, amount },
@@ -323,12 +323,12 @@ pub mod do_command {
         payment_promise: Option<crate::date::PaymentPromise>,
         description: Option<String>,
     ) -> miette::Result<()> {
-        use twon_persistence::procedures;
+        use twon::procedures;
 
         let payment_promise = payment_promise.map(|date| match date {
             crate::date::PaymentPromise::Datetime(datetime) => datetime,
             crate::date::PaymentPromise::Delta(delta) => {
-                let mut target = twon_persistence::Timezone::now();
+                let mut target = twon::Timezone::now();
                 delta.add(&mut target);
 
                 target
@@ -341,7 +341,7 @@ pub mod do_command {
                 return Ok(false);
             };
 
-            twon_persistence::procedures::register_in_debt(
+            twon::procedures::register_in_debt(
                 &db,
                 procedures::CreateProcedure { description },
                 procedures::RegisterInDebt {
@@ -369,7 +369,7 @@ use crate::diagnostics::snapshot_read_diagnostic;
 
 pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
     let snapshot_entry = {
-        let mut snapshot_io = twon_persistence::SnapshotIO::new();
+        let mut snapshot_io = twon::SnapshotIO::new();
         snapshot_io.read().map_err(snapshot_read_diagnostic)?
     };
 
@@ -399,7 +399,7 @@ pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
 }
 
 pub fn rebuild() -> miette::Result<()> {
-    let Err(why) = crate::tasks::block_single(twon_persistence::ops::build::rebuild()) else {
+    let Err(why) = crate::tasks::block_single(twon::ops::build::rebuild()) else {
         return Ok(());
     };
 
@@ -407,7 +407,7 @@ pub fn rebuild() -> miette::Result<()> {
 }
 
 pub fn sync() -> miette::Result<()> {
-    let Err(why) = crate::tasks::block_single(twon_persistence::ops::sync::sync()) else {
+    let Err(why) = crate::tasks::block_single(twon::ops::sync::sync()) else {
         return Ok(());
     };
 
@@ -431,24 +431,24 @@ pub mod currencies {
     }
 
     pub fn create(name: String, symbol: String, code: String) -> miette::Result<()> {
-        use twon_persistence::actions::create_currency;
+        use twon::actions::create_currency;
 
         let result = crate::tasks::block_single({
             let code = code.clone();
             async move {
-                let con = match twon_persistence::database::connect().await {
+                let con = match twon::database::connect().await {
                     Ok(con) => con,
-                    Err(why) => twon_persistence::log::database(why),
+                    Err(why) => twon::log::database(why),
                 };
 
-                twon_persistence::actions::create_currency::run(&con, name, symbol, code).await
+                twon::actions::create_currency::run(&con, name, symbol, code).await
             }
         });
 
         let currency_id = match result {
             Ok(currency_id) => currency_id,
             Err(why) => match why {
-                create_currency::Error::Database(err) => twon_persistence::log::database(err),
+                create_currency::Error::Database(err) => twon::log::database(err),
                 create_currency::Error::AlreadyExists => {
                     let diagnostic = miette::diagnostic!(
                         severity = miette::Severity::Error,
@@ -468,17 +468,17 @@ pub mod currencies {
 
     pub fn list() -> miette::Result<()> {
         let result = crate::tasks::block_multi(async move {
-            let con = match twon_persistence::database::connect().await {
+            let con = match twon::database::connect().await {
                 Ok(con) => con,
-                Err(why) => twon_persistence::log::database(why),
+                Err(why) => twon::log::database(why),
             };
 
-            twon_persistence::actions::list_currencies::run(&con).await
+            twon::actions::list_currencies::run(&con).await
         });
 
         let currencies = match result {
             Ok(currencies) => currencies,
-            Err(err) => twon_persistence::log::database(err),
+            Err(err) => twon::log::database(err),
         };
 
         for currency in currencies {
@@ -539,16 +539,16 @@ pub mod wallets {
 
     fn add_event(event: twon_core::Event) -> miette::Result<()> {
         let response = crate::tasks::block_single(async {
-            let con = match twon_persistence::database::connect().await {
+            let con = match twon::database::connect().await {
                 Ok(con) => con,
-                Err(why) => twon_persistence::log::database(why),
+                Err(why) => twon::log::database(why),
             };
 
-            twon_persistence::database::add_event(&con, event).await
+            twon::database::add_event(&con, event).await
         });
 
         if let Err(why) = response {
-            twon_persistence::log::database(why);
+            twon::log::database(why);
         }
 
         Ok(())
@@ -556,12 +556,12 @@ pub mod wallets {
 
     pub fn list() -> miette::Result<()> {
         let wallets = crate::tasks::block_multi(async move {
-            let con = match twon_persistence::database::connect().await {
+            let con = match twon::database::connect().await {
                 Ok(con) => con,
-                Err(why) => twon_persistence::log::database(why),
+                Err(why) => twon::log::database(why),
             };
 
-            twon_persistence::actions::list_wallets::run(&con).await
+            twon::actions::list_wallets::run(&con).await
         })
         .map_err(crate::diagnostics::snapshot_r_diagnostic)?;
 
@@ -595,7 +595,7 @@ pub mod wallets {
                 Err(why) => return Some(Err(why)),
             };
 
-            let result = twon_persistence::actions::create_wallet::run(&con, currency_id, name)
+            let result = twon::actions::create_wallet::run(&con, currency_id, name)
                 .await
                 .map_err(crate::diagnostics::snapshot_opt_diagnostic);
 

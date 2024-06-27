@@ -1,4 +1,4 @@
-use twon_persistence::snapshot_io;
+use twon::snapshot_io;
 
 #[derive(miette::Diagnostic, Debug)]
 #[diagnostic(code = "snapshot::DecodeError", severity(Error))]

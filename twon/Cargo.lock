@@ -3836,6 +3836,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "twon"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "surrealdb",
+ "thiserror",
+ "tokio",
+ "twon_core",
+]
+
+[[package]]
 name = "twon_core"
 version = "0.1.0"
 dependencies = [

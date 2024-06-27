@@ -25,10 +25,10 @@ mod tasks {
             .block_on(fut)
     }
 
-    pub async fn use_db() -> twon_persistence::database::Connection {
-        match twon_persistence::database::connect().await {
+    pub async fn use_db() -> twon::database::Connection {
+        match twon::database::connect().await {
             Ok(conn) => conn,
-            Err(e) => twon_persistence::log::database(e),
+            Err(e) => twon::log::database(e),
         }
     }
 }

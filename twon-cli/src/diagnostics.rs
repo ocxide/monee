@@ -1,7 +1,7 @@
 pub fn snapshot_read_diagnostic(
-    error: twon_persistence::snapshot_io::read::Error,
+    error: twon::snapshot_io::read::Error,
 ) -> miette::Report {
-    use twon_persistence::snapshot_io;
+    use twon::snapshot_io;
 
     match error {
         snapshot_io::read::Error::Io(err) => miette::diagnostic!(
@@ -26,35 +26,35 @@ pub fn apply_diagnostic(why: twon_core::Error) -> miette::MietteDiagnostic {
     diagnostic
 }
 
-pub fn snapshot_r_diagnostic(err: twon_persistence::error::SnapshotReadError) -> miette::Report {
-    use twon_persistence::error::SnapshotReadError as Error;
+pub fn snapshot_r_diagnostic(err: twon::error::SnapshotReadError) -> miette::Report {
+    use twon::error::SnapshotReadError as Error;
 
     match err {
         Error::Read(e) => crate::diagnostics::snapshot_read_diagnostic(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
-        Error::Database(e) => twon_persistence::log::database(e),
+        Error::Database(e) => twon::log::database(e),
     }
 }
 
-pub fn snapshot_opt_diagnostic(err: twon_persistence::error::SnapshotOptError) -> miette::Report {
-    use twon_persistence::error::SnapshotOptError as Error;
+pub fn snapshot_opt_diagnostic(err: twon::error::SnapshotOptError) -> miette::Report {
+    use twon::error::SnapshotOptError as Error;
 
     match err {
         Error::Read(e) => crate::diagnostics::snapshot_read_diagnostic(e),
-        Error::Write(e) => twon_persistence::log::snapshot_write(e),
-        Error::Database(e) => twon_persistence::log::database(e),
+        Error::Write(e) => twon::log::snapshot_write(e),
+        Error::Database(e) => twon::log::database(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
     }
 }
 
 pub fn snapshot_write_diagnostic(
-    err: twon_persistence::error::SnapshotWriteError,
+    err: twon::error::SnapshotWriteError,
 ) -> miette::Report {
-    use twon_persistence::error::SnapshotWriteError as Error;
+    use twon::error::SnapshotWriteError as Error;
 
     match err {
-        Error::Write(e) => twon_persistence::log::snapshot_write(e),
-        Error::Database(e) => twon_persistence::log::database(e),
+        Error::Write(e) => twon::log::snapshot_write(e),
+        Error::Database(e) => twon::log::database(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
     }
 }

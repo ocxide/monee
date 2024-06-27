@@ -48,16 +48,16 @@ async fn confirm_continue() -> bool {
 }
 
 pub async fn get_currency(
-    con: &twon_persistence::database::Connection,
+    con: &twon::database::Connection,
     currency: CurrencyIdOrCode,
     yes: bool,
 ) -> miette::Result<Option<twon_core::CurrencyId>> {
     let currency_id = match currency {
         CurrencyIdOrCode::Id(currency_id) => {
             let exists =
-                match twon_persistence::actions::check_currency_id::run(con, currency_id).await {
+                match twon::actions::check_currency_id::run(con, currency_id).await {
                     Ok(exists) => exists,
-                    Err(err) => twon_persistence::log::database(err),
+                    Err(err) => twon::log::database(err),
                 };
 
             if !exists && !yes {
@@ -79,8 +79,8 @@ pub async fn get_currency(
             currency_id
         }
         CurrencyIdOrCode::Code(code) => {
-            use twon_persistence::actions::currency_id_from_code;
-            match twon_persistence::actions::currency_id_from_code::run(con, code.clone()).await {
+            use twon::actions::currency_id_from_code;
+            match twon::actions::currency_id_from_code::run(con, code.clone()).await {
                 Ok(id) => id,
                 Err(currency_id_from_code::Error::NotFound) => {
                     let diagnostic = miette::diagnostic!(
@@ -93,7 +93,7 @@ pub async fn get_currency(
                     return Err(diagnostic.into());
                 }
                 Err(currency_id_from_code::Error::Database(error)) => {
-                    twon_persistence::log::database(error)
+                    twon::log::database(error)
                 }
             }
         }
