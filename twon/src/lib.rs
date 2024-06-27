@@ -11,7 +11,6 @@ pub mod procedures;
 use std::{fs, path::PathBuf};
 
 pub use database::connect;
-pub use snapshot_io::SnapshotIO;
 
 pub type Datetime = chrono::DateTime<chrono::Utc>;
 pub type Timezone = chrono::Utc;
@@ -33,14 +32,13 @@ fn create_local_path() -> PathBuf {
 }
 
 pub mod snapshot_io {
-    use std::{
-        fs,
-        io::{self, Seek},
-    };
+    pub use read_in::{do_read, read, Error as ReadError, JsonDecodeError};
+
+    use std::fs;
 
     use crate::create_local_path;
 
-    pub struct SnapshotIO(std::fs::File);
+    const SNAPSHOT_FILENAME: &str = "snapshot.json";
 
     #[derive(serde::Serialize, serde::Deserialize)]
     pub struct SnapshotMetadata {
@@ -53,24 +51,36 @@ pub mod snapshot_io {
         pub snapshot: twon_core::Snapshot,
     }
 
-    impl Default for SnapshotIO {
-        fn default() -> Self {
-            Self::new()
-        }
+    pub(crate) async fn write(snapshot: twon_core::Snapshot) -> std::io::Result<()> {
+        tokio::task::spawn_blocking(move || do_write(snapshot))
+            .await
+            .expect("To join write task")
     }
 
-    pub mod read {
-        use std::{
-            io::{self, Read},
-            path::PathBuf,
+    pub(crate) fn do_write(snapshot: twon_core::Snapshot) -> std::io::Result<()> {
+        let entry = SnapshotEntry {
+            snapshot,
+            metadata: SnapshotMetadata {
+                created_at: crate::Timezone::now(),
+            },
         };
 
-        use super::{SnapshotEntry, SnapshotIO, SnapshotMetadata};
+        let path = create_local_path().join(SNAPSHOT_FILENAME);
+        let mut file = fs::File::options().truncate(true).open(path)?;
+        serde_json::to_writer(&mut file, &entry).map_err(Into::into)
+    }
+
+    mod read_in {
+        use std::path::PathBuf;
+
+        use crate::create_local_path;
+
+        use super::{SnapshotEntry, SnapshotMetadata, SNAPSHOT_FILENAME};
 
         #[derive(Debug, thiserror::Error)]
         pub enum Error {
             #[error("Could not read snapshot file : {0}")]
-            Io(io::Error),
+            Io(#[from] std::io::Error),
             #[error("Could not decode snapshot file : {0}")]
             Json(JsonDecodeError),
         }
@@ -83,65 +93,34 @@ pub mod snapshot_io {
             pub filename: PathBuf,
         }
 
-        impl SnapshotIO {
-            pub fn read(&mut self) -> Result<SnapshotEntry, Error> {
-                let mut buf = String::new();
-                self.0.read_to_string(&mut buf).map_err(Error::Io)?;
+        pub fn do_read() -> Result<SnapshotEntry, Error> {
+            let path = create_local_path().join(SNAPSHOT_FILENAME);
+            let buf = std::fs::read_to_string(&path)?;
 
-                if buf.is_empty() {
-                    let snapshot = twon_core::Snapshot::default();
-                    return Ok(SnapshotEntry {
-                        metadata: SnapshotMetadata {
-                            created_at: crate::Timezone::now(),
-                        },
-                        snapshot,
-                    });
-                }
+            if buf.is_empty() {
+                let snapshot = twon_core::Snapshot::default();
+                return Ok(SnapshotEntry {
+                    metadata: SnapshotMetadata {
+                        created_at: crate::Timezone::now(),
+                    },
+                    snapshot,
+                });
+            }
 
-                match serde_json::from_str(&buf) {
-                    Ok(entry) => Ok(entry),
-                    Err(e) => Err(Error::Json(JsonDecodeError {
-                        error: e,
-                        json: buf,
-                        filename: Self::create_snapshot_path(),
-                    })),
-                }
+            match serde_json::from_str(&buf) {
+                Ok(entry) => Ok(entry),
+                Err(e) => Err(Error::Json(JsonDecodeError {
+                    error: e,
+                    json: buf,
+                    filename: path,
+                })),
             }
         }
-    }
 
-    impl SnapshotIO {
-        fn create_snapshot_path() -> std::path::PathBuf {
-            create_local_path().join("snapshot.json")
-        }
-
-        pub fn new() -> Self {
-            let mut opts = fs::OpenOptions::new();
-            opts.read(true).write(true).create(true);
-
-            Self::open(&opts)
-        }
-
-        pub fn open(options: &fs::OpenOptions) -> Self {
-            let file = options
-                .open(Self::create_snapshot_path())
-                .expect("To open snapshot file");
-
-            Self(file)
-        }
-
-        pub fn write(&mut self, snapshot: twon_core::Snapshot) -> io::Result<()> {
-            self.0.set_len(0)?;
-            self.0.rewind()?;
-
-            let entry = SnapshotEntry {
-                snapshot,
-                metadata: SnapshotMetadata {
-                    created_at: crate::Timezone::now(),
-                },
-            };
-
-            serde_json::to_writer(&mut self.0, &entry).map_err(Into::into)
+        pub async fn read() -> Result<SnapshotEntry, Error> {
+            tokio::task::spawn_blocking(do_read)
+                .await
+                .expect("To join read task")
         }
     }
 }

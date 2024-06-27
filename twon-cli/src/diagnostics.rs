@@ -1,16 +1,16 @@
 pub fn snapshot_read_diagnostic(
-    error: twon::snapshot_io::read::Error,
+    error: twon::snapshot_io::ReadError,
 ) -> miette::Report {
     use twon::snapshot_io;
 
     match error {
-        snapshot_io::read::Error::Io(err) => miette::diagnostic!(
+        snapshot_io::ReadError::Io(err) => miette::diagnostic!(
             severity = miette::Severity::Error,
             code = "io::ReadError",
             "{err}",
         )
         .into(),
-        snapshot_io::read::Error::Json(err) => {
+        snapshot_io::ReadError::Json(err) => {
             let diagnostic: crate::json_diagnostic::JsonDecodeDiagnostic = err.into();
             diagnostic.into()
         }

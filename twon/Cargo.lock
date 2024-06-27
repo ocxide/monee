@@ -3857,19 +3857,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "twon_persistence"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "surrealdb",
- "thiserror",
- "tokio",
- "twon_core",
-]
-
-[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

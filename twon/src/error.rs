@@ -10,7 +10,7 @@ pub enum SnapshotOptError {
     Write(#[from] std::io::Error),
 
     #[error(transparent)]
-    Read(#[from] crate::snapshot_io::read::Error),
+    Read(#[from] crate::snapshot_io::ReadError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -54,6 +54,6 @@ pub enum SnapshotReadError {
     SnapshotApply(#[from] twon_core::Error),
 
     #[error(transparent)]
-    Read(#[from] crate::snapshot_io::read::Error),
+    Read(#[from] crate::snapshot_io::ReadError),
 }
 

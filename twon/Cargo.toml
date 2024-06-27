@@ -5,7 +5,7 @@ edition = "2021"
 
 [workspace]
 resolver = "2"
-members = ["twon_core", "twon_persistence"]
+members = ["twon_core"]
 
 [dependencies]
 twon_core = { path = "./twon_core" }

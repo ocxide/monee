@@ -18,9 +18,9 @@ impl std::fmt::Display for JsonDecodeDiagnostic {
 
 impl std::error::Error for JsonDecodeDiagnostic {}
 
-impl From<snapshot_io::read::JsonDecodeError> for JsonDecodeDiagnostic {
-    fn from(err: snapshot_io::read::JsonDecodeError) -> Self {
-        let snapshot_io::read::JsonDecodeError {
+impl From<snapshot_io::JsonDecodeError> for JsonDecodeDiagnostic {
+    fn from(err: snapshot_io::JsonDecodeError) -> Self {
+        let snapshot_io::JsonDecodeError {
             error,
             json,
             filename,

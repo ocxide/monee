@@ -28,12 +28,7 @@ mod common {
         procedure_type: ProcedureType,
     ) -> Result<ProcedureCreated, crate::error::SnapshotReadError> {
         let crate::snapshot_io::SnapshotEntry { mut snapshot, .. } =
-            tokio::task::spawn_blocking(move || {
-                let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
-                snapshot_io.read()
-            })
-            .await
-            .expect("to join read task")?;
+            crate::snapshot_io::read().await?;
 
         for event in events {
             snapshot.apply(event.clone())?;
@@ -78,15 +73,6 @@ mod common {
             snapshot,
         })
     }
-
-    pub async fn write_snapshot(snapshot: twon_core::Snapshot) -> Result<(), std::io::Error> {
-        tokio::task::spawn_blocking(move || {
-            let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
-            snapshot_io.write(snapshot)
-        })
-        .await
-        .expect("to join write task")
-    }
 }
 
 pub async fn register_balance(
@@ -107,7 +93,7 @@ pub async fn register_balance(
     )
     .await?;
 
-    common::write_snapshot(response.snapshot).await?;
+    crate::snapshot_io::write(response.snapshot).await?;
     Ok(())
 }
 
@@ -153,6 +139,6 @@ pub async fn register_in_debt(
         .await?
         .check()?;
 
-    common::write_snapshot(response.snapshot).await?;
+    crate::snapshot_io::write(response.snapshot).await?;
     Ok(())
 }

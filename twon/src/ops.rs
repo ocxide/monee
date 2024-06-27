@@ -1,15 +1,8 @@
 pub mod sync {
-    use crate::snapshot_io;
-
     pub use crate::error::SnapshotOptError as Error;
 
     pub async fn sync() -> Result<(), Error> {
-        let entry = tokio::task::spawn_blocking(move || {
-            let mut snapshot_io = snapshot_io::SnapshotIO::new();
-            snapshot_io.read()
-        })
-        .await
-        .expect("To join read task")?;
+        let entry = crate::snapshot_io::read().await?;
 
         let snapshot = entry.snapshot;
         let min_date = entry.metadata.created_at;
@@ -21,7 +14,7 @@ pub mod sync {
 }
 
 pub mod build {
-    use crate::{database, snapshot_io};
+    use crate::database;
 
     pub use crate::error::SnapshotWriteError as Error;
 
@@ -43,7 +36,9 @@ pub mod build {
 
         loop {
             let mut result = connection
-                .query("SELECT * FROM event WHERE created_at > $min ORDER BY created_at LIMIT $limit")
+                .query(
+                    "SELECT * FROM event WHERE created_at > $min ORDER BY created_at LIMIT $limit",
+                )
                 .bind(("min", min_date))
                 .bind(("limit", STEP_SIZE))
                 .await?
@@ -61,14 +56,7 @@ pub mod build {
             }
         }
 
-        tokio::task::spawn_blocking(move || {
-            let mut snapshot_io = snapshot_io::SnapshotIO::new();
-
-            snapshot_io.write(snapshot)
-        })
-        .await
-        .expect("To join write task")?;
-
+        crate::snapshot_io::write(snapshot).await?;
         Ok(())
     }
 
@@ -79,4 +67,3 @@ pub mod build {
         build(snapshot, min_date).await
     }
 }
-

@@ -21,13 +21,9 @@ pub mod debts {
         ($run_list:expr) => {{
             let result: Result<_, miette::Error> = crate::tasks::block_multi(async {
                 let db = crate::tasks::use_db();
-                let snapshot = tokio::task::spawn_blocking(move || {
-                    twon::snapshot_io::SnapshotIO::new().read()
-                });
-
+                let snapshot = twon::snapshot_io::read();
                 let (db, snapshot) = tokio::join!(db, snapshot);
                 let snapshot_entry = snapshot
-                    .expect("to join read task")
                     .map_err(crate::diagnostics::snapshot_read_diagnostic)?;
 
                 let result = ($run_list)(&db, snapshot_entry).await;
@@ -78,10 +74,7 @@ pub mod debts {
             DebtsCommand::List { show } => match show {
                 ShowMode::In => {
                     let debts = get_debts!(|db, snapshot: SnapshotEntry| {
-                        twon::actions::debts::list::run_in(
-                            db,
-                            snapshot.snapshot.in_debts,
-                        )
+                        twon::actions::debts::list::run_in(db, snapshot.snapshot.in_debts)
                     })?;
 
                     println!("In debts:");
@@ -91,10 +84,7 @@ pub mod debts {
                 }
                 ShowMode::Out => {
                     let debts = get_debts!(|db, snapshot: SnapshotEntry| {
-                        twon::actions::debts::list::run_out(
-                            db,
-                            snapshot.snapshot.out_debts,
-                        )
+                        twon::actions::debts::list::run_out(db, snapshot.snapshot.out_debts)
                     })?;
 
                     println!("Out debts:");
@@ -105,14 +95,8 @@ pub mod debts {
                 ShowMode::Both => {
                     let result = get_debts!(|db, snapshot: SnapshotEntry| async move {
                         let debts = tokio::try_join!(
-                            twon::actions::debts::list::run_in(
-                                db,
-                                snapshot.snapshot.in_debts,
-                            ),
-                            twon::actions::debts::list::run_out(
-                                db,
-                                snapshot.snapshot.out_debts,
-                            )
+                            twon::actions::debts::list::run_in(db, snapshot.snapshot.in_debts,),
+                            twon::actions::debts::list::run_out(db, snapshot.snapshot.out_debts,)
                         );
 
                         Ok(debts)
@@ -233,9 +217,7 @@ pub mod actors {
 
                 Err(diagnostic.into())
             }
-            twon::actions::create_actor::Error::Database(err) => {
-                twon::log::database(err)
-            }
+            twon::actions::create_actor::Error::Database(err) => twon::log::database(err),
         }
     }
 }
@@ -368,10 +350,7 @@ pub mod do_command {
 use crate::diagnostics::snapshot_read_diagnostic;
 
 pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
-    let snapshot_entry = {
-        let mut snapshot_io = twon::SnapshotIO::new();
-        snapshot_io.read().map_err(snapshot_read_diagnostic)?
-    };
+    let snapshot_entry = twon::snapshot_io::do_read().map_err(snapshot_read_diagnostic)?;
 
     match output {
         Some(path) => {

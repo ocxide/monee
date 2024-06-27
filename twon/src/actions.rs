@@ -250,11 +250,7 @@ pub mod list_wallets {
     }
 
     pub async fn run(connection: &crate::database::Connection) -> Result<Vec<WalletRow>, Error> {
-        let snapshot_fut = tokio::task::spawn_blocking(move || {
-            let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
-            snapshot_io.read()
-        });
-
+        let snapshot_fut = crate::snapshot_io::read();
         let metadatas = async move {
             let result: Result<Vec<WalletSelect>, _> = connection.select("wallet_metadata").await;
             result
@@ -262,11 +258,12 @@ pub mod list_wallets {
 
         let curriencies = crate::actions::list_currencies::run(connection);
 
-        let (join, metadatas, curriencies) = tokio::join!(snapshot_fut, metadatas, curriencies);
+        let (snapshot_entry, metadatas, curriencies) =
+            tokio::join!(snapshot_fut, metadatas, curriencies);
 
-        let snapshot_entry = join.expect("To join read task")?;
         let metadatas = metadatas?;
         let curriencies = curriencies?;
+        let snapshot_entry = snapshot_entry?;
 
         let wallets = snapshot_entry
             .snapshot
@@ -291,8 +288,6 @@ pub mod create_wallet {
     use surrealdb::sql::{self, Thing};
     use twon_core::WalletId;
 
-    use crate::snapshot_io;
-
     pub use crate::error::SnapshotOptError as Error;
 
     pub async fn run(
@@ -302,13 +297,7 @@ pub mod create_wallet {
     ) -> Result<WalletId, Error> {
         let wallet_id = WalletId::new();
 
-        let mut snapshot_entry = tokio::task::spawn_blocking(move || {
-            let mut snapshot_io = crate::snapshot_io::SnapshotIO::new();
-            snapshot_io.read()
-        })
-        .await
-        .expect("To join read task")?;
-
+        let mut snapshot_entry = crate::snapshot_io::read().await?;
         let event = twon_core::Event::Wallet(twon_core::WalletEvent::Create {
             wallet_id,
             currency: currency_id,
@@ -335,13 +324,7 @@ CREATE $wallet_resource SET name = $name;",
 
         response.check()?;
 
-        tokio::task::spawn_blocking(move || {
-            let mut snapshot_io = snapshot_io::SnapshotIO::new();
-            snapshot_io.write(snapshot_entry.snapshot)
-        })
-        .await
-        .expect("To join write task")?;
-
+        crate::snapshot_io::write(snapshot_entry.snapshot).await?;
         Ok(wallet_id)
     }
 }
