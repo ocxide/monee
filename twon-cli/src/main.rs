@@ -43,6 +43,7 @@ struct CliParser {
 
 #[derive(clap::Subcommand)]
 enum Commands {
+    Events,
     Snapshot {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
@@ -71,6 +72,9 @@ enum Commands {
 fn main() -> miette::Result<()> {
     let cli = CliParser::parse();
     match cli.command {
+        Commands::Events => {
+            commands::events::handle()?;
+        }
         Commands::Snapshot { output } => {
             commands::snapshot(output)?;
         }

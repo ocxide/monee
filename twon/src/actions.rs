@@ -14,6 +14,20 @@ pub mod events {
         crate::snapshot_io::write(snapshot_entry.snapshot).await?;
         Ok(())
     }
+
+    #[derive(serde::Deserialize)]
+    pub struct EventRow {
+        #[serde(flatten)]
+        pub event: twon_core::Event,
+        pub created_at: crate::date::Datetime,
+    }
+
+    pub async fn list(
+        connection: &crate::database::Connection,
+    ) -> Result<Vec<EventRow>, crate::database::Error> {
+        let events: Vec<EventRow> = connection.select("event").await?;
+        Ok(events)
+    }
 }
 
 pub mod debts {

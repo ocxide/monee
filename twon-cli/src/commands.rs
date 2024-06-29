@@ -1,3 +1,62 @@
+pub mod events {
+    fn print_debt_event(debt_type: &str, event: &twon_core::DebtEvent) {
+        match event {
+            twon_core::DebtEvent::Incur { currency, debt_id } => {
+                print!("{debt_type}Debt {} incurred with currency {}", debt_id, currency);
+            }
+            twon_core::DebtEvent::Forget { debt_id } => {
+                print!("{debt_type}Debt {} forgotten", debt_id);
+            }
+            twon_core::DebtEvent::Accumulate { debt_id, amount } => {
+                print!("{debt_type}Debt {} accumulated {}", debt_id, amount);
+            }
+            twon_core::DebtEvent::Amortize { debt_id, amount } => {
+                print!("{debt_type}Debt {} amortized {}", debt_id, amount);
+            }
+        };
+    }
+
+    pub fn handle() -> miette::Result<()> {
+        let result = crate::tasks::block_single(async {
+            let db = crate::tasks::use_db().await;
+            twon::actions::events::list(&db).await
+        });
+
+        let events = match result {
+            Ok(events) => events,
+            Err(why) => twon::log::database(why),
+        };
+
+        for twon::actions::events::EventRow { event, created_at } in events.iter() {
+            match event {
+                twon_core::Event::Wallet(event) => match event {
+                    twon_core::WalletEvent::Create {
+                        wallet_id,
+                        currency,
+                    } => {
+                        print!("Wallet {} created with currency {}", wallet_id, currency);
+                    }
+                    twon_core::WalletEvent::Deduct { wallet_id, amount } => {
+                        print!("Wallet {} deducted {}", wallet_id, amount);
+                    }
+                    twon_core::WalletEvent::Deposit { wallet_id, amount } => {
+                        print!("Wallet {} deposited {}", wallet_id, amount);
+                    }
+                    twon_core::WalletEvent::Delete { wallet_id } => {
+                        print!("Wallet {} deleted", wallet_id);
+                    }
+                },
+                twon_core::Event::InDebt(event) => print_debt_event("In", event),
+                twon_core::Event::OutDebt(event) => print_debt_event("Out", event),
+            }
+
+            println!(", created at {}", created_at);
+        }
+
+        Ok(())
+    }
+}
+
 pub mod debts {
     use twon::{actions::debts::list::DebtItem, snapshot_io::SnapshotEntry};
 
