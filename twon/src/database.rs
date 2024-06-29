@@ -1,13 +1,13 @@
 pub use surrealdb::Result;
 
-#[cfg(feature = "file")]
+#[cfg(feature = "embedded")]
 pub type Connection = surrealdb::Surreal<surrealdb::engine::local::Db>;
 #[cfg(feature = "remote")]
 pub type Connection = surrealdb::Surreal<surrealdb::engine::remote::ws::Client>;
 
 pub type Error = surrealdb::Error;
 
-#[cfg(feature = "file")]
+#[cfg(feature = "embedded")]
 const DB_DIR: &str = "twon.db";
 
 async fn init(connection: &Connection) -> Result<()> {
@@ -50,10 +50,8 @@ async fn init(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "file")]
+#[cfg(feature = "embedded")]
 async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
-    use surrealdb::engine::local::Db;
-
     let path = crate::create_local_path().join(DB_DIR);
     let exists = tokio::fs::try_exists(&path).await.unwrap_or_else(|_| {
         println!("WARNING: Failed to check if db exists");
@@ -66,7 +64,7 @@ async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
     ))
     .await?;
 
-    (db, exists)
+    Ok((db, exists))
 }
 
 #[cfg(feature = "remote")]
