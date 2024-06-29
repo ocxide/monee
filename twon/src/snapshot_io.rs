@@ -61,17 +61,28 @@ mod read_in {
 
     pub fn do_read() -> Result<SnapshotEntry, Error> {
         let path = create_local_path().join(SNAPSHOT_FILENAME);
-        let buf = std::fs::read_to_string(&path)?;
+        let result = std::fs::read_to_string(&path);
 
-        if buf.is_empty() {
+        let create_empty = move || {
             let snapshot = twon_core::Snapshot::default();
-            return Ok(SnapshotEntry {
+            SnapshotEntry {
                 metadata: SnapshotMetadata {
                     created_at: crate::date::Timezone::now(),
                 },
                 snapshot,
-            });
-        }
+            }
+        };
+
+        let buf = match result {
+            Ok(buf) => match buf.as_str() {
+                "" => return Ok(create_empty()),
+                _ => buf,
+            },
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => return Ok(create_empty()),
+                _ => return Err(Error::Io(err)),
+            },
+        };
 
         match serde_json::from_str(&buf) {
             Ok(entry) => Ok(entry),
@@ -89,4 +100,3 @@ mod read_in {
             .expect("To join read task")
     }
 }
-
