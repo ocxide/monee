@@ -220,7 +220,7 @@ macro_rules! sub_action {
 sub_action!(WalletEvent -> wallet_id: WalletId; { Create, Delete, Deposit, Deduct });
 sub_action!(DebtEvent -> debt_id: DebtId; { Incur, Forget, Accumulate, Amortize });
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "group", rename_all = "snake_case")]
 pub enum Event {
     Wallet(WalletEvent),

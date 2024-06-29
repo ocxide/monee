@@ -2,7 +2,10 @@ pub mod events {
     fn print_debt_event(debt_type: &str, event: &twon_core::DebtEvent) {
         match event {
             twon_core::DebtEvent::Incur { currency, debt_id } => {
-                print!("{debt_type}Debt {} incurred with currency {}", debt_id, currency);
+                print!(
+                    "{debt_type}Debt {} incurred with currency {}",
+                    debt_id, currency
+                );
             }
             twon_core::DebtEvent::Forget { debt_id } => {
                 print!("{debt_type}Debt {} forgotten", debt_id);
@@ -435,11 +438,62 @@ pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
 }
 
 pub fn rebuild() -> miette::Result<()> {
-    let Err(why) = crate::tasks::block_single(twon::ops::build::rebuild()) else {
+    use std::fmt::Write;
+
+    let Err(why) = crate::tasks::block_single(twon::ops::rebuild::rebuild()) else {
         return Ok(());
     };
 
-    Err(crate::diagnostics::snapshot_write_diagnostic(why))
+    let stack = match why {
+        twon::ops::rebuild::Error::Apply(error) => error,
+        twon::ops::rebuild::Error::Database(e) => twon::log::database(e),
+        twon::ops::rebuild::Error::Write(e) => twon::log::snapshot_write(e),
+    };
+
+    fn write_event(buf: &mut String, event: &twon::ops::build::EventRow) {
+        writeln!(buf, "{:?}, created at {}", event.event, event.created_at)
+            .expect("Failed to write preview");
+    }
+
+    let mut preview = String::new();
+    for event in stack.previous.iter() {
+        write_event(&mut preview, event);
+    }
+    if !stack.previous.is_empty() {
+        writeln!(&mut preview, "...").expect("Failed to write preview");
+    }
+
+    let start = preview.len();
+    write_event(&mut preview, &stack.at);
+    let range = (start, preview.len());
+
+    if !stack.next.is_empty() {
+        writeln!(&mut preview, "...").expect("Failed to write preview");
+    }
+    for event in stack.next.iter() {
+        write_event(&mut preview, event);
+    }
+
+    #[derive(miette::Diagnostic, thiserror::Error, Debug)]
+    #[error("Failed to apply snapshot")]
+    struct ApplyDiagnostic {
+        #[source_code]
+        preview: String,
+
+        twon_error: twon_core::Error,
+        #[label = "{twon_error}"]
+        label: (usize, usize),
+    }
+
+    dbg!(&preview);
+    dbg!(&stack.snapshot);
+    let diagnostic = ApplyDiagnostic {
+        preview,
+        twon_error: stack.error,
+        label: range,
+    };
+
+    Err(diagnostic.into())
 }
 
 pub fn sync() -> miette::Result<()> {
