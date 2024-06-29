@@ -6,7 +6,6 @@ pub mod sync {
 
         let snapshot = entry.snapshot;
         let min_date = entry.metadata.created_at;
-
         crate::ops::build::build(snapshot, min_date).await?;
 
         Ok(())
