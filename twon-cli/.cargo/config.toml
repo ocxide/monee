@@ -1,0 +1,2 @@
+[env]
+XDG_DATA_HOME = { value = "./data", relative = true }

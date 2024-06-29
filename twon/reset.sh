@@ -1,2 +1,2 @@
-rm -r ~/.local/share/twon/twon.db
-rm ~/.local/share/twon/snapshot.json
+rm -r ../twon-cli/data/twon/twon.db
+rm ../twon-cli/data/twon/snapshot.json
