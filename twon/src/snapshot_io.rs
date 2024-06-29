@@ -32,7 +32,13 @@ pub(crate) fn do_write(snapshot: twon_core::Snapshot) -> std::io::Result<()> {
     };
 
     let path = create_local_path().join(SNAPSHOT_FILENAME);
-    let mut file = fs::File::options().truncate(true).open(path)?;
+    let mut file = fs::File::options()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+
+
     serde_json::to_writer(&mut file, &entry).map_err(Into::into)
 }
 
