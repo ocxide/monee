@@ -25,10 +25,19 @@ mod tasks {
             .block_on(fut)
     }
 
-    pub async fn use_db() -> monee::database::Connection {
+    pub async fn use_db() -> miette::Result<monee::database::Connection> {
         match monee::database::connect().await {
-            Ok(conn) => conn,
-            Err(e) => monee::log::database(e),
+            Ok(conn) => Ok(conn),
+            Err(_) => {
+                let diagnostic = miette::diagnostic!(
+                    severity = miette::Severity::Error,
+                    code = "io::database",
+                    help = "Check if database is running and accessible from this machine",
+                    "Failed to connect to database",
+                );
+
+                Err(diagnostic.into())
+            }
         }
     }
 }

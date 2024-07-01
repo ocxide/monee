@@ -20,15 +20,16 @@ pub mod events {
     }
 
     pub fn handle() -> miette::Result<()> {
-        let result = crate::tasks::block_single(async {
-            let db = crate::tasks::use_db().await;
-            monee::actions::events::list(&db).await
+        let result: miette::Result<_> = crate::tasks::block_single(async {
+            let db = crate::tasks::use_db().await?;
+
+            match monee::actions::events::list(&db).await {
+                Ok(events) => Ok(events),
+                Err(why) => monee::log::database(why),
+            }
         });
 
-        let events = match result {
-            Ok(events) => events,
-            Err(why) => monee::log::database(why),
-        };
+        let events = result?;
 
         for monee::actions::events::EventRow { event, created_at } in events.iter() {
             match event {
@@ -88,6 +89,7 @@ pub mod debts {
                 let snapshot_entry =
                     snapshot.map_err(crate::diagnostics::snapshot_read_diagnostic)?;
 
+                let db = db?;
                 let result = ($run_list)(&db, snapshot_entry).await;
 
                 match result {
@@ -210,15 +212,16 @@ pub mod actors {
     }
 
     fn list() -> miette::Result<()> {
-        let result = crate::tasks::block_single(async move {
-            let db = crate::tasks::use_db().await;
-            monee::actions::actors::list::run(&db).await
+        let result: miette::Result<_> = crate::tasks::block_single(async move {
+            let db = crate::tasks::use_db().await?;
+
+            match monee::actions::actors::list::run(&db).await {
+                Ok(actors) => Ok(actors),
+                Err(why) => monee::log::database(why),
+            }
         });
 
-        let actors = match result {
-            Ok(actors) => actors,
-            Err(why) => monee::log::database(why),
-        };
+        let actors = result?;
 
         for monee::Entity(id, actor) in actors.iter() {
             println!(
@@ -245,9 +248,10 @@ pub mod actors {
         actor_type: monee_core::actor::ActorType,
         alias: Option<String>,
     ) -> miette::Result<()> {
-        let result = crate::tasks::block_single(async {
-            let db = crate::tasks::use_db().await;
-            monee::actions::actors::create::run(
+        crate::tasks::block_single(async {
+            let db = crate::tasks::use_db().await?;
+
+            let result = monee::actions::actors::create::run(
                 &db,
                 monee_core::actor::Actor {
                     name,
@@ -255,30 +259,30 @@ pub mod actors {
                     alias: alias.clone(),
                 },
             )
-            .await
-        });
+            .await;
 
-        let err = match result {
-            Ok(id) => {
-                println!("Actor `{}` created", id);
-                return Ok(());
+            let err = match result {
+                Ok(id) => {
+                    println!("Actor `{}` created", id);
+                    return Ok(());
+                }
+                Err(why) => why,
+            };
+
+            match err {
+                monee::actions::actors::create::Error::AlreadyExists => {
+                    let diagnostic = miette::diagnostic!(
+                        severity = miette::Severity::Error,
+                        code = "actor::AlreadyExists",
+                        "Actor with alias `{}` already exists",
+                        alias.as_deref().unwrap_or_default()
+                    );
+
+                    Err(diagnostic.into())
+                }
+                monee::actions::actors::create::Error::Database(err) => monee::log::database(err),
             }
-            Err(why) => why,
-        };
-
-        match err {
-            monee::actions::actors::create::Error::AlreadyExists => {
-                let diagnostic = miette::diagnostic!(
-                    severity = miette::Severity::Error,
-                    code = "actor::AlreadyExists",
-                    "Actor with alias `{}` already exists",
-                    alias.as_deref().unwrap_or_default()
-                );
-
-                Err(diagnostic.into())
-            }
-            monee::actions::actors::create::Error::Database(err) => monee::log::database(err),
-        }
+        })
     }
 }
 
@@ -378,7 +382,7 @@ pub mod do_command {
         });
 
         let created: miette::Result<bool> = crate::tasks::block_single(async move {
-            let db = crate::tasks::use_db().await;
+            let db = crate::tasks::use_db().await?;
             let Some(currency_id) = crate::args::get_currency(&db, currency, false).await? else {
                 return Ok(false);
             };
@@ -618,39 +622,42 @@ pub mod wallets {
         wallet_id: monee_core::WalletId,
         amount: monee_core::Amount,
     ) -> miette::Result<()> {
-        let event = monee_core::Event::Wallet(monee_core::WalletEvent::Deposit { wallet_id, amount });
+        let event =
+            monee_core::Event::Wallet(monee_core::WalletEvent::Deposit { wallet_id, amount });
         add_event(event)
     }
 
-    pub fn deduct(wallet_id: monee_core::WalletId, amount: monee_core::Amount) -> miette::Result<()> {
-        let event = monee_core::Event::Wallet(monee_core::WalletEvent::Deduct { wallet_id, amount });
+    pub fn deduct(
+        wallet_id: monee_core::WalletId,
+        amount: monee_core::Amount,
+    ) -> miette::Result<()> {
+        let event =
+            monee_core::Event::Wallet(monee_core::WalletEvent::Deduct { wallet_id, amount });
         add_event(event)
     }
 
     fn add_event(event: monee_core::Event) -> miette::Result<()> {
-        let response = crate::tasks::block_single(async {
-            let con = crate::tasks::use_db().await;
-            monee::actions::events::add(&con, event).await
-        });
+        crate::tasks::block_single(async {
+            let con = crate::tasks::use_db().await?;
+            let response = monee::actions::events::add(&con, event).await;
 
-        if let Err(why) = response {
-            let report = crate::diagnostics::snapshot_opt_diagnostic(why);
-            return Err(report);
-        }
+            if let Err(why) = response {
+                let report = crate::diagnostics::snapshot_opt_diagnostic(why);
+                return Err(report);
+            }
 
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn list() -> miette::Result<()> {
         let wallets = crate::tasks::block_multi(async move {
-            let con = match monee::database::connect().await {
-                Ok(con) => con,
-                Err(why) => monee::log::database(why),
-            };
+            let con = crate::tasks::use_db().await?;
 
-            monee::actions::wallets::list::run(&con).await
-        })
-        .map_err(crate::diagnostics::snapshot_r_diagnostic)?;
+            monee::actions::wallets::list::run(&con)
+                .await
+                .map_err(crate::diagnostics::snapshot_r_diagnostic)
+        })?;
 
         for wallet in wallets.iter() {
             match &wallet.name {
@@ -659,7 +666,9 @@ pub mod wallets {
             }
 
             match &wallet.currency {
-                Some(monee::Entity(_, currency)) => print!(" {} {}", currency.code, currency.symbol),
+                Some(monee::Entity(_, currency)) => {
+                    print!(" {} {}", currency.code, currency.symbol)
+                }
                 None => print!("`Unknown currency`"),
             }
 
@@ -675,7 +684,11 @@ pub mod wallets {
         yes: bool,
     ) -> miette::Result<()> {
         let result = crate::tasks::block_single(async move {
-            let con = crate::tasks::use_db().await;
+            let con = match crate::tasks::use_db().await {
+                Ok(con) => con,
+                Err(why) => return Some(Err(why)),
+            };
+
             let currency_id = match crate::args::get_currency(&con, currency, yes).await {
                 Ok(Some(currency_id)) => currency_id,
                 Ok(None) => return None,
