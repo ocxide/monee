@@ -25,10 +25,10 @@ mod tasks {
             .block_on(fut)
     }
 
-    pub async fn use_db() -> twon::database::Connection {
-        match twon::database::connect().await {
+    pub async fn use_db() -> monee::database::Connection {
+        match monee::database::connect().await {
             Ok(conn) => conn,
-            Err(e) => twon::log::database(e),
+            Err(e) => monee::log::database(e),
         }
     }
 }

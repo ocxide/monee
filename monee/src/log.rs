@@ -1,6 +1,6 @@
 use std::io::Write;
 
-const FILE: &str = "twon.log";
+const FILE: &str = "monee.log";
 
 fn write_error_log<E: std::error::Error>(error: E) {
     let path = crate::create_local_path().join(FILE);

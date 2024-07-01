@@ -1,7 +1,7 @@
 pub fn snapshot_read_diagnostic(
-    error: twon::snapshot_io::ReadError,
+    error: monee::snapshot_io::ReadError,
 ) -> miette::Report {
-    use twon::snapshot_io;
+    use monee::snapshot_io;
 
     match error {
         snapshot_io::ReadError::Io(err) => miette::diagnostic!(
@@ -17,7 +17,7 @@ pub fn snapshot_read_diagnostic(
     }
 }
 
-pub fn apply_diagnostic(why: twon_core::Error) -> miette::MietteDiagnostic {
+pub fn apply_diagnostic(why: monee_core::Error) -> miette::MietteDiagnostic {
     let diagnostic = miette::diagnostic!(
         severity = miette::Severity::Error,
         code = "event::ApplyError",
@@ -26,35 +26,35 @@ pub fn apply_diagnostic(why: twon_core::Error) -> miette::MietteDiagnostic {
     diagnostic
 }
 
-pub fn snapshot_r_diagnostic(err: twon::error::SnapshotReadError) -> miette::Report {
-    use twon::error::SnapshotReadError as Error;
+pub fn snapshot_r_diagnostic(err: monee::error::SnapshotReadError) -> miette::Report {
+    use monee::error::SnapshotReadError as Error;
 
     match err {
         Error::Read(e) => crate::diagnostics::snapshot_read_diagnostic(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
-        Error::Database(e) => twon::log::database(e),
+        Error::Database(e) => monee::log::database(e),
     }
 }
 
-pub fn snapshot_opt_diagnostic(err: twon::error::SnapshotOptError) -> miette::Report {
-    use twon::error::SnapshotOptError as Error;
+pub fn snapshot_opt_diagnostic(err: monee::error::SnapshotOptError) -> miette::Report {
+    use monee::error::SnapshotOptError as Error;
 
     match err {
         Error::Read(e) => crate::diagnostics::snapshot_read_diagnostic(e),
-        Error::Write(e) => twon::log::snapshot_write(e),
-        Error::Database(e) => twon::log::database(e),
+        Error::Write(e) => monee::log::snapshot_write(e),
+        Error::Database(e) => monee::log::database(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
     }
 }
 
 pub fn snapshot_write_diagnostic(
-    err: twon::error::SnapshotWriteError,
+    err: monee::error::SnapshotWriteError,
 ) -> miette::Report {
-    use twon::error::SnapshotWriteError as Error;
+    use monee::error::SnapshotWriteError as Error;
 
     match err {
-        Error::Write(e) => twon::log::snapshot_write(e),
-        Error::Database(e) => twon::log::database(e),
+        Error::Write(e) => monee::log::snapshot_write(e),
+        Error::Database(e) => monee::log::database(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
     }
 }

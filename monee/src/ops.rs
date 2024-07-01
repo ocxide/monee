@@ -25,11 +25,11 @@ pub mod build {
     pub struct EventRow {
         pub created_at: chrono::DateTime<chrono::Utc>,
         #[serde(flatten)]
-        pub event: twon_core::Event,
+        pub event: monee_core::Event,
     }
 
     pub(crate) async fn build(
-        mut snapshot: twon_core::Snapshot,
+        mut snapshot: monee_core::Snapshot,
         mut min_date: crate::date::Datetime,
     ) -> Result<(), Error> {
         let connection = database::connect().await?;
@@ -113,18 +113,18 @@ pub mod rebuild {
 
     #[derive(Debug)]
     pub struct ApplyError {
-        pub snapshot: twon_core::Snapshot,
+        pub snapshot: monee_core::Snapshot,
         pub previous: Vec<EventRow>,
         pub at: EventRow,
         pub next: Vec<EventRow>,
-        pub error: twon_core::Error,
+        pub error: monee_core::Error,
     }
 
     pub async fn rebuild() -> Result<(), Error> {
         let db = crate::database::connect().await?;
         let mut stream = EventsStream::new(&db, crate::date::Datetime::UNIX_EPOCH);
 
-        let mut snapshot = twon_core::Snapshot::default();
+        let mut snapshot = monee_core::Snapshot::default();
 
         while let Some(events) = stream.next().await? {
             for (i, event) in events.iter().enumerate() {

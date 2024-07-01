@@ -29,9 +29,9 @@ fn create_local_path() -> PathBuf {
                 .map(|home| PathBuf::from(home).join(".local/share"))
         })
         .expect("To get share directory");
-    let path = share_dir.join("twon");
+    let path = share_dir.join("monee");
 
-    fs::create_dir_all(&path).expect("To create twon data directory");
+    fs::create_dir_all(&path).expect("To create monee data directory");
     path
 }
 

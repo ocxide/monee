@@ -4,7 +4,7 @@ pub enum SnapshotOptError {
     Database(#[from] surrealdb::Error),
 
     #[error(transparent)]
-    SnapshotApply(#[from] twon_core::Error),
+    SnapshotApply(#[from] monee_core::Error),
 
     #[error(transparent)]
     Write(#[from] std::io::Error),
@@ -19,7 +19,7 @@ pub enum SnapshotWriteError {
     Database(#[from] surrealdb::Error),
 
     #[error(transparent)]
-    SnapshotApply(#[from] twon_core::Error),
+    SnapshotApply(#[from] monee_core::Error),
 
     #[error(transparent)]
     Write(#[from] std::io::Error),
@@ -51,7 +51,7 @@ pub enum SnapshotReadError {
     Database(#[from] surrealdb::Error),
 
     #[error(transparent)]
-    SnapshotApply(#[from] twon_core::Error),
+    SnapshotApply(#[from] monee_core::Error),
 
     #[error(transparent)]
     Read(#[from] crate::snapshot_io::ReadError),

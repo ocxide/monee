@@ -1,6 +1,6 @@
 pub struct RegisterBalance {
-    pub wallet_id: twon_core::WalletId,
-    pub amount: twon_core::Amount,
+    pub wallet_id: monee_core::WalletId,
+    pub amount: monee_core::Amount,
 }
 
 #[derive(serde::Serialize)]
@@ -18,13 +18,13 @@ mod common {
 
     pub struct ProcedureCreated {
         pub procedure_id: surrealdb::sql::Thing,
-        pub snapshot: twon_core::Snapshot,
+        pub snapshot: monee_core::Snapshot,
     }
 
     pub async fn create_procedure(
         connection: &crate::database::Connection,
         procedure: CreateProcedure,
-        events: &[twon_core::Event],
+        events: &[monee_core::Event],
         procedure_type: ProcedureType,
     ) -> Result<ProcedureCreated, crate::error::SnapshotReadError> {
         let crate::snapshot_io::SnapshotEntry { mut snapshot, .. } =
@@ -80,7 +80,7 @@ pub async fn register_balance(
     procedure: CreateProcedure,
     plan: RegisterBalance,
 ) -> Result<(), crate::error::SnapshotOptError> {
-    let events = [twon_core::Event::Wallet(twon_core::WalletEvent::Deposit {
+    let events = [monee_core::Event::Wallet(monee_core::WalletEvent::Deposit {
         wallet_id: plan.wallet_id,
         amount: plan.amount,
     })];
@@ -98,9 +98,9 @@ pub async fn register_balance(
 }
 
 pub struct RegisterInDebt {
-    pub amount: twon_core::Amount,
-    pub currency: twon_core::CurrencyId,
-    pub actor_id: twon_core::actor::ActorId,
+    pub amount: monee_core::Amount,
+    pub currency: monee_core::CurrencyId,
+    pub actor_id: monee_core::actor::ActorId,
     pub payment_promise: Option<crate::date::Datetime>,
 }
 
@@ -109,14 +109,14 @@ pub async fn register_in_debt(
     procedure: CreateProcedure,
     plan: RegisterInDebt,
 ) -> Result<(), crate::error::SnapshotOptError> {
-    let debt_id = twon_core::DebtId::new();
+    let debt_id = monee_core::DebtId::new();
 
     let events = [
-        twon_core::Event::InDebt(twon_core::DebtEvent::Incur {
+        monee_core::Event::InDebt(monee_core::DebtEvent::Incur {
             currency: plan.currency,
             debt_id,
         }),
-        twon_core::Event::InDebt(twon_core::DebtEvent::Accumulate {
+        monee_core::Event::InDebt(monee_core::DebtEvent::Accumulate {
             debt_id,
             amount: plan.amount,
         }),

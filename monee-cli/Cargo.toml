@@ -1,5 +1,5 @@
 [package]
-name = "twon-cli"
+name = "monee-cli"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,9 +12,9 @@ miette = { version = "7.2.0", features = ["fancy"] }
 serde_json = "1.0.117"
 thiserror = "1.0.61"
 tokio = { version = "1.38.0", features = ["full"] }
-twon = { path = "../twon", default-features = false }
-twon_core = { path = "../twon/twon_core" }
+monee = { path = "../monee", default-features = false }
+monee_core = { path = "../monee/monee_core" }
 
 [features]
-default = ["twon/remote"]
-embedded = ["twon/embedded"]
+default = ["monee/remote"]
+embedded = ["monee/embedded"]

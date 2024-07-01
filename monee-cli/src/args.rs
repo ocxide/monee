@@ -4,14 +4,14 @@ mod currency_id_or_code {
 
     #[derive(Clone)]
     pub enum CurrencyIdOrCode {
-        Id(twon_core::CurrencyId),
+        Id(monee_core::CurrencyId),
         Code(String),
     }
 
     #[derive(Debug, thiserror::Error)]
     pub enum Error {
         #[error(transparent)]
-        InvalidId(<twon_core::CurrencyId as FromStr>::Err),
+        InvalidId(<monee_core::CurrencyId as FromStr>::Err),
         #[error("Length must be 3 or 4")]
         InvalidLength,
     }
@@ -21,7 +21,7 @@ mod currency_id_or_code {
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             if s.len() == 4 {
-                let id = twon_core::CurrencyId::from_str(s).map_err(Error::InvalidId)?;
+                let id = monee_core::CurrencyId::from_str(s).map_err(Error::InvalidId)?;
                 return Ok(CurrencyIdOrCode::Id(id));
             }
 
@@ -48,16 +48,16 @@ async fn confirm_continue() -> bool {
 }
 
 pub async fn get_currency(
-    con: &twon::database::Connection,
+    con: &monee::database::Connection,
     currency: CurrencyIdOrCode,
     yes: bool,
-) -> miette::Result<Option<twon_core::CurrencyId>> {
+) -> miette::Result<Option<monee_core::CurrencyId>> {
     let currency_id = match currency {
         CurrencyIdOrCode::Id(currency_id) => {
             let exists =
-                match twon::actions::currencies::check::run(con, currency_id).await {
+                match monee::actions::currencies::check::run(con, currency_id).await {
                     Ok(exists) => exists,
-                    Err(err) => twon::log::database(err),
+                    Err(err) => monee::log::database(err),
                 };
 
             if !exists && !yes {
@@ -79,7 +79,7 @@ pub async fn get_currency(
             currency_id
         }
         CurrencyIdOrCode::Code(code) => {
-            use twon::actions::currencies::from_code;
+            use monee::actions::currencies::from_code;
             match from_code::run(con, code.clone()).await {
                 Ok(id) => id,
                 Err(from_code::Error::NotFound) => {
@@ -93,7 +93,7 @@ pub async fn get_currency(
                     return Err(diagnostic.into());
                 }
                 Err(from_code::Error::Database(error)) => {
-                    twon::log::database(error)
+                    monee::log::database(error)
                 }
             }
         }

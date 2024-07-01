@@ -8,7 +8,7 @@ pub type Connection = surrealdb::Surreal<surrealdb::engine::remote::ws::Client>;
 pub type Error = surrealdb::Error;
 
 #[cfg(feature = "embedded")]
-const DB_DIR: &str = "twon.db";
+const DB_DIR: &str = "monee.db";
 
 async fn init(connection: &Connection) -> Result<()> {
     connection
@@ -76,7 +76,7 @@ async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
 
 pub async fn connect() -> surrealdb::Result<Connection> {
     let (db, exists) = create_connection().await?;
-    db.use_ns("twon").use_db("twon").await?;
+    db.use_ns("monee").use_db("monee").await?;
 
     if !exists {
         init(&db).await?;
@@ -153,8 +153,8 @@ pub(crate) mod entity {
         };
     }
 
-    impl_str_de!(twon_core::DebtId);
-    impl_str_de!(twon_core::WalletId);
-    impl_str_de!(twon_core::CurrencyId);
-    impl_str_de!(twon_core::actor::ActorId);
+    impl_str_de!(monee_core::DebtId);
+    impl_str_de!(monee_core::WalletId);
+    impl_str_de!(monee_core::CurrencyId);
+    impl_str_de!(monee_core::actor::ActorId);
 }

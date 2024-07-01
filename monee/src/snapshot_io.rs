@@ -14,16 +14,16 @@ pub struct SnapshotMetadata {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct SnapshotEntry {
     pub metadata: SnapshotMetadata,
-    pub snapshot: twon_core::Snapshot,
+    pub snapshot: monee_core::Snapshot,
 }
 
-pub(crate) async fn write(snapshot: twon_core::Snapshot) -> std::io::Result<()> {
+pub(crate) async fn write(snapshot: monee_core::Snapshot) -> std::io::Result<()> {
     tokio::task::spawn_blocking(move || do_write(snapshot))
         .await
         .expect("To join write task")
 }
 
-pub(crate) fn do_write(snapshot: twon_core::Snapshot) -> std::io::Result<()> {
+pub(crate) fn do_write(snapshot: monee_core::Snapshot) -> std::io::Result<()> {
     let entry = SnapshotEntry {
         snapshot,
         metadata: SnapshotMetadata {
@@ -70,7 +70,7 @@ mod read_in {
         let result = std::fs::read_to_string(&path);
 
         let create_empty = move || {
-            let snapshot = twon_core::Snapshot::default();
+            let snapshot = monee_core::Snapshot::default();
             SnapshotEntry {
                 metadata: SnapshotMetadata {
                     created_at: crate::date::Timezone::now(),

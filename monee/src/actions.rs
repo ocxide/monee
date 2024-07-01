@@ -1,7 +1,7 @@
 pub mod events {
     pub async fn add(
         connection: &crate::database::Connection,
-        event: twon_core::Event,
+        event: monee_core::Event,
     ) -> Result<(), crate::error::SnapshotOptError> {
         let mut snapshot_entry = crate::snapshot_io::read().await?;
         snapshot_entry.snapshot.apply(event.clone())?;
@@ -18,7 +18,7 @@ pub mod events {
     #[derive(serde::Deserialize)]
     pub struct EventRow {
         #[serde(flatten)]
-        pub event: twon_core::Event,
+        pub event: monee_core::Event,
         pub created_at: crate::date::Datetime,
     }
 
@@ -37,14 +37,14 @@ pub mod debts {
 
         #[derive(serde::Deserialize)]
         struct QueryResult {
-            actors: Vec<twon_core::actor::Actor>,
-            debt_id: twon_core::DebtId,
+            actors: Vec<monee_core::actor::Actor>,
+            debt_id: monee_core::DebtId,
         }
 
         pub struct DebtItem {
-            pub debt_id: twon_core::DebtId,
-            pub debt: twon_core::MoneyStorage,
-            pub actors: Vec<twon_core::actor::Actor>,
+            pub debt_id: monee_core::DebtId,
+            pub debt: monee_core::MoneyStorage,
+            pub actors: Vec<monee_core::actor::Actor>,
             pub currency: Option<crate::actions::currencies::list::CurrencyRow>,
         }
 
@@ -52,7 +52,7 @@ pub mod debts {
             connection: &crate::database::Connection,
             debt_relation: &'static str,
             group: &'static str,
-            debts: twon_core::MoneyRecord<twon_core::DebtId>,
+            debts: monee_core::MoneyRecord<monee_core::DebtId>,
         ) -> Result<Vec<DebtItem>, crate::database::Error> {
             let debts_req = connection
                 .query(format!("SELECT id, <-generated<-procedure<-{debt_relation}<-actor.* as actors, debt_id, currency_id FROM event WHERE group = $group AND type = 'incur'"))
@@ -88,7 +88,7 @@ pub mod debts {
 
         pub async fn run_in(
             connection: &crate::database::Connection,
-            debts: twon_core::MoneyRecord<twon_core::DebtId>,
+            debts: monee_core::MoneyRecord<monee_core::DebtId>,
         ) -> Result<Vec<DebtItem>, crate::database::Error> {
             let response = run(connection, "in_debt_on", "in_debt", debts).await?;
             Ok(response)
@@ -96,7 +96,7 @@ pub mod debts {
 
         pub async fn run_out(
             connection: &crate::database::Connection,
-            debts: twon_core::MoneyRecord<twon_core::DebtId>,
+            debts: monee_core::MoneyRecord<monee_core::DebtId>,
         ) -> Result<Vec<DebtItem>, crate::database::Error> {
             let response = run(connection, "out_debt_on", "out_debt", debts).await?;
             Ok(response)
@@ -107,7 +107,7 @@ pub mod debts {
 pub mod actors {
     pub mod list {
         pub type ActorRow =
-            crate::database::Entity<twon_core::actor::ActorId, twon_core::actor::Actor>;
+            crate::database::Entity<monee_core::actor::ActorId, monee_core::actor::Actor>;
 
         pub async fn run(
             connection: &crate::database::Connection,
@@ -120,7 +120,7 @@ pub mod actors {
     }
 
     pub mod create {
-        use twon_core::actor;
+        use monee_core::actor;
 
         #[derive(thiserror::Error, Debug)]
         pub enum Error {
@@ -169,11 +169,11 @@ pub mod currencies {
         pub async fn run(
             connection: &crate::database::Connection,
             code: String,
-        ) -> Result<twon_core::CurrencyId, Error> {
+        ) -> Result<monee_core::CurrencyId, Error> {
             #[derive(serde::Deserialize)]
             struct CurrencyIdSelect {
                 #[serde(with = "crate::sql_id::string")]
-                id: twon_core::CurrencyId,
+                id: monee_core::CurrencyId,
             }
 
             let mut response = connection
@@ -194,7 +194,7 @@ pub mod currencies {
     pub mod check {
         pub async fn run(
             connection: &crate::database::Connection,
-            id: twon_core::CurrencyId,
+            id: monee_core::CurrencyId,
         ) -> Result<bool, crate::database::Error> {
             #[derive(serde::Deserialize)]
             struct Empty {}
@@ -224,8 +224,8 @@ pub mod currencies {
             name: String,
             symbol: String,
             code: String,
-        ) -> Result<twon_core::CurrencyId, Error> {
-            let id = twon_core::CurrencyId::new();
+        ) -> Result<monee_core::CurrencyId, Error> {
+            let id = monee_core::CurrencyId::new();
             let response = connection
                 .query(
                     "CREATE ONLY currency SET id=$id, name = $name, symbol = $symbol, code = $code",
@@ -249,7 +249,7 @@ pub mod currencies {
     }
 
     pub mod list {
-        use twon_core::currency;
+        use monee_core::currency;
 
         pub type CurrencyRow = crate::database::Entity<currency::CurrencyId, currency::Currency>;
 
@@ -267,10 +267,10 @@ pub mod wallets {
         pub use crate::error::SnapshotReadError as Error;
 
         pub struct WalletRow {
-            pub id: twon_core::WalletId,
+            pub id: monee_core::WalletId,
             pub name: Option<String>,
             pub currency: Option<crate::actions::currencies::list::CurrencyRow>,
-            pub balance: twon_core::Amount,
+            pub balance: monee_core::Amount,
         }
 
         pub async fn run(
@@ -279,7 +279,7 @@ pub mod wallets {
             let snapshot_fut = crate::snapshot_io::read();
             let metadatas = async move {
                 let result: Result<
-                    Vec<crate::Entity<twon_core::WalletId, twon_core::metadata::WalletMetadata>>,
+                    Vec<crate::Entity<monee_core::WalletId, monee_core::metadata::WalletMetadata>>,
                     _,
                 > = connection.select("wallet_metadata").await;
                 result
@@ -315,19 +315,19 @@ pub mod wallets {
 
     pub mod create {
         use surrealdb::sql::{self, Thing};
-        use twon_core::WalletId;
+        use monee_core::WalletId;
 
         pub use crate::error::SnapshotOptError as Error;
 
         pub async fn run(
             connection: &crate::database::Connection,
-            currency_id: twon_core::CurrencyId,
+            currency_id: monee_core::CurrencyId,
             name: Option<String>,
         ) -> Result<WalletId, Error> {
             let wallet_id = WalletId::new();
 
             let mut snapshot_entry = crate::snapshot_io::read().await?;
-            let event = twon_core::Event::Wallet(twon_core::WalletEvent::Create {
+            let event = monee_core::Event::Wallet(monee_core::WalletEvent::Create {
                 wallet_id,
                 currency: currency_id,
             });
