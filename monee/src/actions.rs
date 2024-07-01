@@ -1,3 +1,130 @@
+pub mod snapshopts {
+    pub mod show {
+        use std::{collections::HashMap, future::IntoFuture, rc::Rc};
+
+        pub struct SnapshotShow {
+            pub wallets: Vec<WalletShow>,
+            pub in_debts: Vec<DebtShow>,
+            pub out_debts: Vec<DebtShow>,
+        }
+
+        pub struct WalletShow {
+            pub money: monee_core::MoneyStorage,
+            pub metadata: monee_core::metadata::WalletMetadata,
+            pub currency: Option<Rc<monee_core::currency::Currency>>,
+        }
+
+        pub struct DebtShow {
+            pub money: monee_core::MoneyStorage,
+            pub currency: Option<Rc<monee_core::currency::Currency>>,
+            pub actor: Vec<Rc<monee_core::actor::Actor>>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct DebtActors {
+            debt_id: monee_core::DebtId,
+            #[serde(with = "crate::sql_id::string_vec")]
+            actors: Vec<monee_core::actor::ActorId>,
+        }
+
+        async fn get_debt_actors(
+            connection: &crate::database::Connection,
+            debt_relation: &'static str,
+            group: &'static str,
+        ) -> Result<Vec<DebtActors>, crate::database::Error> {
+            let mut response = connection
+                .query(format!("SELECT <-generated<-procedure<-{debt_relation}<-actor as actors, debt_id FROM event WHERE group = $group AND type = 'incur'"))
+                .bind(("group", group)).await?.check()?;
+
+            response.take(0)
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+        ) -> Result<SnapshotShow, crate::error::SnapshotReadError> {
+            let crate::snapshot_io::SnapshotEntry { snapshot, .. } =
+                crate::snapshot_io::read().await?;
+
+            let currencies = crate::actions::currencies::list::run(connection);
+            let actors = crate::actions::actors::list::run(connection);
+            let metadatas = async {
+                match connection
+                    .query("SELECT * FROM wallet_metadata")
+                    .into_future()
+                    .await
+                {
+                    Ok(mut response) => response.take(0),
+                    Err(e) => Err(e),
+                }
+            };
+            let in_debt_actors = get_debt_actors(connection, "in_debt_on", "in_debt");
+            let out_debt_actors = get_debt_actors(connection, "out_debt_on", "out_debt");
+
+            let (currencies, actors, metadatas, in_debt_actors, out_debt_actors): (
+                _,
+                _,
+                Vec<crate::Entity<monee_core::WalletId, monee_core::metadata::WalletMetadata>>,
+                _,
+                _,
+            ) = tokio::try_join!(
+                currencies,
+                actors,
+                metadatas,
+                in_debt_actors,
+                out_debt_actors
+            )?;
+
+            let currencies: HashMap<_, _> = currencies
+                .into_iter()
+                .map(|c| (c.0, Rc::new(c.1)))
+                .collect();
+
+            let actors: HashMap<_, _> = actors.into_iter().map(|a| (a.0, Rc::new(a.1))).collect();
+
+            let wallets = snapshot
+                .wallets
+                .into_iter()
+                .map(|(id, money)| WalletShow {
+                    currency: currencies.get(&money.currency).cloned(),
+                    money,
+                    metadata: metadatas.iter().find(|m| m.0 == id).unwrap().1.clone(),
+                })
+                .collect();
+
+            let collect_debts = |debts: monee_core::MoneyRecord<monee_core::DebtId>,
+                                 debt_actors: Vec<DebtActors>| {
+                debts
+                    .into_iter()
+                    .map(|(id, money)| DebtShow {
+                        currency: currencies.get(&money.currency).cloned(),
+                        actor: debt_actors
+                            .iter()
+                            .find(|d| d.debt_id == id)
+                            .map(|d| {
+                                d.actors
+                                    .iter()
+                                    .filter_map(|a| actors.get(a))
+                                    .cloned()
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        money,
+                    })
+                    .collect()
+            };
+
+            let in_debts = collect_debts(snapshot.in_debts, in_debt_actors);
+            let out_debts = collect_debts(snapshot.out_debts, out_debt_actors);
+
+            Ok(SnapshotShow {
+                wallets,
+                in_debts,
+                out_debts,
+            })
+        }
+    }
+}
+
 pub mod events {
     pub async fn add(
         connection: &crate::database::Connection,
@@ -314,8 +441,8 @@ pub mod wallets {
     }
 
     pub mod create {
-        use surrealdb::sql::{self, Thing};
         use monee_core::WalletId;
+        use surrealdb::sql::{self, Thing};
 
         pub use crate::error::SnapshotOptError as Error;
 

@@ -110,27 +110,44 @@ pub mod debts {
             currency,
         } in debts
         {
-            print!("{} - ", debt_id);
-
-            let mut actors = actors.iter().peekable();
-            while let Some(actor) = actors.next() {
-                print!("{}", actor.name);
-                if let Some(alias) = actor.alias.as_deref() {
-                    print!("({})", alias);
-                }
-
-                if actors.peek().is_some() {
-                    print!(", ");
-                }
-            }
-
-            print!(" - ");
-            match currency {
-                Some(monee::Entity(_, currency)) => print!("{} {}", currency.code, currency.symbol),
-                None => print!("(Unknown currency)"),
-            }
-            println!("{}", debt.balance);
+            print_debt(
+                *debt_id,
+                &debt.balance,
+                actors.iter(),
+                match currency {
+                    Some(currency) => Some(&currency.1),
+                    None => None,
+                },
+            );
         }
+    }
+
+    pub(in crate::commands) fn print_debt<'a>(
+        id: monee_core::DebtId,
+        balance: &monee_core::Amount,
+        actors: impl Iterator<Item = &'a monee_core::actor::Actor>,
+        currency: Option<&monee_core::currency::Currency>,
+    ) {
+        print!("{} - ", id);
+
+        let mut actors = actors.peekable();
+        while let Some(actor) = actors.next() {
+            print!("{}", actor.name);
+            if let Some(alias) = actor.alias.as_deref() {
+                print!("({})", alias);
+            }
+
+            if actors.peek().is_some() {
+                print!(", ");
+            }
+        }
+
+        print!(" - ");
+        match currency {
+            Some(currency) => print!("{} {}", currency.code, currency.symbol),
+            None => print!("(Unknown currency)"),
+        }
+        println!("{}", balance);
     }
 
     pub fn handle(command: DebtsCommand) -> miette::Result<()> {
@@ -411,9 +428,67 @@ pub mod do_command {
     }
 }
 
+pub mod snapshot {
+    pub fn show() -> miette::Result<()> {
+        let result: Result<_, miette::Error> = crate::tasks::block_multi(async {
+            let db = crate::tasks::use_db().await?;
+            let snapshot = monee::actions::snapshopts::show::run(&db)
+                .await
+                .map_err(crate::diagnostics::snapshot_r_diagnostic)?;
+
+            Ok(snapshot)
+        });
+
+        let snapshot = result?;
+
+        println!("Wallets");
+        if snapshot.wallets.is_empty() {
+            println!("<none>");
+        }
+
+        for wallet in snapshot.wallets {
+            crate::commands::wallets::print_wallet(
+                monee_core::WalletId::new(), // TODO
+                wallet.metadata.name.as_deref(),
+                wallet.currency.as_deref(),
+                &wallet.money.balance,
+            );
+        }
+
+        println!("InDebts");
+        if snapshot.in_debts.is_empty() {
+            println!("<none>");
+        }
+
+        for debt in snapshot.in_debts {
+            crate::commands::debts::print_debt(
+                monee_core::DebtId::new(), // TODO
+                &debt.money.balance,
+                debt.actor.iter().map(|a| a.as_ref()),
+                debt.currency.as_deref(),
+            );
+        }
+
+        println!("\nOutDebts");
+        if snapshot.out_debts.is_empty() {
+            println!("<none>");
+        }
+        for debt in snapshot.out_debts {
+            crate::commands::debts::print_debt(
+                monee_core::DebtId::new(), // TODO
+                &debt.money.balance,
+                debt.actor.iter().map(|a| a.as_ref()),
+                debt.currency.as_deref(),
+            );
+        }
+
+        Ok(())
+    }
+}
+
 use crate::diagnostics::snapshot_read_diagnostic;
 
-pub fn snapshot(output: Option<std::path::PathBuf>) -> miette::Result<()> {
+pub fn snapshot_write(output: Option<std::path::PathBuf>) -> miette::Result<()> {
     let snapshot_entry = monee::snapshot_io::do_read().map_err(snapshot_read_diagnostic)?;
 
     match output {
@@ -650,6 +725,27 @@ pub mod wallets {
         })
     }
 
+    pub(in crate::commands) fn print_wallet(
+        id: monee_core::WalletId,
+        name: Option<&str>,
+        currency: Option<&monee_core::currency::Currency>,
+        balance: &monee_core::Amount,
+    ) {
+        match name {
+            Some(name) => print!("{}({}):", name, id),
+            None => print!("`{}`:", id),
+        }
+
+        match currency {
+            Some(currency) => {
+                print!(" {} {}", currency.code, currency.symbol)
+            }
+            None => print!("`Unknown currency`"),
+        }
+
+        println!("{}\n", balance);
+    }
+
     pub fn list() -> miette::Result<()> {
         let wallets = crate::tasks::block_multi(async move {
             let con = crate::tasks::use_db().await?;
@@ -659,20 +755,13 @@ pub mod wallets {
                 .map_err(crate::diagnostics::snapshot_r_diagnostic)
         })?;
 
-        for wallet in wallets.iter() {
-            match &wallet.name {
-                Some(name) => print!("{}({}):", name, wallet.id),
-                None => print!("`{}`:", wallet.id),
-            }
-
-            match &wallet.currency {
-                Some(monee::Entity(_, currency)) => {
-                    print!(" {} {}", currency.code, currency.symbol)
-                }
-                None => print!("`Unknown currency`"),
-            }
-
-            println!("{}\n", wallet.balance);
+        for wallet in wallets {
+            print_wallet(
+                wallet.id,
+                wallet.name.as_deref(),
+                wallet.currency.map(|c| c.1).as_ref(),
+                &wallet.balance,
+            );
         }
 
         Ok(())
