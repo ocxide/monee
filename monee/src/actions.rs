@@ -262,7 +262,6 @@ pub mod actors {
             actor: actor::Actor,
         ) -> Result<actor::ActorId, Error> {
             let id = actor::ActorId::new();
-            println!("Creating actor id: {:?}", id);
 
             let result = connection
                 .query("CREATE type::thing('actor', $id) CONTENT $data")
