@@ -3,9 +3,9 @@ pub mod snapshopts {
         use std::{collections::HashMap, future::IntoFuture, rc::Rc};
 
         pub struct SnapshotShow {
-            pub wallets: Vec<WalletShow>,
-            pub in_debts: Vec<DebtShow>,
-            pub out_debts: Vec<DebtShow>,
+            pub wallets: Vec<(monee_core::WalletId, WalletShow)>,
+            pub in_debts: Vec<(monee_core::DebtId, DebtShow)>,
+            pub out_debts: Vec<(monee_core::DebtId, DebtShow)>,
         }
 
         pub struct WalletShow {
@@ -84,10 +84,14 @@ pub mod snapshopts {
             let wallets = snapshot
                 .wallets
                 .into_iter()
-                .map(|(id, money)| WalletShow {
-                    currency: currencies.get(&money.currency).cloned(),
-                    money,
-                    metadata: metadatas.iter().find(|m| m.0 == id).unwrap().1.clone(),
+                .map(|(id, money)| {
+                    let wallet = WalletShow {
+                        currency: currencies.get(&money.currency).cloned(),
+                        money,
+                        metadata: metadatas.iter().find(|m| m.0 == id).unwrap().1.clone(),
+                    };
+
+                    (id, wallet)
                 })
                 .collect();
 
@@ -95,20 +99,24 @@ pub mod snapshopts {
                                  debt_actors: Vec<DebtActors>| {
                 debts
                     .into_iter()
-                    .map(|(id, money)| DebtShow {
-                        currency: currencies.get(&money.currency).cloned(),
-                        actor: debt_actors
-                            .iter()
-                            .find(|d| d.debt_id == id)
-                            .map(|d| {
-                                d.actors
-                                    .iter()
-                                    .filter_map(|a| actors.get(a))
-                                    .cloned()
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
-                        money,
+                    .map(|(id, money)| {
+                        let debt = DebtShow {
+                            currency: currencies.get(&money.currency).cloned(),
+                            actor: debt_actors
+                                .iter()
+                                .find(|d| d.debt_id == id)
+                                .map(|d| {
+                                    d.actors
+                                        .iter()
+                                        .filter_map(|a| actors.get(a))
+                                        .cloned()
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
+                            money,
+                        };
+
+                        (id, debt)
                     })
                     .collect()
             };

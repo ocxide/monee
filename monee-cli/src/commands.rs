@@ -446,9 +446,9 @@ pub mod snapshot {
             println!("<none>");
         }
 
-        for wallet in snapshot.wallets {
+        for (id, wallet) in snapshot.wallets {
             crate::commands::wallets::print_wallet(
-                monee_core::WalletId::new(), // TODO
+                id,
                 wallet.metadata.name.as_deref(),
                 wallet.currency.as_deref(),
                 &wallet.money.balance,
@@ -460,9 +460,9 @@ pub mod snapshot {
             println!("<none>");
         }
 
-        for debt in snapshot.in_debts {
+        for (id, debt) in snapshot.in_debts {
             crate::commands::debts::print_debt(
-                monee_core::DebtId::new(), // TODO
+                id,
                 &debt.money.balance,
                 debt.actor.iter().map(|a| a.as_ref()),
                 debt.currency.as_deref(),
@@ -473,9 +473,9 @@ pub mod snapshot {
         if snapshot.out_debts.is_empty() {
             println!("<none>");
         }
-        for debt in snapshot.out_debts {
+        for (id, debt) in snapshot.out_debts {
             crate::commands::debts::print_debt(
-                monee_core::DebtId::new(), // TODO
+                id,
                 &debt.money.balance,
                 debt.actor.iter().map(|a| a.as_ref()),
                 debt.currency.as_deref(),
