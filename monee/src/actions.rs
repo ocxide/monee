@@ -33,6 +33,24 @@ pub mod item_tags {
         }
     }
 
+    pub mod get {
+        use crate::Entity;
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+            name: String,
+        ) -> Result<Option<monee_core::item_tag::ItemTagId>, crate::database::Error> {
+            let mut response = connection
+                .query("SELECT id FROM ONLY item_tag WHERE name = $name LIMIT 1")
+                .bind(("name", name))
+                .await?
+                .check()?;
+
+            let tag: Option<Entity<monee_core::item_tag::ItemTagId, ()>> = response.take(0)?;
+            Ok(tag.map(|t| t.0))
+        }
+    }
+
     pub mod relate {
         #[derive(thiserror::Error, Debug)]
         pub enum Error {

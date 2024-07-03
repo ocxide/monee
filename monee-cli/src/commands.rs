@@ -77,11 +77,11 @@ pub mod item_tags {
         Relate {
             /// Unique identifier
             #[arg(short, long)]
-            tag: monee_core::item_tag::ItemTagId,
+            tag: String,
 
             /// Unique identifier
             #[arg(short, long)]
-            contains: monee_core::item_tag::ItemTagId,
+            contains: String,
         },
     }
 
@@ -117,12 +117,29 @@ pub mod item_tags {
         })
     }
 
-    pub fn relate(
-        parent: monee_core::item_tag::ItemTagId,
-        child: monee_core::item_tag::ItemTagId,
-    ) -> miette::Result<()> {
-        crate::tasks::block_single(async {
+    pub fn relate(parent: String, child: String) -> miette::Result<()> {
+        crate::tasks::block_multi(async {
             let db = crate::tasks::use_db().await?;
+
+            fn diagnostic_not_found(tag_name: String) -> miette::Report {
+                miette::diagnostic!(
+                    severity = miette::Severity::Error,
+                    code = "item_tag::NotFound",
+                    "Item tag with id `{}` not found",
+                    tag_name
+                )
+                .into()
+            }
+
+            let (parent, child) = match tokio::try_join!(
+                item_tags::get::run(&db, parent.clone()),
+                item_tags::get::run(&db, child.clone())
+            ) {
+                Ok((Some(parent), Some(child))) => (parent, child),
+                Err(why) => monee::log::database(why),
+                Ok((None, _)) => return Err(diagnostic_not_found(child)),
+                Ok((_, None)) => return Err(diagnostic_not_found(parent)),
+            };
 
             match item_tags::relate::run(&db, parent, child).await {
                 Ok(()) => {
