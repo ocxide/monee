@@ -168,6 +168,18 @@ pub mod item_tags {
 
                     Err(diagnostic.into())
                 }
+
+                Err(item_tags::relate::Error::AlreadyContains) => {
+                    let diagnostic = miette::diagnostic!(
+                        severity = miette::Severity::Error,
+                        code = "item_tag::AlreadyContains",
+                        "Item tag `{}` already contains `{}`",
+                        parent,
+                        child
+                    );
+
+                    Err(diagnostic.into())
+                }
             }
         })
     }

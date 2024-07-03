@@ -54,6 +54,8 @@ pub mod item_tags {
     pub mod relate {
         #[derive(thiserror::Error, Debug)]
         pub enum Error {
+            #[error("Item tag already contains item tag")]
+            AlreadyContains,
             #[error("Cyclic relation")]
             CyclicRelation,
             #[error("Item tag `{0}` not found")]
@@ -143,16 +145,23 @@ pub mod item_tags {
 
             check_relation(connection, parent_id, child_id).await?;
 
-            connection
+            let response = connection
                 .query("LET $parent_thing = type::thing('item_tag', $parent_id)")
                 .bind(("parent_id", parent_id))
                 .query("LET $child_thing = type::thing('item_tag', $child_id)")
                 .bind(("child_id", child_id))
                 .query("RELATE $parent_thing->contains->$child_thing")
                 .await?
-                .check()?;
+                .check();
 
-            Ok(())
+            match response {
+                Ok(_) => Ok(()),
+                Err(
+                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                ) => Err(Error::AlreadyContains),
+                Err(e) => Err(Error::Database(e)),
+            }
         }
     }
 }
