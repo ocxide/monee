@@ -47,16 +47,25 @@ async fn init(connection: &Connection) -> Result<()> {
         .await?
         .check()?;
 
+    connection
+        .query("DEFINE TABLE item_tag")
+        .query("DEFINE FIELD name ON item_tag TYPE string")
+        .query("DEFINE INDEX item_tag_name ON item_tag FIELDS name UNIQUE")
+        .await?
+        .check()?;
+
     Ok(())
 }
 
 #[cfg(feature = "embedded")]
 async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
     let path = crate::create_local_path().join(DB_DIR);
-    let exists = tokio::fs::try_exists(&path).await.unwrap_or_else(|_| {
+    // For now, just run definition queries
+    /* let exists = tokio::fs::try_exists(&path).await.unwrap_or_else(|_| {
         println!("WARNING: Failed to check if db exists");
         false
-    });
+    }); */
+    let exists = false;
 
     let db = surrealdb::Surreal::new::<surrealdb::engine::local::File>(format!(
         "file://{}",

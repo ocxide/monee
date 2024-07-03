@@ -1,3 +1,147 @@
+pub mod item_tags {
+    pub mod create {
+        use monee_core::item_tag::ItemTag;
+
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Item tag already exists")]
+            AlreadyExists,
+            #[error(transparent)]
+            Database(#[from] crate::database::Error),
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+            item_tag: ItemTag,
+        ) -> Result<(), Error> {
+            let id = monee_core::item_tag::ItemTagId::new();
+            connection
+                .query("CREATE type::thing('item_tag', $id) CONTENT $data")
+                .bind(("id", id))
+                .bind(("data", item_tag))
+                .await?
+                .check()
+                .map_err(|e| match e {
+                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    | crate::database::Error::Db(surrealdb::error::Db::IndexExists { .. }) => {
+                        Error::AlreadyExists
+                    }
+                    e => Error::Database(e),
+                })?;
+
+            Ok(())
+        }
+    }
+
+    pub mod relate {
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Cyclic relation")]
+            CyclicRelation,
+            #[error("Item tag `{0}` not found")]
+            NotFound(monee_core::item_tag::ItemTagId),
+            #[error("Internal error")]
+            Network,
+            #[error(transparent)]
+            Database(#[from] crate::database::Error),
+        }
+
+        #[derive(serde::Deserialize)]
+        struct Parents(
+            #[serde(with = "crate::sql_id::string_vec")] Vec<monee_core::item_tag::ItemTagId>,
+        );
+
+        pub async fn check_multi_relation(
+            connection: &crate::database::Connection,
+            parents: &[monee_core::item_tag::ItemTagId],
+            child_id: monee_core::item_tag::ItemTagId,
+        ) -> Result<(), Error> {
+            let parents = parents
+                .iter()
+                .map(|p| {
+                    let id = surrealdb::sql::Id::String(p.to_string());
+                    surrealdb::sql::Thing::from(("item_tag", id))
+                })
+                .collect::<Vec<_>>();
+
+            let mut response = connection
+                .query("SELECT VALUE ->contains-> as parents FROM $items")
+                .bind(("items", parents))
+                .await?
+                .check()?;
+
+            let grand_parents: Vec<Parents> = response.take(0)?;
+            let grand_parents: Vec<_> = grand_parents
+                .into_iter()
+                .filter(|p| !p.0.is_empty())
+                .flat_map(|p| p.0)
+                .collect();
+
+            if grand_parents.is_empty() {
+                return Ok(());
+            }
+
+            if grand_parents.contains(&child_id) {
+                return Err(Error::CyclicRelation);
+            }
+
+            Box::pin(check_multi_relation(connection, &grand_parents, child_id)).await
+        }
+
+        pub async fn check_relation(
+            connection: &crate::database::Connection,
+            parent_id: monee_core::item_tag::ItemTagId,
+            child_id: monee_core::item_tag::ItemTagId,
+        ) -> Result<(), Error> {
+            let mut response = connection
+                .query(
+                    "SELECT VALUE ->contains-> as parents FROM ONLY type::thing(item_tag, $parent_id)",
+                )
+                .bind(("parent_id", parent_id))
+                .await?
+                // TODO: check child exists
+                .check()?;
+
+            let parents: Option<Parents> = response.take(0)?;
+            let parents = parents.map(|p| p.0);
+            let parents = match parents.as_deref() {
+                Some([]) => return Ok(()),
+                Some(parents) => parents,
+                None => return Err(Error::NotFound(parent_id)),
+            };
+
+            if parents.contains(&child_id) {
+                return Err(Error::CyclicRelation);
+            }
+
+            check_multi_relation(connection, parents, child_id).await
+        }
+
+        pub async fn run(
+            connection: &crate::database::Connection,
+            parent_id: monee_core::item_tag::ItemTagId,
+            child_id: monee_core::item_tag::ItemTagId,
+        ) -> Result<(), Error> {
+            if parent_id == child_id {
+                return Err(Error::CyclicRelation);
+            }
+
+            check_relation(connection, parent_id, child_id).await?;
+
+            connection
+                .query("LET parent_thing = type::thing('item_tag', $parent_id)")
+                .bind(("parent_id", parent_id))
+                .query("LET child_thing = type::thing('item_tag', $child_id)")
+                .bind(("child_id", child_id))
+                .query("RELATE parent_thing->contains->child_thing")
+                .await?
+                .check()?;
+
+            Ok(())
+        }
+    }
+}
+
 pub mod snapshopts {
     pub mod show {
         use std::{collections::HashMap, future::IntoFuture, rc::Rc};

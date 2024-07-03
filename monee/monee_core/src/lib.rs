@@ -31,6 +31,17 @@ pub mod currency {
     }
 }
 
+pub mod item_tag {
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    pub struct ItemTag {
+        pub name: String,
+    }
+
+    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
+    pub struct ItemTagId(crate::tiny_id::TinyId<4>);
+    crate::id_utils::impl_id!(ItemTagId, crate::tiny_id::TinyId<4>);
+}
+
 pub mod metadata {
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(rename_all = "snake_case")]
@@ -62,7 +73,7 @@ mod id_utils {
         ($name:ident, $inner_id:ty) => {
             impl $name {
                 pub fn new() -> Self {
-                    Self(Id::new())
+                    Self(<$inner_id>::new())
                 }
             }
 
