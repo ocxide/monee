@@ -131,7 +131,7 @@ pub mod item_tags {
                 .into()
             }
 
-            let (parent, child) = match tokio::try_join!(
+            let (parent_tag, child_tag) = match tokio::try_join!(
                 item_tags::get::run(&db, parent.clone()),
                 item_tags::get::run(&db, child.clone())
             ) {
@@ -141,7 +141,7 @@ pub mod item_tags {
                 Ok((_, None)) => return Err(diagnostic_not_found(parent)),
             };
 
-            match item_tags::relate::run(&db, parent, child).await {
+            match item_tags::relate::run(&db, parent_tag, child_tag).await {
                 Ok(()) => {
                     println!("Tag `{}` now contains `{}`", parent, child);
                     Ok(())
@@ -162,8 +162,8 @@ pub mod item_tags {
                         severity = miette::Severity::Error,
                         code = "item_tag::CyclicRelation",
                         "Item tag `{}` already contains `{}`",
-                        child,
-                        parent
+                        child_tag,
+                        parent_tag
                     );
 
                     Err(diagnostic.into())

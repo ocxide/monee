@@ -54,6 +54,14 @@ async fn init(connection: &Connection) -> Result<()> {
         .await?
         .check()?;
 
+    connection
+        .query("DEFINE TABLE contains")
+        .query("DEFINE FIELD in ON contains TYPE record<item_tag>")
+        .query("DEFINE FIELD out ON contains TYPE record<item_tag>")
+        .query("DEFINE INDEX contains_item_tag ON contains FIELDS in, out UNIQUE")
+        .await?
+        .check()?;
+
     Ok(())
 }
 
@@ -166,4 +174,5 @@ pub(crate) mod entity {
     impl_str_de!(monee_core::WalletId);
     impl_str_de!(monee_core::CurrencyId);
     impl_str_de!(monee_core::actor::ActorId);
+    impl_str_de!(monee_core::item_tag::ItemTagId);
 }
