@@ -40,77 +40,74 @@ pub mod item_tags {
             CyclicRelation,
             #[error("Item tag `{0}` not found")]
             NotFound(monee_core::item_tag::ItemTagId),
-            #[error("Internal error")]
-            Network,
             #[error(transparent)]
             Database(#[from] crate::database::Error),
         }
 
-        #[derive(serde::Deserialize)]
-        struct Parents(
-            #[serde(with = "crate::sql_id::string_vec")] Vec<monee_core::item_tag::ItemTagId>,
+        #[derive(serde::Deserialize, Debug)]
+        struct ParentTagId(
+            #[serde(with = "crate::sql_id::string")] monee_core::item_tag::ItemTagId,
         );
 
-        pub async fn check_multi_relation(
+        async fn check_multi_relation(
             connection: &crate::database::Connection,
-            parents: &[monee_core::item_tag::ItemTagId],
+            parents: &[ParentTagId],
             child_id: monee_core::item_tag::ItemTagId,
         ) -> Result<(), Error> {
             let parents = parents
                 .iter()
                 .map(|p| {
-                    let id = surrealdb::sql::Id::String(p.to_string());
+                    let id = surrealdb::sql::Id::String(p.0.to_string());
                     surrealdb::sql::Thing::from(("item_tag", id))
                 })
                 .collect::<Vec<_>>();
 
             let mut response = connection
-                .query("SELECT VALUE ->contains-> as parents FROM $items")
+                .query("SELECT <-contains<-item_tag as parents FROM $items")
                 .bind(("items", parents))
                 .await?
                 .check()?;
 
-            let grand_parents: Vec<Parents> = response.take(0)?;
+            let grand_parents: Vec<Vec<ParentTagId>> = response.take("parents")?;
             let grand_parents: Vec<_> = grand_parents
                 .into_iter()
-                .filter(|p| !p.0.is_empty())
-                .flat_map(|p| p.0)
+                .filter(|p| !p.is_empty())
+                .flat_map(|p| p.into_iter())
                 .collect();
 
             if grand_parents.is_empty() {
                 return Ok(());
             }
 
-            if grand_parents.contains(&child_id) {
+            if grand_parents.iter().any(|p| p.0 == child_id) {
                 return Err(Error::CyclicRelation);
             }
 
             Box::pin(check_multi_relation(connection, &grand_parents, child_id)).await
         }
 
-        pub async fn check_relation(
+        async fn check_relation(
             connection: &crate::database::Connection,
             parent_id: monee_core::item_tag::ItemTagId,
             child_id: monee_core::item_tag::ItemTagId,
         ) -> Result<(), Error> {
             let mut response = connection
                 .query(
-                    "SELECT VALUE ->contains-> as parents FROM ONLY type::thing(item_tag, $parent_id)",
+                    "SELECT <-contains<-item_tag as parents FROM ONLY type::thing('item_tag', $parent_id)",
                 )
                 .bind(("parent_id", parent_id))
                 .await?
-                // TODO: check child exists
                 .check()?;
 
-            let parents: Option<Parents> = response.take(0)?;
-            let parents = parents.map(|p| p.0);
+            let parents: Option<Vec<ParentTagId>> = response.take("parents")?;
+
             let parents = match parents.as_deref() {
                 Some([]) => return Ok(()),
                 Some(parents) => parents,
                 None => return Err(Error::NotFound(parent_id)),
             };
 
-            if parents.contains(&child_id) {
+            if parents.iter().any(|p| p.0 == child_id) {
                 return Err(Error::CyclicRelation);
             }
 
@@ -129,11 +126,11 @@ pub mod item_tags {
             check_relation(connection, parent_id, child_id).await?;
 
             connection
-                .query("LET parent_thing = type::thing('item_tag', $parent_id)")
+                .query("LET $parent_thing = type::thing('item_tag', $parent_id)")
                 .bind(("parent_id", parent_id))
-                .query("LET child_thing = type::thing('item_tag', $child_id)")
+                .query("LET $child_thing = type::thing('item_tag', $child_id)")
                 .bind(("child_id", child_id))
-                .query("RELATE parent_thing->contains->child_thing")
+                .query("RELATE $parent_thing->contains->$child_thing")
                 .await?
                 .check()?;
 

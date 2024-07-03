@@ -76,6 +76,10 @@ enum Commands {
         #[command(subcommand)]
         command: commands::debts::DebtsCommand,
     },
+    ItemTags {
+        #[command(subcommand)]
+        command: commands::item_tags::ItemTagsCommand,
+    },
     Do(crate::commands::do_command::DoCommand),
 }
 
@@ -125,6 +129,9 @@ fn main() -> miette::Result<()> {
         },
         Commands::Debts { command } => {
             commands::debts::handle(command)?;
+        }
+        Commands::ItemTags { command } => {
+            commands::item_tags::handle(command)?;
         }
         Commands::Do(command) => {
             crate::commands::do_command::handle(command)?;
