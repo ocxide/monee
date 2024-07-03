@@ -28,7 +28,9 @@ mod tasks {
     pub async fn use_db() -> miette::Result<monee::database::Connection> {
         match monee::database::connect().await {
             Ok(conn) => Ok(conn),
-            Err(_) => {
+            Err(e) => {
+                monee::log::write_error_log(e);
+
                 let diagnostic = miette::diagnostic!(
                     severity = miette::Severity::Error,
                     code = "io::database",

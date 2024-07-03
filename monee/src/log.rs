@@ -2,7 +2,7 @@ use std::io::Write;
 
 const FILE: &str = "monee.log";
 
-fn write_error_log<E: std::error::Error>(error: E) {
+pub fn write_error_log<E: std::error::Error>(error: E) {
     let path = crate::create_local_path().join(FILE);
     let mut file = match std::fs::OpenOptions::new()
         .create(true)
@@ -45,4 +45,3 @@ pub fn snapshot_write(error: std::io::Error) -> ! {
     write_error_log(error);
     panic!("Error: Snapshot write error, aborting...");
 }
-
