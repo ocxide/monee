@@ -13,22 +13,34 @@ pub enum ItemTagsCommand {
     Relate {
         /// Unique identifier
         #[arg(short, long)]
-        tag: String,
+        parent: String,
 
         /// Unique identifier
         #[arg(short, long)]
-        contains: String,
+        child: String,
     },
 
     #[command(alias = "v")]
     View,
+
+    #[command(alias = "u")]
+    Unlink {
+        /// Unique identifier
+        #[arg(short, long)]
+        parent: String,
+
+        /// Unique identifier
+        #[arg(short, long)]
+        child: String,
+    },
 }
 
 pub fn handle(command: ItemTagsCommand) -> miette::Result<()> {
     match command {
         ItemTagsCommand::Create { name } => create(name),
-        ItemTagsCommand::Relate { tag, contains } => relate(contains, tag),
+        ItemTagsCommand::Relate { parent, child } => relate(parent, child),
         ItemTagsCommand::View => view(),
+        ItemTagsCommand::Unlink { parent, child } => unlink(parent, child),
     }
 }
 
@@ -57,29 +69,40 @@ pub fn create(name: String) -> miette::Result<()> {
     })
 }
 
+async fn recover_tags(
+    db: &monee::database::Connection,
+    parent: String,
+    child: String,
+) -> miette::Result<(
+    monee_core::item_tag::ItemTagId,
+    monee_core::item_tag::ItemTagId,
+)> {
+    fn diagnostic_not_found(tag_name: String) -> miette::Report {
+        miette::diagnostic!(
+            severity = miette::Severity::Error,
+            code = "item_tag::NotFound",
+            "Item tag with id `{}` not found",
+            tag_name
+        )
+        .into()
+    }
+
+    match tokio::try_join!(
+        item_tags::get::run(db, parent.clone()),
+        item_tags::get::run(db, child.clone())
+    ) {
+        Ok((Some(parent), Some(child))) => Ok((parent, child)),
+        Err(why) => monee::log::database(why),
+        Ok((None, _)) => Err(diagnostic_not_found(child)),
+        Ok((_, None)) => Err(diagnostic_not_found(parent)),
+    }
+}
+
 pub fn relate(parent: String, child: String) -> miette::Result<()> {
     crate::tasks::block_multi(async {
         let db = crate::tasks::use_db().await?;
 
-        fn diagnostic_not_found(tag_name: String) -> miette::Report {
-            miette::diagnostic!(
-                severity = miette::Severity::Error,
-                code = "item_tag::NotFound",
-                "Item tag with id `{}` not found",
-                tag_name
-            )
-            .into()
-        }
-
-        let (parent_tag, child_tag) = match tokio::try_join!(
-            item_tags::get::run(&db, parent.clone()),
-            item_tags::get::run(&db, child.clone())
-        ) {
-            Ok((Some(parent), Some(child))) => (parent, child),
-            Err(why) => monee::log::database(why),
-            Ok((None, _)) => return Err(diagnostic_not_found(child)),
-            Ok((_, None)) => return Err(diagnostic_not_found(parent)),
-        };
+        let (parent_tag, child_tag) = recover_tags(&db, parent.clone(), child.clone()).await?;
 
         match item_tags::relate::run(&db, parent_tag, child_tag).await {
             Ok(()) => {
@@ -147,4 +170,29 @@ pub fn view() -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn unlink(parent: String, child: String) -> miette::Result<()> {
+    crate::tasks::block_multi(async {
+        let db = crate::tasks::use_db().await?;
+        let (parent_tag, child_tag) = recover_tags(&db, parent.clone(), child.clone()).await?;
+
+        match item_tags::unlink::run(&db, parent_tag, child_tag).await {
+            Ok(()) => {
+                println!("Tag `{}` no longer contains `{}`", parent, child);
+                Ok(())
+            }
+            Err(item_tags::unlink::Error::Database(db_err)) => monee::log::database(db_err),
+            Err(item_tags::unlink::Error::NotFound(tag_id)) => {
+                let diagnostic = miette::diagnostic!(
+                    severity = miette::Severity::Error,
+                    code = "item_tag::NotFound",
+                    "Item tag with id `{}` not found",
+                    tag_id
+                );
+
+                Err(diagnostic.into())
+            }
+        }
+    })
 }

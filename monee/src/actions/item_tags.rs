@@ -91,9 +91,7 @@ pub mod relate {
     }
 
     #[derive(serde::Deserialize, Debug)]
-    struct ParentTagId(
-        #[serde(with = "crate::sql_id::string")] monee_core::item_tag::ItemTagId,
-    );
+    struct ParentTagId(#[serde(with = "crate::sql_id::string")] monee_core::item_tag::ItemTagId);
 
     async fn check_multi_relation(
         connection: &crate::database::Connection,
@@ -191,3 +189,24 @@ pub mod relate {
     }
 }
 
+pub mod unlink {
+    #[derive(thiserror::Error, Debug)]
+    pub enum Error {
+        #[error("Item tag `{0}` not found")]
+        NotFound(monee_core::item_tag::ItemTagId),
+        #[error(transparent)]
+        Database(#[from] crate::database::Error),
+    }
+
+    pub async fn run(
+        connection: &crate::database::Connection,
+        parent_id: monee_core::item_tag::ItemTagId,
+        child_id: monee_core::item_tag::ItemTagId,
+    ) -> Result<(), Error> {
+        connection.query("DELETE type::thing('item_tag', $parent_id)->contains WHERE out=type::thing('item_tag', $child_id)")
+            .bind(("parent_id", parent_id)).bind(("child_id", child_id))
+            .await?.check()?;
+
+        Ok(())
+    }
+}
