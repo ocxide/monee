@@ -81,7 +81,7 @@ async fn recover_tags(
         miette::diagnostic!(
             severity = miette::Severity::Error,
             code = "item_tag::NotFound",
-            "Item tag with id `{}` not found",
+            "Item tag `{}` not found",
             tag_name
         )
         .into()
@@ -92,9 +92,19 @@ async fn recover_tags(
         item_tags::get::run(db, child.clone())
     ) {
         Ok((Some(parent), Some(child))) => Ok((parent, child)),
-        Err(why) => monee::log::database(why),
+        Ok((None, None)) => Err({
+            let diagnostic = miette::diagnostic!(
+                severity = miette::Severity::Error,
+                code = "item_tag::NotFound",
+                "No item tags found for `{}` and `{}`",
+                parent,
+                child
+            );
+            diagnostic.into()
+        }),
         Ok((None, _)) => Err(diagnostic_not_found(child)),
         Ok((_, None)) => Err(diagnostic_not_found(parent)),
+        Err(why) => monee::log::database(why),
     }
 }
 
