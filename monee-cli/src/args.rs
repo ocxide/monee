@@ -22,8 +22,8 @@ pub mod actor {
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             const PREFIX: &str = "actor:";
-            if s.starts_with(PREFIX) {
-                let id = actor::ActorId::from_str(&s[PREFIX.len()..]).map_err(Error::Id)?;
+            if let Some(raw) = s.strip_prefix(PREFIX) {
+                let id = actor::ActorId::from_str(raw).map_err(Error::Id)?;
                 return Ok(Arg::Id(id));
             }
 
