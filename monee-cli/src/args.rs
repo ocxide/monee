@@ -1,3 +1,63 @@
+pub mod actor {
+    use std::str::FromStr;
+
+    use monee_core::{actor, alias};
+
+    #[derive(Debug, Clone)]
+    pub enum Arg {
+        Id(actor::ActorId),
+        Alias(alias::Alias),
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum Error {
+        #[error(transparent)]
+        Id(<actor::ActorId as FromStr>::Err),
+        #[error(transparent)]
+        Alias(#[from] alias::from_str::Error),
+    }
+
+    impl FromStr for Arg {
+        type Err = Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            const PREFIX: &str = "actor:";
+            if s.starts_with(PREFIX) {
+                let id = actor::ActorId::from_str(&s[PREFIX.len()..]).map_err(Error::Id)?;
+                return Ok(Arg::Id(id));
+            }
+
+            let alias = alias::Alias::from_str(s)?;
+            Ok(Arg::Alias(alias))
+        }
+    }
+
+    pub async fn get_id(
+        db: &monee::database::Connection,
+        id: Arg,
+    ) -> miette::Result<actor::ActorId> {
+        match id {
+            Arg::Id(id) => Ok(id),
+            Arg::Alias(alias) => {
+                match monee::actions::actors::alias_get::run(db, alias.as_str()).await {
+                    Ok(Some(id)) => Ok(id),
+                    Ok(None) => {
+                        let diagnostic = miette::diagnostic!(
+                            severity = miette::Severity::Error,
+                            code = "actor::NotFound",
+                            "Actor with alias `{}` not found",
+                            alias
+                        );
+
+                        Err(diagnostic.into())
+                    }
+                    Err(err) => monee::log::database(err),
+                }
+            }
+        }
+    }
+}
+
 pub use currency_id_or_code::CurrencyIdOrCode;
 mod currency_id_or_code {
     use std::str::FromStr;
@@ -54,11 +114,10 @@ pub async fn get_currency(
 ) -> miette::Result<Option<monee_core::CurrencyId>> {
     let currency_id = match currency {
         CurrencyIdOrCode::Id(currency_id) => {
-            let exists =
-                match monee::actions::currencies::check::run(con, currency_id).await {
-                    Ok(exists) => exists,
-                    Err(err) => monee::log::database(err),
-                };
+            let exists = match monee::actions::currencies::check::run(con, currency_id).await {
+                Ok(exists) => exists,
+                Err(err) => monee::log::database(err),
+            };
 
             if !exists && !yes {
                 use tokio::io::AsyncWriteExt;
@@ -92,9 +151,7 @@ pub async fn get_currency(
 
                     return Err(diagnostic.into());
                 }
-                Err(from_code::Error::Database(error)) => {
-                    monee::log::database(error)
-                }
+                Err(from_code::Error::Database(error)) => monee::log::database(error),
             }
         }
     };

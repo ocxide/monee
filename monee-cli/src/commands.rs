@@ -329,7 +329,7 @@ pub mod do_command {
             #[arg(short, long)]
             currency: crate::args::CurrencyIdOrCode,
             #[arg(long)]
-            actor: monee_core::actor::ActorId,
+            actor: crate::args::actor::Arg,
             #[arg(short, long)]
             payment_promise: Option<crate::date::PaymentPromise>,
         },
@@ -384,7 +384,7 @@ pub mod do_command {
     fn register_in_debt(
         amount: monee_core::Amount,
         currency: crate::args::CurrencyIdOrCode,
-        actor_id: monee_core::actor::ActorId,
+        actor: crate::args::actor::Arg,
         payment_promise: Option<crate::date::PaymentPromise>,
         description: Option<String>,
     ) -> miette::Result<()> {
@@ -402,7 +402,13 @@ pub mod do_command {
 
         let created: miette::Result<bool> = crate::tasks::block_single(async move {
             let db = crate::tasks::use_db().await?;
-            let Some(currency_id) = crate::args::get_currency(&db, currency, false).await? else {
+
+            let (currency_id, actor) = tokio::try_join!(
+                crate::args::get_currency(&db, currency, false),
+                crate::args::actor::get_id(&db, actor)
+            )?;
+
+            let Some(currency_id) = currency_id else {
                 return Ok(false);
             };
 
@@ -412,7 +418,7 @@ pub mod do_command {
                 procedures::register_in_debt::Plan {
                     amount,
                     currency: currency_id,
-                    actor_id,
+                    actor_id: actor,
                     payment_promise,
                 },
             )

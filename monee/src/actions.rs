@@ -241,56 +241,7 @@ pub mod debts {
     }
 }
 
-pub mod actors {
-    pub mod list {
-        pub type ActorRow =
-            crate::database::Entity<monee_core::actor::ActorId, monee_core::actor::Actor>;
-
-        pub async fn run(
-            connection: &crate::database::Connection,
-        ) -> Result<Vec<ActorRow>, crate::database::Error> {
-            let mut response = connection.query("SELECT * FROM actor").await?.check()?;
-
-            let actors: Vec<ActorRow> = response.take(0)?;
-            Ok(actors)
-        }
-    }
-
-    pub mod create {
-        use monee_core::actor;
-
-        #[derive(thiserror::Error, Debug)]
-        pub enum Error {
-            #[error("Actor already exists")]
-            AlreadyExists,
-            #[error(transparent)]
-            Database(#[from] crate::database::Error),
-        }
-
-        pub async fn run(
-            connection: &crate::database::Connection,
-            actor: actor::Actor,
-        ) -> Result<actor::ActorId, Error> {
-            let id = actor::ActorId::new();
-
-            let result = connection
-                .query("CREATE type::thing('actor', $id) CONTENT $data")
-                .bind(("id", id))
-                .bind(("data", actor))
-                .await?
-                .check();
-
-            match result {
-                Err(
-                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
-                    | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                ) => Err(Error::AlreadyExists),
-                Err(e) => Err(e.into()),
-                Ok(_) => Ok(id),
-            }
-        }
-    }
-}
+pub mod actors;
 
 pub mod currencies {
     pub mod from_code {
@@ -494,3 +445,4 @@ CREATE $wallet_resource SET name = $name;",
         }
     }
 }
+
