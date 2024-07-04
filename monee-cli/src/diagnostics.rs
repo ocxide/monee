@@ -1,6 +1,4 @@
-pub fn snapshot_read_diagnostic(
-    error: monee::snapshot_io::ReadError,
-) -> miette::Report {
+pub fn snapshot_read_diagnostic(error: monee::snapshot_io::ReadError) -> miette::Report {
     use monee::snapshot_io;
 
     match error {
@@ -41,20 +39,22 @@ pub fn snapshot_opt_diagnostic(err: monee::error::SnapshotOptError) -> miette::R
 
     match err {
         Error::Read(e) => crate::diagnostics::snapshot_read_diagnostic(e),
-        Error::Write(e) => monee::log::snapshot_write(e),
+        Error::Write(e) => write_diagnostic(e),
         Error::Database(e) => monee::log::database(e),
         Error::SnapshotApply(e) => apply_diagnostic(e).into(),
     }
 }
 
-pub fn snapshot_write_diagnostic(
-    err: monee::error::SnapshotWriteError,
-) -> miette::Report {
-    use monee::error::SnapshotWriteError as Error;
+fn write_diagnostic(error: std::io::Error) -> miette::Report {
+    use std::io::ErrorKind;
 
-    match err {
-        Error::Write(e) => monee::log::snapshot_write(e),
-        Error::Database(e) => monee::log::database(e),
-        Error::SnapshotApply(e) => apply_diagnostic(e).into(),
+    match error.kind() {
+        ErrorKind::PermissionDenied => miette::diagnostic!(
+            severity = miette::Severity::Error,
+            code = "io::WriteError",
+            "Permission denied",
+        )
+        .into(),
+        _ => monee::log::snapshot_write(error),
     }
 }
