@@ -4,8 +4,11 @@ use std::ops::{AddAssign, Sub, SubAssign};
 pub struct Amount(u64);
 
 impl Amount {
-    pub const fn checked_sub(self, rhs: Amount) -> Option<u64> {
-        self.0.checked_sub(rhs.0)
+    pub const fn checked_sub(self, rhs: Amount) -> Option<Amount> {
+        match self.0.checked_sub(rhs.0) {
+            Some(amount) => Some(Amount(amount)),
+            None => None,
+        }
     }
 }
 

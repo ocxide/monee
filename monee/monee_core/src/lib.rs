@@ -208,10 +208,12 @@ pub mod money_record {
 
                 Action::Sub(amount) => {
                     if let Some(storage) = self.0.get_mut(&key) {
-                        storage
+                        let result = storage
                             .balance
                             .checked_sub(amount)
                             .ok_or(Error::CannotSub)?;
+
+                        storage.balance = result;
                         Ok(())
                     } else {
                         Err(Error::NotFound)
