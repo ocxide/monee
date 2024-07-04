@@ -90,7 +90,7 @@ pub mod snapshopts {
                     let wallet = WalletShow {
                         currency: currencies.get(&money.currency).cloned(),
                         money,
-                        metadata: metadatas.iter().find(|m| m.0 == id).unwrap().1.clone(),
+                        metadata: metadatas.iter().find(|m| m.0 == id).expect("to get metadata").1.clone(),
                     };
 
                     (id, wallet)

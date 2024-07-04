@@ -9,6 +9,7 @@ pub struct CreateProcedure {
 pub enum ProcedureType {
     RegisterBalance,
     RegisterInDebt,
+    MoveValue,
 }
 
 mod common {
@@ -21,13 +22,11 @@ mod common {
 
     pub async fn create_procedure(
         connection: &crate::database::Connection,
+        crate::snapshot_io::SnapshotEntry { mut snapshot, .. }: crate::snapshot_io::SnapshotEntry,
         procedure: CreateProcedure,
         events: &[monee_core::Event],
         procedure_type: ProcedureType,
     ) -> Result<ProcedureCreated, crate::error::SnapshotReadError> {
-        let crate::snapshot_io::SnapshotEntry { mut snapshot, .. } =
-            crate::snapshot_io::read().await?;
-
         for event in events {
             snapshot.apply(event.clone())?;
         }
@@ -73,8 +72,11 @@ pub mod register_balance {
             },
         )];
 
+        let entry = crate::snapshot_io::read().await?;
+
         let response = common::create_procedure(
             connection,
+            entry,
             procedure,
             &events,
             ProcedureType::RegisterBalance,
@@ -114,8 +116,11 @@ pub mod register_in_debt {
             }),
         ];
 
+        let entry = crate::snapshot_io::read().await?;
+
         let response = common::create_procedure(
             connection,
+            entry,
             procedure,
             &events,
             ProcedureType::RegisterInDebt,
@@ -134,6 +139,72 @@ pub mod register_in_debt {
             .check()?;
 
         crate::snapshot_io::write(response.snapshot).await?;
+        Ok(())
+    }
+}
+
+pub mod move_value {
+    use super::{common, ProcedureType};
+
+    pub struct Plan {
+        pub from: monee_core::WalletId,
+        pub to: monee_core::WalletId,
+        pub amount: monee_core::Amount,
+    }
+
+    pub enum Error {
+        UnequalCurrencies,
+        Snapshot(crate::error::SnapshotOptError),
+    }
+
+    pub async fn run(
+        connection: &crate::database::Connection,
+        procedure: super::CreateProcedure,
+        plan: Plan,
+    ) -> Result<(), Error> {
+        let entry = crate::snapshot_io::read()
+            .await
+            .map_err(|e| Error::Snapshot(e.into()))?;
+
+        let wallet_not_found = || -> Error {
+            Error::Snapshot(crate::error::SnapshotOptError::SnapshotApply(
+                monee_core::Error::Wallet(monee_core::money_record::Error::NotFound),
+            ))
+        };
+
+        let wallets = entry.snapshot.wallets.as_ref();
+        let from = wallets.get(&plan.from).ok_or_else(wallet_not_found)?;
+        let to = wallets.get(&plan.to).ok_or_else(wallet_not_found)?;
+
+        if from.currency != to.currency {
+            return Err(Error::UnequalCurrencies);
+        }
+
+        let events = [
+            monee_core::Event::Wallet(monee_core::WalletEvent::Deduct {
+                wallet_id: plan.from,
+                amount: plan.amount,
+            }),
+            monee_core::Event::Wallet(monee_core::WalletEvent::Deposit {
+                wallet_id: plan.to,
+                amount: plan.amount,
+            }),
+        ];
+
+        let response = common::create_procedure(
+            connection,
+            entry,
+            procedure,
+            &events,
+            ProcedureType::MoveValue,
+        )
+        .await
+        .map_err(|e| Error::Snapshot(e.into()))?;
+
+        crate::snapshot_io::write(response.snapshot)
+            .await
+            .map_err(|e| Error::Snapshot(e.into()))?;
+
         Ok(())
     }
 }
