@@ -1,9 +1,11 @@
 #[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct CreateProcedure {
     pub description: Option<String>,
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ProcedureType {
     RegisterBalance,
     RegisterInDebt,
@@ -31,41 +33,21 @@ mod common {
         }
 
         let mut response = connection
-            .query("CREATE procedure SET description = $description, type = $type RETURN id")
+            .query(surrealdb::sql::statements::BeginStatement)
+            .query("LET $procedure = CREATE ONLY procedure SET description = $description, type = $type RETURN id")
             .bind(procedure)
             .bind(("type", procedure_type))
-            .await?
-            .check()?;
+            .query("LET $events = INSERT INTO event $events_data")
+            .bind(("events_data", events))
+            .query("RELATE $procedure->generated->$events")
+            .query(surrealdb::sql::statements::CommitStatement)
+            .query("RETURN $procedure").await?.check()?;
 
-        let procedure_id: surrealdb::sql::Thing = response
-            .take::<Vec<_>>("id")?
-            .into_iter()
-            .next()
-            .expect("to get procedure id");
-
-        for event in events {
-            let mut response = connection
-                .query("CREATE event CONTENT $data RETURN id")
-                .bind(("data", event))
-                .await?
-                .check()?;
-
-            let event_id: surrealdb::sql::Thing = response
-                .take::<Vec<_>>("id")?
-                .into_iter()
-                .next()
-                .expect("to get event id");
-
-            connection
-                .query("RELATE $procedure->generated->$event")
-                .bind(("procedure", procedure_id.clone()))
-                .bind(("event", event_id))
-                .await?
-                .check()?;
-        }
+        let procedure_id: Option<surrealdb::sql::Thing> =
+            response.take((response.num_statements() - 1, "id"))?;
 
         Ok(ProcedureCreated {
-            procedure_id,
+            procedure_id: procedure_id.expect("to get procedure_id"),
             snapshot,
         })
     }
