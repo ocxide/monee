@@ -463,7 +463,7 @@ pub mod snapshot {
             );
         }
 
-        println!("InDebts");
+        println!("\nInDebts");
         if snapshot.in_debts.is_empty() {
             println!("<none>");
         }
@@ -751,7 +751,7 @@ pub mod wallets {
             None => print!("`Unknown currency`"),
         }
 
-        println!("{}\n", balance);
+        println!("{}", balance);
     }
 
     pub fn list() -> miette::Result<()> {
