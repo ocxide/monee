@@ -16,7 +16,7 @@ pub mod view {
         connection: &crate::database::Connection,
     ) -> Result<Vec<(item_tag::ItemTag, Vec<String>)>, crate::database::Error> {
         let mut response = connection
-            .query("SELECT <-contains<-item_tag.name as children, name FROM item_tag")
+            .query("SELECT ->contains->item_tag.name as children, name FROM item_tag")
             .await?
             .check()?;
 
