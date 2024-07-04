@@ -1,8 +1,3 @@
-pub struct RegisterBalance {
-    pub wallet_id: monee_core::WalletId,
-    pub amount: monee_core::Amount,
-}
-
 #[derive(serde::Serialize)]
 pub struct CreateProcedure {
     pub description: Option<String>,
@@ -10,7 +5,8 @@ pub struct CreateProcedure {
 
 #[derive(serde::Serialize)]
 pub enum ProcedureType {
-    BalanceRegister,
+    RegisterBalance,
+    RegisterInDebt,
 }
 
 mod common {
@@ -75,70 +71,87 @@ mod common {
     }
 }
 
-pub async fn register_balance(
-    connection: &crate::database::Connection,
-    procedure: CreateProcedure,
-    plan: RegisterBalance,
-) -> Result<(), crate::error::SnapshotOptError> {
-    let events = [monee_core::Event::Wallet(monee_core::WalletEvent::Deposit {
-        wallet_id: plan.wallet_id,
-        amount: plan.amount,
-    })];
+pub mod register_balance {
+    use super::{common, CreateProcedure, ProcedureType};
 
-    let response = common::create_procedure(
-        connection,
-        procedure,
-        &events,
-        ProcedureType::BalanceRegister,
-    )
-    .await?;
+    pub struct Plan {
+        pub wallet_id: monee_core::WalletId,
+        pub amount: monee_core::Amount,
+    }
 
-    crate::snapshot_io::write(response.snapshot).await?;
-    Ok(())
+    pub async fn run(
+        connection: &crate::database::Connection,
+        procedure: CreateProcedure,
+        plan: Plan,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        let events = [monee_core::Event::Wallet(
+            monee_core::WalletEvent::Deposit {
+                wallet_id: plan.wallet_id,
+                amount: plan.amount,
+            },
+        )];
+
+        let response = common::create_procedure(
+            connection,
+            procedure,
+            &events,
+            ProcedureType::RegisterBalance,
+        )
+        .await?;
+
+        crate::snapshot_io::write(response.snapshot).await?;
+        Ok(())
+    }
 }
 
-pub struct RegisterInDebt {
-    pub amount: monee_core::Amount,
-    pub currency: monee_core::CurrencyId,
-    pub actor_id: monee_core::actor::ActorId,
-    pub payment_promise: Option<crate::date::Datetime>,
-}
+pub mod register_in_debt {
+    use super::{common, CreateProcedure, ProcedureType};
 
-pub async fn register_in_debt(
-    connection: &crate::database::Connection,
-    procedure: CreateProcedure,
-    plan: RegisterInDebt,
-) -> Result<(), crate::error::SnapshotOptError> {
-    let debt_id = monee_core::DebtId::new();
+    pub struct Plan {
+        pub amount: monee_core::Amount,
+        pub currency: monee_core::CurrencyId,
+        pub actor_id: monee_core::actor::ActorId,
+        pub payment_promise: Option<crate::date::Datetime>,
+    }
 
-    let events = [
-        monee_core::Event::InDebt(monee_core::DebtEvent::Incur {
-            currency: plan.currency,
-            debt_id,
-        }),
-        monee_core::Event::InDebt(monee_core::DebtEvent::Accumulate {
-            debt_id,
-            amount: plan.amount,
-        }),
-    ];
+    pub async fn run(
+        connection: &crate::database::Connection,
+        procedure: CreateProcedure,
+        plan: Plan,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        let debt_id = monee_core::DebtId::new();
 
-    let response = common::create_procedure(
-        connection,
-        procedure,
-        &events,
-        ProcedureType::BalanceRegister,
-    )
-    .await?;
+        let events = [
+            monee_core::Event::InDebt(monee_core::DebtEvent::Incur {
+                currency: plan.currency,
+                debt_id,
+            }),
+            monee_core::Event::InDebt(monee_core::DebtEvent::Accumulate {
+                debt_id,
+                amount: plan.amount,
+            }),
+        ];
 
-    connection
-        .query("LET $actor = type::thing('actor', $actor_id)")
-        .bind(("actor_id", plan.actor_id))
-        .query("RELATE $actor -> in_debt_on -> $procedure SET payment_promise = $payment_promise")
-        .bind(("procedure", response.procedure_id))
-        .bind(("payment_promise", plan.payment_promise))
-        .await?
-        .check()?;
+        let response = common::create_procedure(
+            connection,
+            procedure,
+            &events,
+            ProcedureType::RegisterInDebt,
+        )
+        .await?;
 
-    crate::snapshot_io::write(response.snapshot).await?;
-    Ok(())
+        connection
+            .query("LET $actor = type::thing('actor', $actor_id)")
+            .bind(("actor_id", plan.actor_id))
+            .query(
+                "RELATE $actor -> in_debt_on -> $procedure SET payment_promise = $payment_promise",
+            )
+            .bind(("procedure", response.procedure_id))
+            .bind(("payment_promise", plan.payment_promise))
+            .await?
+            .check()?;
+
+        crate::snapshot_io::write(response.snapshot).await?;
+        Ok(())
+    }
 }

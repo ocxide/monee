@@ -367,10 +367,10 @@ pub mod do_command {
                 Err(why) => monee::log::database(why),
             };
 
-            monee::procedures::register_balance(
+            procedures::register_balance::run(
                 &con,
                 procedures::CreateProcedure { description },
-                procedures::RegisterBalance { wallet_id, amount },
+                procedures::register_balance::Plan { wallet_id, amount },
             )
             .await
         })
@@ -406,10 +406,10 @@ pub mod do_command {
                 return Ok(false);
             };
 
-            monee::procedures::register_in_debt(
+            procedures::register_in_debt::run(
                 &db,
                 procedures::CreateProcedure { description },
-                procedures::RegisterInDebt {
+                procedures::register_in_debt::Plan {
                     amount,
                     currency: currency_id,
                     actor_id,
