@@ -20,6 +20,7 @@ async fn init(connection: &Connection) -> Result<()> {
     connection
         .query("DEFINE TABLE wallet_metadata")
         .query("DEFINE FIELD name ON wallet_metadata TYPE option<string>")
+        .query("DEFINE INDEX wallet_metadata_name ON wallet_metadata FIELDS name UNIQUE")
         .await?
         .check()?;
 

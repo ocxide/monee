@@ -467,4 +467,45 @@ CREATE $wallet_resource SET name = $name;",
             Ok(id.map(|Entity(id, _)| id))
         }
     }
+
+    pub mod rename {
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Wallet id not found")]
+            NotFound,
+            #[error("Wallet name already exists")]
+            AlreadyExists,
+            #[error(transparent)]
+            Database(#[from] crate::database::Error),
+        }
+
+        pub async fn run(
+            db: &crate::database::Connection,
+            wallet_id: monee_core::WalletId,
+            new_name: &str,
+        ) -> Result<(), Error> {
+            let result = db
+                .query(surrealdb::sql::statements::BeginStatement)
+                .query("IF type::is::none(SELECT id FROM ONLY type::thing('wallet_metadata', $wallet_id) LIMIT 1) { THROW false }")
+                .query("UPDATE type::thing('wallet_metadata', $wallet_id) SET name = $new_name")
+                .bind(("wallet_id", wallet_id))
+                .bind(("new_name", new_name))
+                .query(surrealdb::sql::statements::CommitStatement)
+                .await?
+                .check();
+
+            match result {
+                Ok(_) => Ok(()),
+                Err(
+                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                ) => Err(Error::AlreadyExists),
+                Err(
+                    surrealdb::Error::Db(surrealdb::error::Db::Thrown(_))
+                    | surrealdb::Error::Api(surrealdb::error::Api::Ws(_)),
+                ) => Err(Error::NotFound),
+                Err(e) => Err(e.into()),
+            }
+        }
+    }
 }

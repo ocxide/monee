@@ -541,7 +541,11 @@ pub mod currencies {
 }
 
 pub mod wallets {
+    use monee::actions::wallets;
+
     use crate::args::CurrencyIdOrCode;
+
+    type Wallet = crate::args::alias::Arg<monee_core::WalletId>;
 
     #[derive(clap::Subcommand)]
     pub enum WalletCommand {
@@ -570,6 +574,60 @@ pub mod wallets {
             #[arg(short, long)]
             amount: monee_core::Amount,
         },
+
+        Rename {
+            #[arg(short, long)]
+            wallet: Wallet,
+
+            #[arg(short, long)]
+            new_name: String,
+        },
+    }
+
+    pub fn handle(command: WalletCommand) -> miette::Result<()> {
+        match command {
+            WalletCommand::List => list(),
+            WalletCommand::Create {
+                currency,
+                name,
+                yes,
+            } => create(currency, name, yes),
+            WalletCommand::Deduct { wallet_id, amount } => deduct(wallet_id, amount),
+            WalletCommand::Deposit { wallet_id, amount } => deposit(wallet_id, amount),
+            WalletCommand::Rename { wallet, new_name } => rename(wallet, new_name),
+        }
+    }
+
+    fn rename(wallet: Wallet, new_name: String) -> miette::Result<()> {
+        let result: Result<_, miette::Error> = crate::tasks::block_single(async {
+            let con = crate::tasks::use_db().await?;
+            let wallet_id = crate::args::alias::get_id(&con, wallet).await?;
+
+            monee::actions::wallets::rename::run(&con, wallet_id, &new_name)
+                .await
+                .map_err(|e| match e {
+                    wallets::rename::Error::Database(err) => monee::log::database(err),
+                    wallets::rename::Error::NotFound => {
+                        miette::miette!(
+                            code = "wallet::NotExists",
+                            "Wallet `{}` does not exist",
+                            wallet_id
+                        )
+                    }
+                    wallets::rename::Error::AlreadyExists => {
+                        miette::miette!(
+                            code = "wallet::AlreadyExists",
+                            "Wallet name `{}` already exists",
+                            new_name
+                        )
+                    }
+                })
+        });
+
+        let _ = result?;
+
+        println!("Wallet renamed");
+        Ok(())
     }
 
     pub fn deposit(

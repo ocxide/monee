@@ -103,24 +103,7 @@ fn main() -> miette::Result<()> {
         Commands::Sync => {
             commands::sync()?;
         }
-        Commands::Wallets { command } => match command {
-            commands::wallets::WalletCommand::Create {
-                currency: currency_id,
-                name,
-                yes,
-            } => {
-                commands::wallets::create(currency_id, name, yes)?;
-            }
-            commands::wallets::WalletCommand::List => {
-                commands::wallets::list()?;
-            }
-            commands::wallets::WalletCommand::Deduct { wallet_id, amount } => {
-                commands::wallets::deduct(wallet_id, amount)?;
-            }
-            commands::wallets::WalletCommand::Deposit { wallet_id, amount } => {
-                commands::wallets::deposit(wallet_id, amount)?;
-            }
-        },
+        Commands::Wallets { command } => commands::wallets::handle(command)?,
         Commands::Currencies { command } => match command {
             commands::currencies::CurrencyCommand::List => {
                 commands::currencies::list()?;
