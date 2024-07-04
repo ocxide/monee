@@ -7,11 +7,14 @@ pub struct DoCommand {
     pub description: Option<String>,
 }
 
+pub type Wallet = crate::args::alias::Arg<monee_core::WalletId>;
+
 #[derive(clap::Subcommand)]
 pub enum DoDetailCommand {
     RegisterBalance {
         #[arg(short, long)]
-        wallet_id: monee_core::WalletId,
+        wallet: Wallet,
+
         #[arg(short, long)]
         amount: monee_core::Amount,
     },
@@ -28,10 +31,10 @@ pub enum DoDetailCommand {
 
     MoveValue {
         #[arg(short, long)]
-        from: monee_core::WalletId,
+        from: Wallet,
 
         #[arg(short, long)]
-        to: monee_core::WalletId,
+        to: Wallet,
 
         #[arg(short, long)]
         amount: monee_core::Amount,
@@ -45,8 +48,8 @@ pub fn handle(
     }: DoCommand,
 ) -> miette::Result<()> {
     match command {
-        DoDetailCommand::RegisterBalance { wallet_id, amount } => {
-            register_balance(wallet_id, amount, description)
+        DoDetailCommand::RegisterBalance { wallet, amount } => {
+            register_balance(wallet, amount, description)
         }
 
         DoDetailCommand::RegisterInDebt {
@@ -63,26 +66,26 @@ pub fn handle(
 }
 
 fn register_balance(
-    wallet_id: monee_core::WalletId,
+    wallet: Wallet,
     amount: monee_core::Amount,
     description: Option<String>,
 ) -> miette::Result<()> {
     use monee::procedures;
 
-    crate::tasks::block_single(async move {
-        let con = match monee::database::connect().await {
-            Ok(con) => con,
-            Err(why) => monee::log::database(why),
-        };
+    let result: miette::Result<_> = crate::tasks::block_single(async move {
+        let db = crate::tasks::use_db().await?; 
+        let wallet_id = crate::args::alias::get_id(&db, wallet).await?;
 
         procedures::register_balance::run(
-            &con,
+            &db,
             procedures::CreateProcedure { description },
             procedures::register_balance::Plan { wallet_id, amount },
         )
         .await
-    })
-    .map_err(crate::diagnostics::snapshot_opt_diagnostic)?;
+        .map_err(crate::diagnostics::snapshot_opt_diagnostic)
+    });
+
+    result?;
 
     println!("Done!");
 
@@ -144,15 +147,19 @@ fn register_in_debt(
 }
 
 fn move_value(
-    from: monee_core::WalletId,
-    to: monee_core::WalletId,
+    from: Wallet,
+    to: Wallet,
     amount: monee_core::Amount,
     description: Option<String>,
 ) -> miette::Result<()> {
     use monee::procedures;
 
-    let result: miette::Result<()> =  crate::tasks::block_single(async move {
+    let result: miette::Result<()> = crate::tasks::block_single(async move {
         let db = crate::tasks::use_db().await?;
+        let (from, to) = tokio::try_join!(
+            crate::args::alias::get_id(&db, from),
+            crate::args::alias::get_id(&db, to)
+        )?;
 
         let result = procedures::move_value::run(
             &db,
@@ -163,7 +170,9 @@ fn move_value(
 
         match result {
             Ok(()) => Ok(()),
-            Err(procedures::move_value::Error::Snapshot(error)) => Err(crate::diagnostics::snapshot_opt_diagnostic(error)),
+            Err(procedures::move_value::Error::Snapshot(error)) => {
+                Err(crate::diagnostics::snapshot_opt_diagnostic(error))
+            }
             Err(procedures::move_value::Error::UnequalCurrencies) => {
                 let diagnostic = miette::diagnostic!(
                     severity = miette::Severity::Error,

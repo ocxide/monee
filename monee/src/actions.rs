@@ -90,7 +90,12 @@ pub mod snapshopts {
                     let wallet = WalletShow {
                         currency: currencies.get(&money.currency).cloned(),
                         money,
-                        metadata: metadatas.iter().find(|m| m.0 == id).expect("to get metadata").1.clone(),
+                        metadata: metadatas
+                            .iter()
+                            .find(|m| m.0 == id)
+                            .expect("to get metadata")
+                            .1
+                            .clone(),
                     };
 
                     (id, wallet)
@@ -444,5 +449,22 @@ CREATE $wallet_resource SET name = $name;",
             Ok(wallet_id)
         }
     }
-}
 
+    pub mod alias_get {
+        use crate::Entity;
+
+        pub async fn run(
+            db: &crate::database::Connection,
+            name: &str,
+        ) -> Result<Option<monee_core::WalletId>, crate::database::Error> {
+            let mut response = db
+                .query("SELECT id FROM wallet_metadata WHERE name = $name")
+                .bind(("name", name))
+                .await?
+                .check()?;
+
+            let id: Option<Entity<monee_core::WalletId, ()>> = response.take(0)?;
+            Ok(id.map(|Entity(id, _)| id))
+        }
+    }
+}
