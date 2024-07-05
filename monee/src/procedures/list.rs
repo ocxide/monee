@@ -73,7 +73,7 @@ async fn get_debt(
     }
 
     let events: Vec<monee_core::DebtEvent> = response.take(0)?;
-    let debt: Option<DebtRelation> = response.take((1, "debt"))?;
+    let debt: Option<DebtRelation> = response.take(1)?;
 
     let detail = match (
         <[monee_core::DebtEvent; 2] as TryFrom<_>>::try_from(events),
@@ -245,13 +245,20 @@ pub async fn run(
 ) -> Result<Vec<ProcedureData>, crate::error::SnapshotReadError> {
     let entry = crate::snapshot_io::read().await?;
 
+    let until = until.unwrap_or_else(|| {
+        let now = crate::date::Timezone::now();
+        now.clone()
+            .checked_add_days(chrono::Days::new(1))
+            .unwrap_or(now)
+    });
+
     let mut response = db
         .query("SELECT * FROM wallet_metadata")
         .query("SELECT * FROM actor")
         .query("SELECT * FROM currency")
         .query("SELECT * FROM procedure WHERE created_at >= <datetime>$since AND created_at <= <datetime>$until")
         .bind(("since", since.unwrap_or_else(|| crate::date::Datetime::UNIX_EPOCH)))
-        .bind(("until", until.unwrap_or_else(|| crate::date::Datetime::MAX_UTC)))
+        .bind(("until", until))
         .await?.check()?
     ;
 
