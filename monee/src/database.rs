@@ -40,6 +40,13 @@ async fn init(connection: &Connection) -> Result<()> {
         .check()?;
 
     connection
+        .query("DEFINE TABLE generated")
+        .query("DEFINE FIELD in ON generated TYPE record<procedure>")
+        .query("DEFINE FIELD out ON generated TYPE record<event>")
+        .await?
+        .check()?;
+
+    connection
         .query("DEFINE TABLE actor")
         .query("DEFINE FIELD name ON actor TYPE string")
         .query("DEFINE FIELD type ON actor TYPE string")
@@ -60,6 +67,13 @@ async fn init(connection: &Connection) -> Result<()> {
         .query("DEFINE FIELD in ON contains TYPE record<item_tag>")
         .query("DEFINE FIELD out ON contains TYPE record<item_tag>")
         .query("DEFINE INDEX contains_item_tag ON contains FIELDS in, out UNIQUE")
+        .await?
+        .check()?;
+
+    connection
+        .query("DEFINE TABLE brought")
+        .query("DEFINE FIELD in ON brought TYPE record<procedure>")
+        .query("DEFINE FIELD out ON brought TYPE record<item_tag>")
         .await?
         .check()?;
 
