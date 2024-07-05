@@ -167,9 +167,9 @@ mod id_utils {
 pub struct Snapshot {
     pub wallets: money_record::MoneyRecord<WalletId>,
     /// Debts that I should pay
-    pub in_debts: money_record::MoneyRecord<DebtId>,
+    pub debts: money_record::MoneyRecord<DebtId>,
     /// Debts that should be payed to me
-    pub out_debts: money_record::MoneyRecord<DebtId>,
+    pub loans: money_record::MoneyRecord<DebtId>,
 }
 
 pub mod money_record {
@@ -298,15 +298,15 @@ sub_action!(DebtEvent -> debt_id: DebtId; { Incur, Forget, Accumulate, Amortize 
 #[serde(tag = "group", rename_all = "snake_case")]
 pub enum Event {
     Wallet(WalletEvent),
-    OutDebt(DebtEvent),
-    InDebt(DebtEvent),
+    Loan(DebtEvent),
+    Debt(DebtEvent),
 }
 
 #[derive(Debug)]
 pub enum Error {
     Wallet(money_record::Error),
-    InDebt(money_record::Error),
-    OutDebt(money_record::Error),
+    Debt(money_record::Error),
+    Loan(money_record::Error),
 }
 
 impl std::fmt::Display for Error {
@@ -328,11 +328,11 @@ impl std::fmt::Display for Error {
                 money_record::Error::CannotSub => write!(f, "cannot deduct from wallet"),
                 money_record::Error::AlreadyExists => write!(f, "wallet already exists"),
             },
-            Error::InDebt(e) => {
+            Error::Debt(e) => {
                 write!(f, "in ")?;
                 print_debt_err(e, f)
             }
-            Error::OutDebt(e) => {
+            Error::Loan(e) => {
                 write!(f, "out ")?;
                 print_debt_err(e, f)
             }
@@ -378,15 +378,15 @@ impl Snapshot {
                 self.wallets.apply(wallet_id, action).map_err(Error::Wallet)
             }
 
-            Event::InDebt(event) => {
+            Event::Debt(event) => {
                 let (debt_id, action) = extract_action(event);
-                self.in_debts.apply(debt_id, action).map_err(Error::InDebt)
+                self.debts.apply(debt_id, action).map_err(Error::Debt)
             }
-            Event::OutDebt(event) => {
+            Event::Loan(event) => {
                 let (debt_id, action) = extract_action(event);
-                self.out_debts
+                self.loans
                     .apply(debt_id, action)
-                    .map_err(Error::OutDebt)
+                    .map_err(Error::Loan)
             }
         }
     }

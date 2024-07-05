@@ -6,8 +6,8 @@ pub mod snapshopts {
 
         pub struct SnapshotShow {
             pub wallets: Vec<(monee_core::WalletId, WalletShow)>,
-            pub in_debts: Vec<(monee_core::DebtId, DebtShow)>,
-            pub out_debts: Vec<(monee_core::DebtId, DebtShow)>,
+            pub debts: Vec<(monee_core::DebtId, DebtShow)>,
+            pub loans: Vec<(monee_core::DebtId, DebtShow)>,
         }
 
         pub struct WalletShow {
@@ -35,7 +35,7 @@ pub mod snapshopts {
             group: &'static str,
         ) -> Result<Vec<DebtActors>, crate::database::Error> {
             let mut response = connection
-                .query(format!("SELECT <-generated<-procedure<-{debt_relation}<-actor as actors, debt_id FROM event WHERE group = $group AND type = 'incur'"))
+                .query(format!("SELECT <-generated<-procedure->{debt_relation}->actor as actors, debt_id FROM event WHERE group = $group AND type = 'incur'"))
                 .bind(("group", group)).await?.check()?;
 
             response.take(0)
@@ -59,8 +59,8 @@ pub mod snapshopts {
                     Err(e) => Err(e),
                 }
             };
-            let in_debt_actors = get_debt_actors(connection, "in_debt_on", "in_debt");
-            let out_debt_actors = get_debt_actors(connection, "out_debt_on", "out_debt");
+            let debt_actors = get_debt_actors(connection, "debts", "debt");
+            let loan_actors = get_debt_actors(connection, "loans", "loan");
 
             let (currencies, actors, metadatas, in_debt_actors, out_debt_actors): (
                 _,
@@ -72,8 +72,8 @@ pub mod snapshopts {
                 currencies,
                 actors,
                 metadatas,
-                in_debt_actors,
-                out_debt_actors
+                debt_actors,
+                loan_actors
             )?;
 
             let currencies: HashMap<_, _> = currencies
@@ -128,13 +128,13 @@ pub mod snapshopts {
                     .collect()
             };
 
-            let in_debts = collect_debts(snapshot.in_debts, in_debt_actors);
-            let out_debts = collect_debts(snapshot.out_debts, out_debt_actors);
+            let in_debts = collect_debts(snapshot.debts, in_debt_actors);
+            let out_debts = collect_debts(snapshot.loans, out_debt_actors);
 
             Ok(SnapshotShow {
                 wallets,
-                in_debts,
-                out_debts,
+                debts: in_debts,
+                loans: out_debts,
             })
         }
     }
@@ -197,7 +197,7 @@ pub mod debts {
             debts: monee_core::MoneyRecord<monee_core::DebtId>,
         ) -> Result<Vec<DebtItem>, crate::database::Error> {
             let debts_req = connection
-                .query(format!("SELECT id, <-generated<-procedure<-{debt_relation}<-actor.* as actors, debt_id, currency_id FROM event WHERE group = $group AND type = 'incur'"))
+                .query(format!("SELECT id, <-generated<-procedure->{debt_relation}->actor.* as actors, debt_id, currency_id FROM event WHERE group = $group AND type = 'incur'"))
                 .bind(("group", group)).into_future();
 
             let currencies = crate::actions::currencies::list::run(connection);
@@ -228,19 +228,19 @@ pub mod debts {
             Ok(response)
         }
 
-        pub async fn run_in(
+        pub async fn run_debts(
             connection: &crate::database::Connection,
             debts: monee_core::MoneyRecord<monee_core::DebtId>,
         ) -> Result<Vec<DebtItem>, crate::database::Error> {
-            let response = run(connection, "in_debt_on", "in_debt", debts).await?;
+            let response = run(connection, "debts", "debts", debts).await?;
             Ok(response)
         }
 
-        pub async fn run_out(
+        pub async fn run_loans(
             connection: &crate::database::Connection,
             debts: monee_core::MoneyRecord<monee_core::DebtId>,
         ) -> Result<Vec<DebtItem>, crate::database::Error> {
-            let response = run(connection, "out_debt_on", "out_debt", debts).await?;
+            let response = run(connection, "loans", "loan", debts).await?;
             Ok(response)
         }
     }

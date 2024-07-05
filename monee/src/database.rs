@@ -58,6 +58,22 @@ async fn init(connection: &Connection) -> Result<()> {
         .check()?;
 
     connection
+        .query("DEFINE TABLE debts")
+        .query("DEFINE FIELD id ON debts TYPE record<procedure>")
+        .query("DEFINE FIELD out ON debts TYPE record<actor>")
+        .query("DEFINE FIELD payment_promise ON debts TYPE datetime")
+        .await?
+        .check()?;
+
+    connection
+        .query("DEFINE TABLE loans")
+        .query("DEFINE FIELD id ON loans TYPE record<procedure>")
+        .query("DEFINE FIELD out ON loans TYPE record<actor>")
+        .query("DEFINE FIELD payment_promise ON loans TYPE datetime")
+        .await?
+        .check()?;
+
+    connection
         .query("DEFINE TABLE item_tag")
         .query("DEFINE FIELD name ON item_tag TYPE string")
         .query("DEFINE INDEX item_tag_name ON item_tag FIELDS name UNIQUE")

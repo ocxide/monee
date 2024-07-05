@@ -8,13 +8,13 @@ pub mod events {
                 );
             }
             monee_core::DebtEvent::Forget { debt_id } => {
-                print!("{debt_type}Debt {} forgotten", debt_id);
+                print!("{debt_type} {} forgotten", debt_id);
             }
             monee_core::DebtEvent::Accumulate { debt_id, amount } => {
-                print!("{debt_type}Debt {} accumulated {}", debt_id, amount);
+                print!("{debt_type} {} accumulated {}", debt_id, amount);
             }
             monee_core::DebtEvent::Amortize { debt_id, amount } => {
-                print!("{debt_type}Debt {} amortized {}", debt_id, amount);
+                print!("{debt_type} {} amortized {}", debt_id, amount);
             }
         };
     }
@@ -50,8 +50,8 @@ pub mod events {
                         print!("Wallet {} deleted", wallet_id);
                     }
                 },
-                monee_core::Event::InDebt(event) => print_debt_event("In", event),
-                monee_core::Event::OutDebt(event) => print_debt_event("Out", event),
+                monee_core::Event::Debt(event) => print_debt_event("Deby", event),
+                monee_core::Event::Loan(event) => print_debt_event("Loan", event),
             }
 
             println!(", created at {}", created_at);
@@ -157,20 +157,20 @@ pub mod debts {
             DebtsCommand::List { show } => match show {
                 ShowMode::In => {
                     let debts = get_debts!(|db, snapshot: SnapshotEntry| {
-                        monee::actions::debts::list::run_in(db, snapshot.snapshot.in_debts)
+                        monee::actions::debts::list::run_debts(db, snapshot.snapshot.debts)
                     })?;
 
-                    println!("In debts:");
+                    println!("debts:");
                     list_debts(&debts);
 
                     Ok(())
                 }
                 ShowMode::Out => {
                     let debts = get_debts!(|db, snapshot: SnapshotEntry| {
-                        monee::actions::debts::list::run_out(db, snapshot.snapshot.out_debts)
+                        monee::actions::debts::list::run_loans(db, snapshot.snapshot.loans)
                     })?;
 
-                    println!("Out debts:");
+                    println!("loans");
                     list_debts(&debts);
 
                     Ok(())
@@ -178,23 +178,23 @@ pub mod debts {
                 ShowMode::Both => {
                     let result = get_debts!(|db, snapshot: SnapshotEntry| async move {
                         let debts = tokio::try_join!(
-                            monee::actions::debts::list::run_in(db, snapshot.snapshot.in_debts,),
-                            monee::actions::debts::list::run_out(db, snapshot.snapshot.out_debts,)
+                            monee::actions::debts::list::run_debts(db, snapshot.snapshot.debts),
+                            monee::actions::debts::list::run_loans(db, snapshot.snapshot.loans)
                         );
 
                         Ok(debts)
                     })?;
 
-                    let (in_debts, out_debts) = match result {
-                        Ok((in_debts, out_debts)) => (in_debts, out_debts),
+                    let (debts, loans) = match result {
+                        Ok((debts, loans)) => (debts, loans),
                         Err(why) => monee::log::database(why),
                     };
 
-                    println!("In debts:");
-                    list_debts(&in_debts);
+                    println!("debts:");
+                    list_debts(&debts);
 
-                    println!("\nOut debts:");
-                    list_debts(&out_debts);
+                    println!("\nloans:");
+                    list_debts(&loans);
 
                     Ok(())
                 }
@@ -334,12 +334,12 @@ pub mod snapshot {
             );
         }
 
-        println!("\nInDebts");
-        if snapshot.in_debts.is_empty() {
+        println!("\nDebts");
+        if snapshot.debts.is_empty() {
             println!("<none>");
         }
 
-        for (id, debt) in snapshot.in_debts {
+        for (id, debt) in snapshot.debts {
             crate::commands::debts::print_debt(
                 id,
                 &debt.money.balance,
@@ -348,11 +348,11 @@ pub mod snapshot {
             );
         }
 
-        println!("\nOutDebts");
-        if snapshot.out_debts.is_empty() {
+        println!("\nLoans");
+        if snapshot.loans.is_empty() {
             println!("<none>");
         }
-        for (id, debt) in snapshot.out_debts {
+        for (id, debt) in snapshot.loans {
             crate::commands::debts::print_debt(
                 id,
                 &debt.money.balance,
@@ -624,7 +624,7 @@ pub mod wallets {
                 })
         });
 
-        let _ = result?;
+        result?;
 
         println!("Wallet renamed");
         Ok(())

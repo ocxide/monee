@@ -18,7 +18,7 @@ pub enum DoDetailCommand {
         #[arg(short, long)]
         amount: monee_core::Amount,
     },
-    RegisterInDebt {
+    RegisterDebt {
         #[arg(long)]
         amount: monee_core::Amount,
         #[arg(short, long)]
@@ -52,7 +52,7 @@ pub fn handle(
             register_balance(wallet, amount, description)
         }
 
-        DoDetailCommand::RegisterInDebt {
+        DoDetailCommand::RegisterDebt {
             amount,
             currency,
             actor,
@@ -123,10 +123,10 @@ fn register_in_debt(
             return Ok(false);
         };
 
-        procedures::register_in_debt::run(
+        procedures::register_debt::run(
             &db,
             procedures::CreateProcedure { description },
-            procedures::register_in_debt::Plan {
+            procedures::register_debt::Plan {
                 amount,
                 currency: currency_id,
                 actor_id: actor,

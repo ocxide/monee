@@ -8,7 +8,7 @@ pub struct CreateProcedure {
 #[serde(rename_all = "snake_case")]
 pub enum ProcedureType {
     RegisterBalance,
-    RegisterInDebt,
+    RegisterDebt,
     MoveValue,
 }
 
@@ -85,7 +85,7 @@ pub mod register_balance {
     }
 }
 
-pub mod register_in_debt {
+pub mod register_debt {
     use super::{common, CreateProcedure, ProcedureType};
 
     pub struct Plan {
@@ -103,11 +103,11 @@ pub mod register_in_debt {
         let debt_id = monee_core::DebtId::new();
 
         let events = [
-            monee_core::Event::InDebt(monee_core::DebtEvent::Incur {
+            monee_core::Event::Debt(monee_core::DebtEvent::Incur {
                 currency: plan.currency,
                 debt_id,
             }),
-            monee_core::Event::InDebt(monee_core::DebtEvent::Accumulate {
+            monee_core::Event::Debt(monee_core::DebtEvent::Accumulate {
                 debt_id,
                 amount: plan.amount,
             }),
@@ -120,11 +120,11 @@ pub mod register_in_debt {
             entry,
             procedure,
             &events,
-            ProcedureType::RegisterInDebt,
+            ProcedureType::RegisterDebt,
             |q| {
                 q.query("LET $actor = type::thing('actor', $actor_id)")
                 .bind(("actor_id", plan.actor_id))
-                .query("RELATE $actor -> in_debt_on -> $procedure SET payment_promise = $payment_promise")
+                .query("RELATE $procedure->debts->$actor SET payment_promise = $payment_promise")
                 .bind(("payment_promise", plan.payment_promise))
             },
         )
