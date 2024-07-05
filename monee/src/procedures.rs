@@ -4,7 +4,7 @@ pub struct CreateProcedure {
     pub description: Option<String>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcedureType {
     RegisterBalance,
@@ -13,6 +13,8 @@ pub enum ProcedureType {
     MoveValue,
     Buy,
 }
+
+pub mod list;
 
 mod common {
     use super::{CreateProcedure, ProcedureType};
