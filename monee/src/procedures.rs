@@ -126,7 +126,7 @@ pub mod register_debt {
             q.query("LET $actor = type::thing('actor', $actor_id)")
                 .bind(("actor_id", plan.actor_id))
                 .query(format!(
-                    "RELATE $procedure->{relation}->$actor SET payment_promise = <datetime>$payment_promise",
+                    "RELATE $procedure->{relation}->$actor SET payment_promise = <option<datetime>>$payment_promise",
                 ))
                 .bind(("payment_promise", plan.payment_promise))
         })
