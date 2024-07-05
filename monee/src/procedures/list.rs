@@ -153,7 +153,7 @@ async fn get_detail(
 
         super::ProcedureType::RegisterLoan => {
             let detail = get_debt(db, "loans", &procedure, &currencies, &actors).await?;
-            ProcedureDetail::RegisterDebt(detail)
+            ProcedureDetail::RegisterLoan(detail)
         }
 
         super::ProcedureType::MoveValue => {
