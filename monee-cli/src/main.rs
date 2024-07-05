@@ -54,6 +54,7 @@ struct CliParser {
 
 #[derive(clap::Subcommand)]
 enum Commands {
+    History(crate::commands::history::Args),
     Events,
     Show,
     Snapshot {
@@ -93,6 +94,9 @@ fn main() -> miette::Result<()> {
         }
         Commands::Show => {
             commands::snapshot::show()?;
+        }
+        Commands::History(args) => {
+            commands::history::handle(args)?;
         }
         Commands::Snapshot { output } => {
             commands::snapshot_write(output)?;

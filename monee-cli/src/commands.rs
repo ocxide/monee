@@ -1,3 +1,138 @@
+pub mod history {
+
+    #[derive(clap::Args)]
+    pub struct Args {
+        pub since: Option<crate::date::PaymentPromise>,
+        pub until: Option<crate::date::PaymentPromise>,
+    }
+
+    use monee::procedures::list;
+
+    fn print_register_debt(
+        list::RegisterDebt {
+            amount,
+            currency,
+            actor: (_, actor),
+            debt_id,
+            payment_promise,
+        }: list::RegisterDebt,
+    ) {
+        print!("{} - ", debt_id);
+        crate::commands::debts::print_debt(
+            debt_id,
+            &amount,
+            [actor.as_ref()].into_iter(),
+            currency.as_ref().map(|(_, currency)| currency.as_ref()),
+        );
+
+        if let Some(payment_promise) = payment_promise {
+            println!("Payment promise: {}", payment_promise);
+        }
+    }
+
+    pub fn handle(args: Args) -> miette::Result<()> {
+        use monee::procedures::list::ProcedureDetail;
+
+        let since = args.since.map(|date| match date {
+            crate::date::PaymentPromise::Datetime(datetime) => datetime,
+            crate::date::PaymentPromise::Delta(delta) => {
+                let mut target = monee::date::Timezone::now();
+                delta.add(&mut target);
+
+                target
+            }
+        });
+
+        let until = args.until.map(|date| match date {
+            crate::date::PaymentPromise::Datetime(datetime) => datetime,
+            crate::date::PaymentPromise::Delta(delta) => {
+                let mut target = monee::date::Timezone::now();
+                delta.add(&mut target);
+
+                target
+            }
+        });
+
+        let result: miette::Result<_> = crate::tasks::block_single(async {
+            let db = crate::tasks::use_db().await?;
+            let procedures = monee::procedures::list::run(&db, since, until)
+                .await
+                .map_err(crate::diagnostics::snapshot_r_diagnostic)?;
+
+            Ok(procedures)
+        });
+
+        let procedures = result?;
+
+        for procedure in procedures {
+            match procedure.detail {
+                ProcedureDetail::RegisterBalance {
+                    wallet: (wallet_id, wallet),
+                    amount,
+                    currency,
+                } => {
+                    print!("Register Balance: ");
+                    crate::commands::wallets::print_wallet(
+                        wallet_id,
+                        wallet.name.as_deref(),
+                        currency.as_ref().map(|(_, currency)| currency.as_ref()),
+                        &amount,
+                    );
+                    println!();
+                }
+
+                ProcedureDetail::Buy {
+                    currency,
+                    amount,
+                    wallet: (wallet_id, wallet),
+                    items,
+                } => {
+                    print!("Buy: ");
+                    crate::commands::wallets::print_wallet(
+                        wallet_id,
+                        wallet.name.as_deref(),
+                        currency.as_ref().map(|(_, currency)| currency.as_ref()),
+                        &amount,
+                    );
+                    println!("Items: {}\n", items.join(", "));
+                }
+
+                ProcedureDetail::RegisterDebt(procedure) => {
+                    print!("Register Debt: ");
+                    print_register_debt(procedure);
+                    println!();
+                }
+
+                ProcedureDetail::RegisterLoan(procedure) => {
+                    print!("Register Loan: ");
+                    print_register_debt(procedure);
+                    println!();
+                }
+
+                ProcedureDetail::MoveValue { from, to, amount, currency } => {
+                    print!("Move Value: ");
+                    crate::commands::wallets::print_wallet(
+                        from.0,
+                        from.1.name.as_deref(),
+                        currency.as_ref().map(|(_, currency)| currency.as_ref()),
+                        &amount,
+                    );
+                    print!(" -> ");
+                    crate::commands::wallets::print_wallet(
+                        to.0,
+                        to.1.name.as_deref(),
+                        currency.as_ref().map(|(_, currency)| currency.as_ref()),
+                        &amount,
+                    );
+                    println!();
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 pub mod events {
     fn print_debt_event(debt_type: &str, event: &monee_core::DebtEvent) {
         match event {
