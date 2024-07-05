@@ -9,6 +9,7 @@ pub struct CreateProcedure {
 pub enum ProcedureType {
     RegisterBalance,
     RegisterDebt,
+    RegisterLoan,
     MoveValue,
 }
 
@@ -95,19 +96,22 @@ pub mod register_debt {
         pub payment_promise: Option<crate::date::Datetime>,
     }
 
-    pub async fn run(
+    async fn run(
         connection: &crate::database::Connection,
         procedure: CreateProcedure,
         plan: Plan,
+        procedure_type: ProcedureType,
+        build_event: fn(monee_core::DebtEvent) -> monee_core::Event,
+        relation: &str,
     ) -> Result<(), crate::error::SnapshotOptError> {
         let debt_id = monee_core::DebtId::new();
 
         let events = [
-            monee_core::Event::Debt(monee_core::DebtEvent::Incur {
+            (build_event)(monee_core::DebtEvent::Incur {
                 currency: plan.currency,
                 debt_id,
             }),
-            monee_core::Event::Debt(monee_core::DebtEvent::Accumulate {
+            (build_event)(monee_core::DebtEvent::Accumulate {
                 debt_id,
                 amount: plan.amount,
             }),
@@ -115,22 +119,49 @@ pub mod register_debt {
 
         let entry = crate::snapshot_io::read().await?;
 
-        common::create_procedure(
-            connection,
-            entry,
-            procedure,
-            &events,
-            ProcedureType::RegisterDebt,
-            |q| {
-                q.query("LET $actor = type::thing('actor', $actor_id)")
+        common::create_procedure(connection, entry, procedure, &events, procedure_type, |q| {
+            q.query("LET $actor = type::thing('actor', $actor_id)")
                 .bind(("actor_id", plan.actor_id))
-                .query("RELATE $procedure->debts->$actor SET payment_promise = $payment_promise")
+                .query(format!(
+                    "RELATE $procedure->{relation}->$actor SET payment_promise = <datetime>$payment_promise",
+                ))
                 .bind(("payment_promise", plan.payment_promise))
-            },
-        )
+        })
         .await?;
 
         Ok(())
+    }
+
+    pub async fn run_debt(
+        db: &crate::database::Connection,
+        procedure: CreateProcedure,
+        plan: Plan,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        run(
+            db,
+            procedure,
+            plan,
+            ProcedureType::RegisterDebt,
+            |event| monee_core::Event::Debt(event),
+            "debts",
+        )
+        .await
+    }
+
+    pub async fn run_loan(
+        db: &crate::database::Connection,
+        procedure: CreateProcedure,
+        plan: Plan,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        run(
+            db,
+            procedure,
+            plan,
+            ProcedureType::RegisterLoan,
+            |event| monee_core::Event::Loan(event),
+            "loans",
+        )
+        .await
     }
 }
 

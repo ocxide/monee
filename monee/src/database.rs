@@ -59,7 +59,7 @@ async fn init(connection: &Connection) -> Result<()> {
 
     connection
         .query("DEFINE TABLE debts")
-        .query("DEFINE FIELD id ON debts TYPE record<procedure>")
+        .query("DEFINE FIELD in ON debts TYPE record<procedure>")
         .query("DEFINE FIELD out ON debts TYPE record<actor>")
         .query("DEFINE FIELD payment_promise ON debts TYPE datetime")
         .await?
@@ -67,7 +67,7 @@ async fn init(connection: &Connection) -> Result<()> {
 
     connection
         .query("DEFINE TABLE loans")
-        .query("DEFINE FIELD id ON loans TYPE record<procedure>")
+        .query("DEFINE FIELD in ON loans TYPE record<procedure>")
         .query("DEFINE FIELD out ON loans TYPE record<actor>")
         .query("DEFINE FIELD payment_promise ON loans TYPE datetime")
         .await?

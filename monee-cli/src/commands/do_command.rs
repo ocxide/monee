@@ -1,3 +1,7 @@
+use std::future::Future;
+
+use monee::procedures;
+
 #[derive(clap::Args)]
 pub struct DoCommand {
     #[command(subcommand)]
@@ -18,16 +22,9 @@ pub enum DoDetailCommand {
         #[arg(short, long)]
         amount: monee_core::Amount,
     },
-    RegisterDebt {
-        #[arg(long)]
-        amount: monee_core::Amount,
-        #[arg(short, long)]
-        currency: crate::args::CurrencyIdOrCode,
-        #[arg(long)]
-        actor: crate::args::actor::Arg,
-        #[arg(short, long)]
-        payment_promise: Option<crate::date::PaymentPromise>,
-    },
+
+    RegisterDebt(RegisterDebt),
+    RegisterLoan(RegisterDebt),
 
     MoveValue {
         #[arg(short, long)]
@@ -41,6 +38,18 @@ pub enum DoDetailCommand {
     },
 }
 
+#[derive(clap::Args)]
+pub struct RegisterDebt {
+    #[arg(long)]
+    amount: monee_core::Amount,
+    #[arg(short, long)]
+    currency: crate::args::CurrencyIdOrCode,
+    #[arg(long)]
+    actor: crate::args::actor::Arg,
+    #[arg(short, long)]
+    payment_promise: Option<crate::date::PaymentPromise>,
+}
+
 pub fn handle(
     DoCommand {
         command,
@@ -52,12 +61,17 @@ pub fn handle(
             register_balance(wallet, amount, description)
         }
 
-        DoDetailCommand::RegisterDebt {
-            amount,
-            currency,
-            actor,
-            payment_promise,
-        } => register_in_debt(amount, currency, actor, payment_promise, description),
+        DoDetailCommand::RegisterDebt(arg) => {
+            register_any_debt(description, arg, |db, procedure, plan| async move {
+                procedures::register_debt::run_debt(&db, procedure, plan).await
+            })
+        }
+
+        DoDetailCommand::RegisterLoan(arg) => {
+            register_any_debt(description, arg, |db, procedure, plan| async move {
+                procedures::register_debt::run_loan(&db, procedure, plan).await
+            })
+        }
 
         DoDetailCommand::MoveValue { from, to, amount } => {
             move_value(from, to, amount, description)
@@ -73,7 +87,7 @@ fn register_balance(
     use monee::procedures;
 
     let result: miette::Result<_> = crate::tasks::block_single(async move {
-        let db = crate::tasks::use_db().await?; 
+        let db = crate::tasks::use_db().await?;
         let wallet_id = crate::args::alias::get_id(&db, wallet).await?;
 
         procedures::register_balance::run(
@@ -92,15 +106,24 @@ fn register_balance(
     Ok(())
 }
 
-fn register_in_debt(
-    amount: monee_core::Amount,
-    currency: crate::args::CurrencyIdOrCode,
-    actor: crate::args::actor::Arg,
-    payment_promise: Option<crate::date::PaymentPromise>,
+fn register_any_debt<F, Fut>(
     description: Option<String>,
-) -> miette::Result<()> {
-    use monee::procedures;
-
+    RegisterDebt {
+        actor,
+        amount,
+        currency,
+        payment_promise,
+    }: RegisterDebt,
+    run: F,
+) -> miette::Result<()>
+where
+    F: Fn(
+        monee::database::Connection,
+        procedures::CreateProcedure,
+        procedures::register_debt::Plan,
+    ) -> Fut,
+    Fut: Future<Output = Result<(), monee::error::SnapshotOptError>>,
+{
     let payment_promise = payment_promise.map(|date| match date {
         crate::date::PaymentPromise::Datetime(datetime) => datetime,
         crate::date::PaymentPromise::Delta(delta) => {
@@ -123,8 +146,8 @@ fn register_in_debt(
             return Ok(false);
         };
 
-        procedures::register_debt::run(
-            &db,
+        (run)(
+            db,
             procedures::CreateProcedure { description },
             procedures::register_debt::Plan {
                 amount,
