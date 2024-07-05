@@ -11,6 +11,7 @@ pub enum ProcedureType {
     RegisterDebt,
     RegisterLoan,
     MoveValue,
+    Buy,
 }
 
 mod common {
@@ -225,5 +226,44 @@ pub mod move_value {
         .map_err(Error::Snapshot)?;
 
         Ok(())
+    }
+}
+
+pub mod buy {
+    use super::{common, ProcedureType};
+
+    pub struct Plan {
+        pub wallet_id: monee_core::WalletId,
+        pub amount: monee_core::Amount,
+        pub items: Vec<monee_core::item_tag::ItemTagId>,
+    }
+
+    pub async fn run(
+        db: &crate::database::Connection,
+        procedure: super::CreateProcedure,
+        plan: Plan,
+    ) -> Result<(), crate::error::SnapshotOptError> {
+        let entry = crate::snapshot_io::read().await?;
+
+        let events = [monee_core::Event::Wallet(monee_core::WalletEvent::Deduct {
+            wallet_id: plan.wallet_id,
+            amount: plan.amount,
+        })];
+
+        common::create_procedure(db, entry, procedure, &events, ProcedureType::Buy, |q| {
+            let item_tags = plan
+                .items
+                .iter()
+                .map(|item| {
+                    let id = surrealdb::sql::Id::String(item.to_string());
+                    surrealdb::sql::Thing::from(("item_tag", id))
+                })
+                .collect::<Vec<_>>();
+
+            q.query("LET $items_tags = $items_tags_values")
+                .bind(("items_tags_values", item_tags))
+                .query("RELATE $procedure->brought->$items_tags")
+        })
+        .await
     }
 }

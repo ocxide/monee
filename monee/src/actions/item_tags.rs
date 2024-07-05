@@ -64,7 +64,7 @@ pub mod get {
 
     pub async fn run(
         connection: &crate::database::Connection,
-        name: String,
+        name: &str,
     ) -> Result<Option<monee_core::item_tag::ItemTagId>, crate::database::Error> {
         let mut response = connection
             .query("SELECT id FROM ONLY item_tag WHERE name = $name LIMIT 1")

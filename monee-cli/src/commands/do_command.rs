@@ -36,6 +36,17 @@ pub enum DoDetailCommand {
         #[arg(short, long)]
         amount: monee_core::Amount,
     },
+
+    Buy {
+        #[arg(short, long)]
+        wallet: Wallet,
+
+        #[arg(short, long)]
+        amount: monee_core::Amount,
+
+        #[arg(short, long)]
+        items: Vec<String>,
+    },
 }
 
 #[derive(clap::Args)]
@@ -76,6 +87,12 @@ pub fn handle(
         DoDetailCommand::MoveValue { from, to, amount } => {
             move_value(from, to, amount, description)
         }
+
+        DoDetailCommand::Buy {
+            wallet,
+            amount,
+            items,
+        } => buy(description, wallet, amount, items),
     }
 }
 
@@ -212,4 +229,56 @@ fn move_value(
 
     println!("Done!");
     Ok(())
+}
+
+fn buy(
+    description: Option<String>,
+    wallet: Wallet,
+    amount: monee_core::Amount,
+    item_names: Vec<String>,
+) -> miette::Result<()> {
+    crate::tasks::block_multi(async move {
+        let db = crate::tasks::use_db().await?;
+
+        let mut items = vec![];
+        let mut set = tokio::task::JoinSet::new();
+        for item in item_names {
+            let db = db.clone();
+            set.spawn(async move {
+                let result = monee::actions::item_tags::get::run(&db, item.as_str()).await;
+                (result, item)
+            });
+        }
+
+        while let Some(result) = set.join_next().await {
+            match result.expect("Failed to join task") {
+                (Ok(Some(item)), _) => items.push(item),
+                (Ok(None), item_name) => {
+                    let diagnostic = miette::diagnostic!(
+                        severity = miette::Severity::Error,
+                        code = "item_tag::NotFound",
+                        "Item tag `{}` not found",
+                        item_name
+                    );
+
+                    return Err(diagnostic.into());
+                }
+                (Err(why), _) => monee::log::database(why),
+            }
+        }
+
+        let wallet_id = crate::args::alias::get_id(&db, wallet).await?;
+        monee::procedures::buy::run(
+            &db,
+            monee::procedures::CreateProcedure { description },
+            monee::procedures::buy::Plan {
+                wallet_id,
+                amount,
+                items,
+            },
+        )
+        .await
+        .map_err(crate::diagnostics::snapshot_opt_diagnostic)
+    })
+    .inspect(|_| println!("Done!"))
 }

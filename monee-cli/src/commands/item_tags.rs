@@ -88,8 +88,8 @@ async fn recover_tags(
     }
 
     match tokio::try_join!(
-        item_tags::get::run(db, parent.clone()),
-        item_tags::get::run(db, child.clone())
+        item_tags::get::run(db, &parent),
+        item_tags::get::run(db, &child)
     ) {
         Ok((Some(parent), Some(child))) => Ok((parent, child)),
         Ok((None, None)) => Err({
