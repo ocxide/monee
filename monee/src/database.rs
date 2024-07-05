@@ -1,9 +1,11 @@
 pub use surrealdb::Result;
 
 #[cfg(feature = "embedded")]
-pub type Connection = surrealdb::Surreal<surrealdb::engine::local::Db>;
+pub type Engine = surrealdb::engine::local::Db;
 #[cfg(feature = "remote")]
-pub type Connection = surrealdb::Surreal<surrealdb::engine::remote::ws::Client>;
+pub type Engine = surrealdb::engine::remote::ws::Client;
+
+pub type Connection = surrealdb::Surreal<Engine>;
 
 pub type Error = surrealdb::Error;
 

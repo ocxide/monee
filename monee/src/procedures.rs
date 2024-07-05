@@ -15,40 +15,37 @@ pub enum ProcedureType {
 mod common {
     use super::{CreateProcedure, ProcedureType};
 
-    pub struct ProcedureCreated {
-        pub procedure_id: surrealdb::sql::Thing,
-        pub snapshot: monee_core::Snapshot,
-    }
-
     pub async fn create_procedure(
-        connection: &crate::database::Connection,
+        db: &crate::database::Connection,
         crate::snapshot_io::SnapshotEntry { mut snapshot, .. }: crate::snapshot_io::SnapshotEntry,
         procedure: CreateProcedure,
         events: &[monee_core::Event],
         procedure_type: ProcedureType,
-    ) -> Result<ProcedureCreated, crate::error::SnapshotReadError> {
+        post_fn: impl Fn(
+            surrealdb::method::Query<crate::database::Engine>,
+        ) -> surrealdb::method::Query<crate::database::Engine>,
+    ) -> Result<(), crate::error::SnapshotOptError> {
         for event in events {
             snapshot.apply(event.clone())?;
         }
 
-        let mut response = connection
+        let query = db
             .query(surrealdb::sql::statements::BeginStatement)
             .query("LET $procedure = CREATE ONLY procedure SET description = $description, type = $type RETURN id")
             .bind(procedure)
             .bind(("type", procedure_type))
             .query("LET $events = INSERT INTO event $events_data")
             .bind(("events_data", events))
-            .query("RELATE $procedure->generated->$events")
+            .query("RELATE $procedure->generated->$events");
+
+        (post_fn)(query)
             .query(surrealdb::sql::statements::CommitStatement)
-            .query("RETURN $procedure").await?.check()?;
+            .await?
+            .check()?;
 
-        let procedure_id: Option<surrealdb::sql::Thing> =
-            response.take((response.num_statements() - 1, "id"))?;
+        crate::snapshot_io::write(snapshot).await?;
 
-        Ok(ProcedureCreated {
-            procedure_id: procedure_id.expect("to get procedure_id"),
-            snapshot,
-        })
+        Ok(())
     }
 }
 
@@ -74,16 +71,16 @@ pub mod register_balance {
 
         let entry = crate::snapshot_io::read().await?;
 
-        let response = common::create_procedure(
+        common::create_procedure(
             connection,
             entry,
             procedure,
             &events,
             ProcedureType::RegisterBalance,
+            |q| q,
         )
         .await?;
 
-        crate::snapshot_io::write(response.snapshot).await?;
         Ok(())
     }
 }
@@ -118,27 +115,21 @@ pub mod register_in_debt {
 
         let entry = crate::snapshot_io::read().await?;
 
-        let response = common::create_procedure(
+        common::create_procedure(
             connection,
             entry,
             procedure,
             &events,
             ProcedureType::RegisterInDebt,
+            |q| {
+                q.query("LET $actor = type::thing('actor', $actor_id)")
+                .bind(("actor_id", plan.actor_id))
+                .query("RELATE $actor -> in_debt_on -> $procedure SET payment_promise = $payment_promise")
+                .bind(("payment_promise", plan.payment_promise))
+            },
         )
         .await?;
 
-        connection
-            .query("LET $actor = type::thing('actor', $actor_id)")
-            .bind(("actor_id", plan.actor_id))
-            .query(
-                "RELATE $actor -> in_debt_on -> $procedure SET payment_promise = $payment_promise",
-            )
-            .bind(("procedure", response.procedure_id))
-            .bind(("payment_promise", plan.payment_promise))
-            .await?
-            .check()?;
-
-        crate::snapshot_io::write(response.snapshot).await?;
         Ok(())
     }
 }
@@ -191,19 +182,16 @@ pub mod move_value {
             }),
         ];
 
-        let response = common::create_procedure(
+        common::create_procedure(
             connection,
             entry,
             procedure,
             &events,
             ProcedureType::MoveValue,
+            |q| q,
         )
         .await
-        .map_err(|e| Error::Snapshot(e.into()))?;
-
-        crate::snapshot_io::write(response.snapshot)
-            .await
-            .map_err(|e| Error::Snapshot(e.into()))?;
+        .map_err(Error::Snapshot)?;
 
         Ok(())
     }
