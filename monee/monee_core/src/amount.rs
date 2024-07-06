@@ -62,7 +62,7 @@ pub mod from_str {
 
     use super::{Amount, DECIMALS, MULTIPLIER};
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub enum Error {
         /// Has more than 4 decimals
         MaxDecimal,
@@ -93,40 +93,36 @@ pub mod from_str {
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             let mut split = s.split(&['.', ',']);
 
-            let Some(integer_str) = split.next() else {
-                return Err(Error::InvalidNumber);
-            };
-
-            let integer_part = match integer_str {
-                "" => 0,
-                _ => integer_str
-                    .parse::<u64>()
-                    .map_err(|_| Error::InvalidNumber)?,
-            };
-
-            let real = integer_part.checked_mul(MULTIPLIER).ok_or(Error::TooBig)?;
-
-            let Some(decimal_str) = split.next() else {
-                return Ok(Self(integer_part * MULTIPLIER));
-            };
+            let int_part = split.next();
+            let decimal_part = split.next();
 
             if split.next().is_some() {
                 return Err(Error::InvalidDecimal);
             }
 
-            if decimal_str.is_empty() {
-                return Err(Error::InvalidNumber);
-            }
+            let int = match int_part {
+                Some("") => Ok(0),
+                Some(int_part) => int_part.parse::<u64>().map_err(|_| Error::InvalidNumber),
+                None => Err(Error::InvalidNumber),
+            }?
+            .checked_mul(MULTIPLIER)
+            .ok_or(Error::TooBig)?;
 
-            if decimal_str.len() > DECIMALS as usize {
-                return Err(Error::MaxDecimal);
-            }
+            let (parsed_decimal, len) = match decimal_part {
+                Some("") => Err(Error::InvalidNumber),
+                Some(decimal_part) if decimal_part.len() > DECIMALS as usize => {
+                    Err(Error::MaxDecimal)
+                }
+                Some(decimal_part) => match decimal_part.parse::<u64>() {
+                    Ok(parsed_decimal) => Ok((parsed_decimal, decimal_part.len())),
+                    Err(_) => Err(Error::InvalidNumber),
+                },
+                None => Ok((0, 0)),
+            }?;
 
-            let decimal_part = decimal_str
-                .parse::<u64>()
-                .map_err(|_| Error::InvalidNumber)?;
+            let decimal = parsed_decimal * 10u64.pow(DECIMALS - len as u32);
 
-            Ok(Self(real + decimal_part))
+            Ok(Self(int + decimal))
         }
     }
 }
@@ -150,7 +146,6 @@ mod tests {
         assert_eq!(Amount(10000).to_string(), "1");
     }
 
-
     #[test]
     fn donot_display_trailing() {
         assert_eq!(Amount(1234500).to_string(), "123.45");
@@ -164,5 +159,10 @@ mod tests {
     #[test]
     fn from_str() {
         assert_eq!(Amount(1234567), "123.4567".parse().unwrap());
+    }
+
+    #[test]
+    fn from_str_21_90() {
+        assert_eq!("21.90".parse::<Amount>(), Ok(Amount(219000)));
     }
 }
