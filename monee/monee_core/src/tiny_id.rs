@@ -72,6 +72,10 @@ mod string {
         type Err = Error;
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
+            if s.len() != N {
+                return Err(Error::InvalidLength(N));
+            }
+
             let mut bytes = [0u8; N];
 
             let mut chars = s.chars();
@@ -215,6 +219,15 @@ mod sede {
                     Some(e) => e,
                     None => return Err(A::Error::invalid_length(i, &self)),
                 };
+            }
+
+            let mut remaining = 0;
+            while seq.next_element::<u8>()?.is_some() {
+                remaining += 1; 
+            }
+            
+            if remaining > 0 {
+                return Err(A::Error::invalid_length(N + remaining, &self))
             }
 
             match TinyId::<N>::try_from(bytes) {
