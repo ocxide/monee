@@ -271,7 +271,7 @@ pub async fn run(
         .query("SELECT * FROM wallet_metadata")
         .query("SELECT * FROM actor")
         .query("SELECT * FROM currency")
-        .query("SELECT * FROM procedure WHERE created_at >= <datetime>$since AND created_at <= <datetime>$until")
+        .query("SELECT * FROM procedure WHERE created_at >= <datetime>$since AND created_at <= <datetime>$until ORDER BY created_at")
         .bind(("since", since.unwrap_or_else(|| crate::date::Datetime::UNIX_EPOCH)))
         .bind(("until", until))
         .await?.check()?
