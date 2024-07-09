@@ -202,7 +202,7 @@ async fn get_detail(
             let mut response = db
                 .query("SELECT * FROM ONLY $procedure->generated->event LIMIT 1")
                 .bind(("procedure", procedure.id.clone()))
-                .query("SELECT name FROM $procedure->brought->item_tag")
+                .query("SELECT name FROM $procedure->bought->item_tag")
                 .await?
                 .check()?;
 

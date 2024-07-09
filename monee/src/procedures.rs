@@ -238,6 +238,7 @@ pub mod buy {
         pub wallet_id: monee_core::WalletId,
         pub amount: monee_core::Amount,
         pub items: Vec<monee_core::item_tag::ItemTagId>,
+        pub from_actors: Vec<monee_core::actor::ActorId>,
     }
 
     pub async fn run(
@@ -262,9 +263,21 @@ pub mod buy {
                 })
                 .collect::<Vec<_>>();
 
+            let from_actors = plan
+                .from_actors
+                .iter()
+                .map(|from_actor| {
+                    let id = surrealdb::sql::Id::String(from_actor.to_string());
+                    surrealdb::sql::Thing::from(("actor", id))
+                })
+                .collect::<Vec<_>>();
+
             q.query("LET $items_tags = $items_tags_values")
                 .bind(("items_tags_values", item_tags))
-                .query("RELATE $procedure->brought->$items_tags")
+                .query("RELATE $procedure->bought->$items_tags")
+                .query("LET $from_actors = $from_actors_values")
+                .bind(("from_actors_values", from_actors))
+                .query("RELATE $procedure->bought->$from_actors")
         })
         .await
     }

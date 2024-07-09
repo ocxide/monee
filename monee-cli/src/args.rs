@@ -86,64 +86,16 @@ pub mod alias {
             monee::actions::wallets::alias_get::run(db, name.as_str()).await
         }
     }
-}
 
-pub mod actor {
-    use std::str::FromStr;
+    impl AliasedId for monee_core::actor::ActorId {
+        const ENTITY_NAME: &'static str = "actor";
+        const ALIAS_FIELD: &'static str = "alias";
 
-    use monee_core::{actor, alias};
-
-    #[derive(Debug, Clone)]
-    pub enum Arg {
-        Id(actor::ActorId),
-        Alias(alias::Alias),
-    }
-
-    #[derive(Debug, thiserror::Error)]
-    pub enum Error {
-        #[error(transparent)]
-        Id(<actor::ActorId as FromStr>::Err),
-        #[error(transparent)]
-        Alias(#[from] alias::from_str::Error),
-    }
-
-    impl FromStr for Arg {
-        type Err = Error;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            const PREFIX: &str = "actor:";
-            if let Some(raw) = s.strip_prefix(PREFIX) {
-                let id = actor::ActorId::from_str(raw).map_err(Error::Id)?;
-                return Ok(Arg::Id(id));
-            }
-
-            let alias = alias::Alias::from_str(s)?;
-            Ok(Arg::Alias(alias))
-        }
-    }
-
-    pub async fn get_id(
-        db: &monee::database::Connection,
-        id: Arg,
-    ) -> miette::Result<actor::ActorId> {
-        match id {
-            Arg::Id(id) => Ok(id),
-            Arg::Alias(alias) => {
-                match monee::actions::actors::alias_get::run(db, alias.as_str()).await {
-                    Ok(Some(id)) => Ok(id),
-                    Ok(None) => {
-                        let diagnostic = miette::diagnostic!(
-                            severity = miette::Severity::Error,
-                            code = "actor::NotFound",
-                            "Actor with alias `{}` not found",
-                            alias
-                        );
-
-                        Err(diagnostic.into())
-                    }
-                    Err(err) => monee::log::database(err),
-                }
-            }
+        async fn get_id(
+            db: &monee::database::Connection,
+            alias: &alias::Alias,
+        ) -> monee::database::Result<Option<Self>> {
+            monee::actions::actors::alias_get::run(db, alias.as_str()).await
         }
     }
 }

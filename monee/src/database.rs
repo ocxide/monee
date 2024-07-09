@@ -89,9 +89,18 @@ async fn init(connection: &Connection) -> Result<()> {
         .check()?;
 
     connection
-        .query("DEFINE TABLE brought")
-        .query("DEFINE FIELD in ON brought TYPE record<procedure>")
-        .query("DEFINE FIELD out ON brought TYPE record<item_tag>")
+        .query("DEFINE TABLE bought")
+        .query("DEFINE FIELD in ON bought TYPE record<procedure>")
+        .query("DEFINE FIELD out ON bought TYPE record<item_tag>")
+        .query("DEFINE INDEX bought_u ON bought FIELDS in, out UNIQUE")
+        .await?
+        .check()?;
+
+    connection
+        .query("DEFINE TABLE bought_from")
+        .query("DEFINE FIELD in ON bought_from TYPE record<procedure>")
+        .query("DEFINE FIELD out ON bought_from TYPE record<actor>")
+        .query("DEFINE INDEX bought_from_u ON bought_from FIELDS in, out UNIQUE")
         .await?
         .check()?;
 

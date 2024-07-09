@@ -12,6 +12,7 @@ pub struct DoCommand {
 }
 
 pub type Wallet = crate::args::alias::Arg<monee_core::WalletId>;
+pub type Actor = crate::args::alias::Arg<monee_core::actor::ActorId>;
 
 #[derive(clap::Subcommand)]
 pub enum DoDetailCommand {
@@ -46,6 +47,9 @@ pub enum DoDetailCommand {
 
         #[arg(short, long)]
         items: Vec<String>,
+
+        #[arg(short, long)]
+        from_actor: Vec<Actor>,
     },
 }
 
@@ -56,7 +60,7 @@ pub struct RegisterDebt {
     #[arg(short, long)]
     currency: crate::args::CurrencyIdOrCode,
     #[arg(long)]
-    actor: crate::args::actor::Arg,
+    actor: Actor,
     #[arg(short, long)]
     payment_promise: Option<crate::date::PaymentPromise>,
 }
@@ -92,7 +96,8 @@ pub fn handle(
             wallet,
             amount,
             items,
-        } => buy(description, wallet, amount, items),
+            from_actor,
+        } => buy(description, wallet, amount, items, from_actor),
     }
 }
 
@@ -156,7 +161,7 @@ where
 
         let (currency_id, actor) = tokio::try_join!(
             crate::args::get_currency(&db, currency, false),
-            crate::args::actor::get_id(&db, actor)
+            crate::args::alias::get_id(&db, actor)
         )?;
 
         let Some(currency_id) = currency_id else {
@@ -231,43 +236,74 @@ fn move_value(
     Ok(())
 }
 
+async fn resolve_many<T, F, Fut, M>(
+    db: &monee::database::Connection,
+    things: Vec<T>,
+    f: F,
+) -> miette::Result<Vec<M>>
+where
+    T: Send + Sync + 'static,
+    F: Fn(monee::database::Connection, T) -> Fut + Send + Copy + 'static,
+    Fut: Future<Output = miette::Result<M>> + Send,
+    M: Send + Sync + 'static,
+{
+    let mut items = vec![];
+    let mut set = tokio::task::JoinSet::new();
+
+    for thing in things {
+        let db = db.clone();
+        set.spawn(async move {
+            (f)(db, thing).await
+        });
+    }
+
+    while let Some(result) = set.join_next().await {
+        match result.expect("Failed to join task") {
+            Ok(thing) => items.push(thing),
+            Err(error) => {
+                return Err(error);
+            }
+        }
+    }
+
+    Ok(items)
+}
+
 fn buy(
     description: Option<String>,
     wallet: Wallet,
     amount: monee_core::Amount,
     item_names: Vec<String>,
+    from_actors: Vec<Actor>,
 ) -> miette::Result<()> {
     crate::tasks::block_multi(async move {
         let db = crate::tasks::use_db().await?;
 
-        let mut items = vec![];
-        let mut set = tokio::task::JoinSet::new();
-        for item in item_names {
-            let db = db.clone();
-            set.spawn(async move {
-                let result = monee::actions::item_tags::get::run(&db, item.as_str()).await;
-                (result, item)
-            });
-        }
+        let actors = resolve_many(&db, from_actors, |db, actor| async move {
+            crate::args::alias::get_id(&db, actor).await
+        });
 
-        while let Some(result) = set.join_next().await {
-            match result.expect("Failed to join task") {
-                (Ok(Some(item)), _) => items.push(item),
-                (Ok(None), item_name) => {
+        let items = resolve_many(&db, item_names, |db, name| async move {
+            let result = monee::actions::item_tags::get::run(&db, name.as_str()).await;
+            match result {
+                Ok(Some(item)) => Ok(item),
+                Ok(None) => {
                     let diagnostic = miette::diagnostic!(
                         severity = miette::Severity::Error,
                         code = "item_tag::NotFound",
                         "Item tag `{}` not found",
-                        item_name
+                        name
                     );
 
-                    return Err(diagnostic.into());
+                    Err(diagnostic.into())
                 }
-                (Err(why), _) => monee::log::database(why),
+                Err(why) => monee::log::database(why),
             }
-        }
+        });
 
-        let wallet_id = crate::args::alias::get_id(&db, wallet).await?;
+        let wallet_id = crate::args::alias::get_id(&db, wallet);
+
+        let (actors, items, wallet_id) = tokio::try_join!(actors, items, wallet_id)?;
         monee::procedures::buy::run(
             &db,
             monee::procedures::CreateProcedure { description },
@@ -275,6 +311,7 @@ fn buy(
                 wallet_id,
                 amount,
                 items,
+                from_actors: actors,
             },
         )
         .await
