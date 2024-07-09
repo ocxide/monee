@@ -277,7 +277,7 @@ pub mod buy {
                 .query("RELATE $procedure->bought->$items_tags")
                 .query("LET $from_actors = $from_actors_values")
                 .bind(("from_actors_values", from_actors))
-                .query("RELATE $procedure->bought->$from_actors")
+                .query("RELATE $procedure->bought_from->$from_actors")
         })
         .await
     }

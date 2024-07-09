@@ -86,6 +86,7 @@ pub mod history {
                     amount,
                     wallet: (wallet_id, wallet),
                     items,
+                    from_actors,
                 } => {
                     print!("Buy: ");
                     crate::commands::wallets::print_wallet(
@@ -94,7 +95,19 @@ pub mod history {
                         currency.as_ref().map(|(_, currency)| currency.as_ref()),
                         &amount,
                     );
-                    println!("Items: {}\n", items.join(", "));
+                    println!("Items: {}", items.join(", "));
+
+                    let mut from_actors = from_actors.iter().peekable();
+
+                    print!("From: ");
+                    while let Some((id, actor)) = from_actors.next() {
+                        print!("{}({})", actor.name.as_str(), id);
+                        if from_actors.peek().is_some() {
+                            print!(", ");
+                        }
+                    }
+
+                    println!("\n");
                 }
 
                 ProcedureDetail::RegisterDebt(procedure) => {
@@ -109,7 +122,12 @@ pub mod history {
                     println!();
                 }
 
-                ProcedureDetail::MoveValue { from, to, amount, currency } => {
+                ProcedureDetail::MoveValue {
+                    from,
+                    to,
+                    amount,
+                    currency,
+                } => {
                     print!("Move Value: ");
                     crate::commands::wallets::print_wallet(
                         from.0,

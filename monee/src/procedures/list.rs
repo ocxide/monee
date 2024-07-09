@@ -6,6 +6,7 @@ use crate::Entity;
 
 pub type CurrencyEntity = (CurrencyId, Rc<Currency>);
 pub type WalletEntity = (WalletId, Rc<WalletMetadata>);
+pub type ActorEntity = (monee_core::actor::ActorId, Rc<monee_core::actor::Actor>);
 
 pub enum ProcedureDetail {
     RegisterBalance {
@@ -26,6 +27,7 @@ pub enum ProcedureDetail {
         items: Vec<String>,
         amount: monee_core::Amount,
         currency: Option<CurrencyEntity>,
+        from_actors: Vec<ActorEntity>,
     },
 }
 
@@ -47,7 +49,7 @@ pub struct RegisterDebt {
     pub debt_id: monee_core::DebtId,
     pub amount: monee_core::Amount,
     pub currency: Option<CurrencyEntity>,
-    pub actor: (monee_core::actor::ActorId, Rc<monee_core::actor::Actor>),
+    pub actor: ActorEntity,
     pub payment_promise: Option<crate::date::Datetime>,
 }
 
@@ -199,15 +201,19 @@ async fn get_detail(
         }
 
         super::ProcedureType::Buy => {
+            use monee_core::actor;
+
             let mut response = db
                 .query("SELECT * FROM ONLY $procedure->generated->event LIMIT 1")
                 .bind(("procedure", procedure.id.clone()))
                 .query("SELECT name FROM $procedure->bought->item_tag")
+                .query("SELECT id FROM $procedure->bought_from->actor")
                 .await?
                 .check()?;
 
             let event: Option<monee_core::WalletEvent> = response.take(0)?;
             let items: Vec<String> = response.take((1, "name"))?;
+            let this_actors: Vec<Entity<actor::ActorId, ()>> = response.take(2)?;
 
             match event {
                 Some(monee_core::WalletEvent::Deduct { wallet_id, amount }) => {
@@ -223,11 +229,20 @@ async fn get_detail(
                         .get(&wallet.currency)
                         .map(|c| (wallet.currency, Rc::clone(c)));
 
+                    let actors = this_actors
+                        .into_iter()
+                        .map(|Entity(actor_id, _)| {
+                            let actor = actors.get(&actor_id).expect("to get actor");
+                            (actor_id, Rc::clone(actor))
+                        })
+                        .collect();
+
                     ProcedureDetail::Buy {
                         wallet: (wallet_id, Rc::clone(wallet_metadata)),
                         items,
                         amount,
                         currency,
+                        from_actors: actors
                     }
                 }
                 _ => panic!("failed, got: {event:?}"),
