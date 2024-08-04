@@ -13,8 +13,10 @@ serde = { version = "1.0.203", features = ["derive"] }
 surrealdb = { version = "1.5.2" } 
 serde_json = "1.0.117"
 chrono = { version = "0.4.38", features = ["serde"] }
-tokio = { version = "1.38.0", features = ["full"] }
+tokio = { version = "^1.39.1", features = ["full"] }
 thiserror = "1.0.61"
+cream = { git = "https://github.com/ocxide/cream.git" }
+async-trait = "0.1.81"
 
 [features]
 default = ["remote"]
