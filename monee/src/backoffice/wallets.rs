@@ -1,10 +1,14 @@
 pub mod application {
     pub mod create_one {
         use cream::from_context::FromContext;
+        use monee_core::WalletId;
 
         use crate::{
-            backoffice::wallets::domain::{repository::Repository, wallet::Wallet},
-            shared::{domain::context::AppContext, errors::InfrastructureError},
+            backoffice::wallets::domain::{
+                repository::{Repository, SaveError},
+                wallet::Wallet,
+            },
+            shared::domain::context::AppContext,
         };
 
         pub struct CreateOne {
@@ -20,9 +24,45 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(&self, wallet: Wallet) -> Result<(), InfrastructureError> {
-                self.repository.save(wallet).await?;
+            pub async fn run(&self, wallet: Wallet) -> Result<(), SaveError> {
+                self.repository.save(WalletId::new(), wallet).await?;
+                Ok(())
+            }
+        }
+    }
 
+    pub mod update_one {
+        use cream::from_context::FromContext;
+        use monee_core::WalletId;
+
+        use crate::{
+            backoffice::wallets::domain::{
+                repository::{Repository, UpdateError},
+                wallet_name::WalletName,
+            },
+            shared::domain::context::AppContext,
+        };
+
+        pub struct UpdateOne {
+            repository: Box<dyn Repository>,
+        }
+
+        impl<C: AppContext> FromContext<C> for UpdateOne {
+            fn from_context(context: &C) -> Self {
+                Self {
+                    repository: context.backoffice_wallets_repository(),
+                }
+            }
+        }
+
+        impl UpdateOne {
+            pub async fn run(
+                &self,
+                id: WalletId,
+                name: Option<WalletName>,
+                description: String,
+            ) -> Result<(), UpdateError> {
+                self.repository.update(id, name, description).await?;
                 Ok(())
             }
         }
@@ -33,29 +73,135 @@ pub mod domain {
     pub mod repository {
         use monee_core::WalletId;
 
-        use super::wallet::Wallet;
+        use crate::shared::errors::InfrastructureError;
+
+        use super::{wallet::Wallet, wallet_name::WalletName};
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn save(
+            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), SaveError>;
+            async fn update(
                 &self,
-                wallet: Wallet,
-            ) -> Result<WalletId, crate::shared::errors::InfrastructureError>;
+                id: WalletId,
+                name: Option<WalletName>,
+                description: String,
+            ) -> Result<(), UpdateError>;
+        }
+
+        #[derive(thiserror::Error, Debug)]
+        pub enum SaveError {
+            #[error(transparent)]
+            Infrastructure(#[from] InfrastructureError),
+            #[error("Wallet name already exists")]
+            AlreadyExists,
+        }
+
+        #[derive(thiserror::Error, Debug)]
+        pub enum UpdateError {
+            #[error("Wallet id not found")]
+            NotFound,
+            #[error("Wallet name already exists")]
+            AlreadyExists,
+            #[error(transparent)]
+            Infrastructure(InfrastructureError),
         }
     }
 
     pub mod wallet {
+        use super::wallet_name::WalletName;
+
         pub struct Wallet {
             pub currency_id: monee_core::CurrencyId,
-            pub name: Option<String>,
+            pub name: Option<WalletName>,
+            pub description: String,
+        }
+    }
+
+    pub mod wallet_name {
+        #[derive(Debug, serde::Serialize, serde::Deserialize)]
+        pub struct WalletName(String);
+
+        pub enum Error {
+            InvalidCharacter(char),
+        }
+
+        impl TryFrom<String> for WalletName {
+            type Error = Error;
+
+            fn try_from(value: String) -> Result<Self, Self::Error> {
+                match value.chars().find(|c| !c.is_alphanumeric()) {
+                    Some(c) => Err(Error::InvalidCharacter(c)),
+                    None => Ok(Self(value)),
+                }
+            }
         }
     }
 }
 
 pub mod infrastructure {
     pub mod repository {
-        use crate::shared::infrastructure::database::Connection;
+        use monee_core::WalletId;
+
+        use crate::{
+            backoffice::wallets::domain::{
+                repository::{Repository, SaveError, UpdateError},
+                wallet::Wallet,
+                wallet_name::WalletName,
+            },
+            shared::infrastructure::database::Connection,
+        };
 
         pub struct SurrealRepository(Connection);
+
+        #[async_trait::async_trait]
+        impl Repository for SurrealRepository {
+            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), SaveError> {
+                let result = self.0
+                    .query("INSERT INTO wallet (id, currency_id, name) VALUES ($id, $currency_id, $name)")
+                    .bind(("id", id))
+                    .bind(("currency_id", wallet.currency_id))
+                    .bind(("name", wallet.name))
+                    .await.map_err(|e| SaveError::Infrastructure(e.into()))?.check();
+
+                match result {
+                    Ok(_) => Ok(()),
+                    Err(
+                        crate::shared::infrastructure::database::Error::Api(
+                            surrealdb::error::Api::Query { .. },
+                        )
+                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                    ) => Err(SaveError::AlreadyExists),
+                    Err(e) => Err(SaveError::Infrastructure(e.into())),
+                }
+            }
+
+            async fn update(
+                &self,
+                id: WalletId,
+                name: Option<WalletName>,
+                description: String,
+            ) -> Result<(), UpdateError> {
+                let result = self.0
+                    .query("UPDATE type::thing('wallet', $id) SET name = $name, description = $description")
+                    .bind(("id", id))
+                    .bind(("name", name))
+                    .bind(("description", description))
+                    .await.map_err(|e| UpdateError::Infrastructure(e.into()))?.check();
+
+                match result {
+                    Ok(mut response) => match response.take(0).map_err(|e| UpdateError::Infrastructure(e.into()))? {
+                        Some(()) => Ok(()),
+                        None => Err(UpdateError::NotFound),
+                    },
+                    Err(
+                        crate::shared::infrastructure::database::Error::Api(
+                            surrealdb::error::Api::Query { .. },
+                        )
+                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                    ) => Err(UpdateError::AlreadyExists),
+                    Err(e) => Err(UpdateError::Infrastructure(e.into())),
+                }
+            }
+        }
     }
 }

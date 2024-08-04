@@ -144,6 +144,12 @@ pub async fn connect() -> surrealdb::Result<Connection> {
     Ok(db)
 }
 
+impl From<surrealdb::Error> for crate::shared::errors::InfrastructureError {
+    fn from(value: surrealdb::Error) -> Self {
+        Self::new(value)
+    }
+}
+
 pub use entity::Entity;
 
 pub(crate) mod entity {
