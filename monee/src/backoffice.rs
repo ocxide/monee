@@ -1,3 +1,4 @@
+pub mod actors;
 pub mod wallets;
 
 pub mod events {
@@ -43,9 +44,7 @@ pub mod events {
         }
 
         pub mod event {
-            use monee_core::{
-                actor::ActorId, item_tag::ItemTagId, Amount, CurrencyId, WalletId,
-            };
+            use monee_core::{actor::ActorId, item_tag::ItemTagId, Amount, CurrencyId, WalletId};
 
             use crate::date::Datetime;
 
@@ -100,12 +99,10 @@ pub mod events {
                 async fn add_buy(
                     &self,
                     event: Buy,
-                ) -> Result<(), crate::shared::errors::InfrastructureError>
-                {
+                ) -> Result<(), crate::shared::errors::InfrastructureError> {
                     todo!()
                 }
             }
         }
     }
 }
-

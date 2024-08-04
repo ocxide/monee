@@ -132,6 +132,12 @@ pub mod application {
             ) -> Box<dyn crate::backoffice::wallets::domain::repository::Repository> {
                 todo!()
             }
+
+            fn backoffice_actors_repository(
+                &self,
+            ) -> Box<dyn crate::backoffice::actors::domain::repository::Repository> {
+                todo!()
+            }
         }
     }
 }
@@ -148,6 +154,10 @@ pub mod domain {
             fn backoffice_wallets_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::wallets::domain::repository::Repository>;
+
+            fn backoffice_actors_repository(
+                &self,
+            ) -> Box<dyn crate::backoffice::actors::domain::repository::Repository>;
         }
     }
 }
