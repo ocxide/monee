@@ -634,7 +634,7 @@ dependencies = [
 [[package]]
 name = "cream"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#b823863b394c22dff3f43ce5a17398fd29838e38"
+source = "git+https://github.com/ocxide/cream.git#6c59769a78883a17de8e70e85c82ba753503e2d8"
 dependencies = [
  "async-trait",
  "tokio",
@@ -1572,7 +1572,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e310b3a6b5907f99202fcdb4960ff45b93735d7c7d96b760fcff8db2dc0e103d"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.5",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
