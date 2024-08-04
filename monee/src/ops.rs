@@ -13,7 +13,7 @@ pub mod sync {
 }
 
 pub mod build {
-    use crate::database;
+    use crate::shared::infrastructure::database;
 
     pub use crate::error::SnapshotWriteError as Error;
 
@@ -62,12 +62,12 @@ pub mod build {
 
     pub(crate) struct EventsStream<'c> {
         last_date: crate::date::Datetime,
-        connection: &'c crate::database::Connection,
+        connection: &'c crate::shared::infrastructure::database::Connection,
     }
 
     impl<'c> EventsStream<'c> {
         pub fn new(
-            connection: &'c crate::database::Connection,
+            connection: &'c crate::shared::infrastructure::database::Connection,
             last_date: crate::date::Datetime,
         ) -> Self {
             Self {
@@ -76,7 +76,7 @@ pub mod build {
             }
         }
 
-        pub async fn next(&mut self) -> Result<Option<Vec<EventRow>>, crate::database::Error> {
+        pub async fn next(&mut self) -> Result<Option<Vec<EventRow>>, crate::shared::infrastructure::database::Error> {
             let mut result = self
                 .connection
                 .query(
@@ -105,7 +105,7 @@ pub mod rebuild {
         Apply(Box<ApplyError>),
 
         #[error(transparent)]
-        Database(#[from] crate::database::Error),
+        Database(#[from] crate::shared::infrastructure::database::Error),
 
         #[error(transparent)]
         Write(#[from] std::io::Error),
@@ -121,7 +121,7 @@ pub mod rebuild {
     }
 
     pub async fn rebuild() -> Result<(), Error> {
-        let db = crate::database::connect().await?;
+        let db = crate::shared::infrastructure::database::connect().await?;
         let mut stream = EventsStream::new(&db, crate::date::Datetime::UNIX_EPOCH);
 
         let mut snapshot = monee_core::Snapshot::default();

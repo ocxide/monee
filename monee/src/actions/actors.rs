@@ -1,10 +1,10 @@
 pub mod list {
     pub type ActorRow =
-        crate::database::Entity<monee_core::actor::ActorId, monee_core::actor::Actor>;
+        crate::shared::infrastructure::database::Entity<monee_core::actor::ActorId, monee_core::actor::Actor>;
 
     pub async fn run(
-        connection: &crate::database::Connection,
-    ) -> Result<Vec<ActorRow>, crate::database::Error> {
+        connection: &crate::shared::infrastructure::database::Connection,
+    ) -> Result<Vec<ActorRow>, crate::shared::infrastructure::database::Error> {
         let mut response = connection.query("SELECT * FROM actor").await?.check()?;
 
         let actors: Vec<ActorRow> = response.take(0)?;
@@ -20,11 +20,11 @@ pub mod create {
         #[error("Actor already exists")]
         AlreadyExists,
         #[error(transparent)]
-        Database(#[from] crate::database::Error),
+        Database(#[from] crate::shared::infrastructure::database::Error),
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         actor: actor::Actor,
     ) -> Result<actor::ActorId, Error> {
         let id = actor::ActorId::new();
@@ -38,7 +38,7 @@ pub mod create {
 
         match result {
             Err(
-                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                crate::shared::infrastructure::database::Error::Api(surrealdb::error::Api::Query { .. })
                 | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
             ) => Err(Error::AlreadyExists),
             Err(e) => Err(e.into()),
@@ -53,9 +53,9 @@ pub mod alias_get {
     use crate::Entity;
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         alias: &str,
-    ) -> Result<Option<actor::ActorId>, crate::database::Error> {
+    ) -> Result<Option<actor::ActorId>, crate::shared::infrastructure::database::Error> {
         let mut response = connection
             .query("SELECT id FROM ONLY actor WHERE alias = $alias LIMIT 1")
             .bind(("alias", alias))

@@ -30,10 +30,10 @@ pub mod snapshopts {
         }
 
         async fn get_debt_actors(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             debt_relation: &'static str,
             group: &'static str,
-        ) -> Result<Vec<DebtActors>, crate::database::Error> {
+        ) -> Result<Vec<DebtActors>, crate::shared::infrastructure::database::Error> {
             let mut response = connection
                 .query(format!("SELECT <-generated<-procedure->{debt_relation}->actor as actors, debt_id FROM event WHERE group = $group AND type = 'incur'"))
                 .bind(("group", group)).await?.check()?;
@@ -42,7 +42,7 @@ pub mod snapshopts {
         }
 
         pub async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
         ) -> Result<SnapshotShow, crate::error::SnapshotReadError> {
             let crate::snapshot_io::SnapshotEntry { snapshot, .. } =
                 crate::snapshot_io::read().await?;
@@ -142,7 +142,7 @@ pub mod snapshopts {
 
 pub mod events {
     pub async fn add(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         event: monee_core::Event,
     ) -> Result<(), crate::error::SnapshotOptError> {
         let mut snapshot_entry = crate::snapshot_io::read().await?;
@@ -165,8 +165,8 @@ pub mod events {
     }
 
     pub async fn list(
-        connection: &crate::database::Connection,
-    ) -> Result<Vec<EventRow>, crate::database::Error> {
+        connection: &crate::shared::infrastructure::database::Connection,
+    ) -> Result<Vec<EventRow>, crate::shared::infrastructure::database::Error> {
         let events: Vec<EventRow> = connection.select("event").await?;
         Ok(events)
     }
@@ -191,11 +191,11 @@ pub mod debts {
         }
 
         async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             debt_relation: &'static str,
             group: &'static str,
             debts: monee_core::MoneyRecord<monee_core::DebtId>,
-        ) -> Result<Vec<DebtItem>, crate::database::Error> {
+        ) -> Result<Vec<DebtItem>, crate::shared::infrastructure::database::Error> {
             let debts_req = connection
                 .query(format!("SELECT id, <-generated<-procedure->{debt_relation}->actor.* as actors, debt_id, currency_id FROM event WHERE group = $group AND type = 'incur'"))
                 .bind(("group", group)).into_future();
@@ -229,17 +229,17 @@ pub mod debts {
         }
 
         pub async fn run_debts(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             debts: monee_core::MoneyRecord<monee_core::DebtId>,
-        ) -> Result<Vec<DebtItem>, crate::database::Error> {
+        ) -> Result<Vec<DebtItem>, crate::shared::infrastructure::database::Error> {
             let response = run(connection, "debts", "debts", debts).await?;
             Ok(response)
         }
 
         pub async fn run_loans(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             debts: monee_core::MoneyRecord<monee_core::DebtId>,
-        ) -> Result<Vec<DebtItem>, crate::database::Error> {
+        ) -> Result<Vec<DebtItem>, crate::shared::infrastructure::database::Error> {
             let response = run(connection, "loans", "loan", debts).await?;
             Ok(response)
         }
@@ -255,11 +255,11 @@ pub mod currencies {
             #[error("Currency code not found")]
             NotFound,
             #[error(transparent)]
-            Database(#[from] crate::database::Error),
+            Database(#[from] crate::shared::infrastructure::database::Error),
         }
 
         pub async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             code: String,
         ) -> Result<monee_core::CurrencyId, Error> {
             #[derive(serde::Deserialize)]
@@ -285,9 +285,9 @@ pub mod currencies {
 
     pub mod check {
         pub async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             id: monee_core::CurrencyId,
-        ) -> Result<bool, crate::database::Error> {
+        ) -> Result<bool, crate::shared::infrastructure::database::Error> {
             #[derive(serde::Deserialize)]
             struct Empty {}
 
@@ -308,11 +308,11 @@ pub mod currencies {
             #[error("Currency already exists")]
             AlreadyExists,
             #[error(transparent)]
-            Database(#[from] crate::database::Error),
+            Database(#[from] crate::shared::infrastructure::database::Error),
         }
 
         pub async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             name: String,
             symbol: String,
             code: String,
@@ -331,7 +331,7 @@ pub mod currencies {
 
             match response {
                 Err(
-                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    crate::shared::infrastructure::database::Error::Api(surrealdb::error::Api::Query { .. })
                     | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
                 ) => Err(Error::AlreadyExists),
                 Err(e) => Err(e.into()),
@@ -343,11 +343,11 @@ pub mod currencies {
     pub mod list {
         use monee_core::currency;
 
-        pub type CurrencyRow = crate::database::Entity<currency::CurrencyId, currency::Currency>;
+        pub type CurrencyRow = crate::shared::infrastructure::database::Entity<currency::CurrencyId, currency::Currency>;
 
         pub async fn run(
-            connection: &crate::database::Connection,
-        ) -> Result<Vec<CurrencyRow>, crate::database::Error> {
+            connection: &crate::shared::infrastructure::database::Connection,
+        ) -> Result<Vec<CurrencyRow>, crate::shared::infrastructure::database::Error> {
             let response: Vec<CurrencyRow> = connection.select("currency").await?;
             Ok(response)
         }
@@ -366,7 +366,7 @@ pub mod wallets {
         }
 
         pub async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
         ) -> Result<Vec<WalletRow>, Error> {
             let snapshot_fut = crate::snapshot_io::read();
             let metadatas = async move {
@@ -412,7 +412,7 @@ pub mod wallets {
         pub use crate::error::SnapshotOptError as Error;
 
         pub async fn run(
-            connection: &crate::database::Connection,
+            connection: &crate::shared::infrastructure::database::Connection,
             currency_id: monee_core::CurrencyId,
             name: Option<String>,
         ) -> Result<WalletId, Error> {
@@ -454,9 +454,9 @@ CREATE $wallet_resource SET name = $name;",
         use crate::Entity;
 
         pub async fn run(
-            db: &crate::database::Connection,
+            db: &crate::shared::infrastructure::database::Connection,
             name: &str,
-        ) -> Result<Option<monee_core::WalletId>, crate::database::Error> {
+        ) -> Result<Option<monee_core::WalletId>, crate::shared::infrastructure::database::Error> {
             let mut response = db
                 .query("SELECT id FROM wallet_metadata WHERE name = $name")
                 .bind(("name", name))
@@ -476,11 +476,11 @@ CREATE $wallet_resource SET name = $name;",
             #[error("Wallet name already exists")]
             AlreadyExists,
             #[error(transparent)]
-            Database(#[from] crate::database::Error),
+            Database(#[from] crate::shared::infrastructure::database::Error),
         }
 
         pub async fn run(
-            db: &crate::database::Connection,
+            db: &crate::shared::infrastructure::database::Connection,
             wallet_id: monee_core::WalletId,
             new_name: &str,
         ) -> Result<(), Error> {
@@ -497,7 +497,7 @@ CREATE $wallet_resource SET name = $name;",
             match result {
                 Ok(_) => Ok(()),
                 Err(
-                    crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                    crate::shared::infrastructure::database::Error::Api(surrealdb::error::Api::Query { .. })
                     | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
                 ) => Err(Error::AlreadyExists),
                 Err(

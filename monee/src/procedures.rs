@@ -20,14 +20,14 @@ mod common {
     use super::{CreateProcedure, ProcedureType};
 
     pub async fn create_procedure(
-        db: &crate::database::Connection,
+        db: &crate::shared::infrastructure::database::Connection,
         crate::snapshot_io::SnapshotEntry { mut snapshot, .. }: crate::snapshot_io::SnapshotEntry,
         procedure: CreateProcedure,
         events: &[monee_core::Event],
         procedure_type: ProcedureType,
         post_fn: impl Fn(
-            surrealdb::method::Query<crate::database::Engine>,
-        ) -> surrealdb::method::Query<crate::database::Engine>,
+            surrealdb::method::Query<crate::shared::infrastructure::database::Engine>,
+        ) -> surrealdb::method::Query<crate::shared::infrastructure::database::Engine>,
     ) -> Result<(), crate::error::SnapshotOptError> {
         for event in events {
             snapshot.apply(event.clone())?;
@@ -62,7 +62,7 @@ pub mod register_balance {
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         procedure: CreateProcedure,
         plan: Plan,
     ) -> Result<(), crate::error::SnapshotOptError> {
@@ -100,7 +100,7 @@ pub mod register_debt {
     }
 
     async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         procedure: CreateProcedure,
         plan: Plan,
         procedure_type: ProcedureType,
@@ -136,7 +136,7 @@ pub mod register_debt {
     }
 
     pub async fn run_debt(
-        db: &crate::database::Connection,
+        db: &crate::shared::infrastructure::database::Connection,
         procedure: CreateProcedure,
         plan: Plan,
     ) -> Result<(), crate::error::SnapshotOptError> {
@@ -152,7 +152,7 @@ pub mod register_debt {
     }
 
     pub async fn run_loan(
-        db: &crate::database::Connection,
+        db: &crate::shared::infrastructure::database::Connection,
         procedure: CreateProcedure,
         plan: Plan,
     ) -> Result<(), crate::error::SnapshotOptError> {
@@ -183,7 +183,7 @@ pub mod move_value {
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         procedure: super::CreateProcedure,
         plan: Plan,
     ) -> Result<(), Error> {
@@ -242,7 +242,7 @@ pub mod buy {
     }
 
     pub async fn run(
-        db: &crate::database::Connection,
+        db: &crate::shared::infrastructure::database::Connection,
         procedure: super::CreateProcedure,
         plan: Plan,
     ) -> Result<(), crate::error::SnapshotOptError> {

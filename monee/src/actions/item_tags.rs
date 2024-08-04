@@ -13,8 +13,8 @@ pub mod view {
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
-    ) -> Result<Vec<(item_tag::ItemTag, Vec<String>)>, crate::database::Error> {
+        connection: &crate::shared::infrastructure::database::Connection,
+    ) -> Result<Vec<(item_tag::ItemTag, Vec<String>)>, crate::shared::infrastructure::database::Error> {
         let mut response = connection
             .query("SELECT ->contains->item_tag.name as children, name FROM item_tag")
             .await?
@@ -33,11 +33,11 @@ pub mod create {
         #[error("Item tag already exists")]
         AlreadyExists,
         #[error(transparent)]
-        Database(#[from] crate::database::Error),
+        Database(#[from] crate::shared::infrastructure::database::Error),
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         item_tag: ItemTag,
     ) -> Result<(), Error> {
         let id = monee_core::item_tag::ItemTagId::new();
@@ -48,8 +48,8 @@ pub mod create {
             .await?
             .check()
             .map_err(|e| match e {
-                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
-                | crate::database::Error::Db(surrealdb::error::Db::IndexExists { .. }) => {
+                crate::shared::infrastructure::database::Error::Api(surrealdb::error::Api::Query { .. })
+                | crate::shared::infrastructure::database::Error::Db(surrealdb::error::Db::IndexExists { .. }) => {
                     Error::AlreadyExists
                 }
                 e => Error::Database(e),
@@ -63,9 +63,9 @@ pub mod get {
     use crate::Entity;
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         name: &str,
-    ) -> Result<Option<monee_core::item_tag::ItemTagId>, crate::database::Error> {
+    ) -> Result<Option<monee_core::item_tag::ItemTagId>, crate::shared::infrastructure::database::Error> {
         let mut response = connection
             .query("SELECT id FROM ONLY item_tag WHERE name = $name LIMIT 1")
             .bind(("name", name))
@@ -87,14 +87,14 @@ pub mod relate {
         #[error("Item tag `{0}` not found")]
         NotFound(monee_core::item_tag::ItemTagId),
         #[error(transparent)]
-        Database(#[from] crate::database::Error),
+        Database(#[from] crate::shared::infrastructure::database::Error),
     }
 
     #[derive(serde::Deserialize, Debug)]
     struct ParentTagId(#[serde(with = "crate::sql_id::string")] monee_core::item_tag::ItemTagId);
 
     async fn check_multi_relation(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         parents: &[ParentTagId],
         child_id: monee_core::item_tag::ItemTagId,
     ) -> Result<(), Error> {
@@ -131,7 +131,7 @@ pub mod relate {
     }
 
     async fn check_relation(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         parent_id: monee_core::item_tag::ItemTagId,
         child_id: monee_core::item_tag::ItemTagId,
     ) -> Result<(), Error> {
@@ -159,7 +159,7 @@ pub mod relate {
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         parent_id: monee_core::item_tag::ItemTagId,
         child_id: monee_core::item_tag::ItemTagId,
     ) -> Result<(), Error> {
@@ -181,7 +181,7 @@ pub mod relate {
         match response {
             Ok(_) => Ok(()),
             Err(
-                crate::database::Error::Api(surrealdb::error::Api::Query { .. })
+                crate::shared::infrastructure::database::Error::Api(surrealdb::error::Api::Query { .. })
                 | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
             ) => Err(Error::AlreadyContains),
             Err(e) => Err(Error::Database(e)),
@@ -195,11 +195,11 @@ pub mod unlink {
         #[error("Item tag `{0}` not found")]
         NotFound(monee_core::item_tag::ItemTagId),
         #[error(transparent)]
-        Database(#[from] crate::database::Error),
+        Database(#[from] crate::shared::infrastructure::database::Error),
     }
 
     pub async fn run(
-        connection: &crate::database::Connection,
+        connection: &crate::shared::infrastructure::database::Connection,
         parent_id: monee_core::item_tag::ItemTagId,
         child_id: monee_core::item_tag::ItemTagId,
     ) -> Result<(), Error> {

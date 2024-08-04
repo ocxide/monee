@@ -54,12 +54,12 @@ pub struct RegisterDebt {
 }
 
 async fn get_debt(
-    db: &crate::database::Connection,
+    db: &crate::shared::infrastructure::database::Connection,
     relation: &'static str,
     procedure: &Procedure,
     currencies: &HashMap<CurrencyId, Rc<Currency>>,
     actors: &HashMap<monee_core::actor::ActorId, Rc<monee_core::actor::Actor>>,
-) -> Result<RegisterDebt, crate::database::Error> {
+) -> Result<RegisterDebt, crate::shared::infrastructure::database::Error> {
     let mut response = db
         .query("SELECT * FROM $procedure->generated->event ORDER BY created_at")
         .bind(("procedure", procedure.id.clone()))
@@ -108,13 +108,13 @@ async fn get_debt(
 }
 
 async fn get_detail(
-    db: &crate::database::Connection,
+    db: &crate::shared::infrastructure::database::Connection,
     entry: &crate::snapshot_io::SnapshotEntry,
     procedure: &Procedure,
     wallets: &HashMap<WalletId, Rc<WalletMetadata>>,
     currencies: &HashMap<CurrencyId, Rc<Currency>>,
     actors: &HashMap<monee_core::actor::ActorId, Rc<monee_core::actor::Actor>>,
-) -> Result<ProcedureDetail, crate::database::Error> {
+) -> Result<ProcedureDetail, crate::shared::infrastructure::database::Error> {
     let detail = match procedure.procedure_type {
         super::ProcedureType::RegisterBalance => {
             let event: Option<monee_core::WalletEvent> = db
@@ -254,7 +254,7 @@ async fn get_detail(
 }
 
 pub async fn run(
-    db: &crate::database::Connection,
+    db: &crate::shared::infrastructure::database::Connection,
     since: Option<crate::date::Datetime>,
     until: Option<crate::date::Datetime>,
 ) -> Result<Vec<ProcedureData>, crate::error::SnapshotReadError> {
