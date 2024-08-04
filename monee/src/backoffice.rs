@@ -1,4 +1,5 @@
 pub mod actors;
+pub mod currencies;
 pub mod wallets;
 
 pub mod events {
