@@ -1,6 +1,7 @@
 pub mod actors;
 pub mod currencies;
 pub mod wallets;
+pub mod item_tags;
 
 pub mod events {
     pub mod application {
