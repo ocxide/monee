@@ -157,6 +157,13 @@ pub mod infrastructure {
         };
 
         pub struct SurrealRepository(Connection);
+        impl SurrealRepository {
+            pub(crate) fn new(
+                clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
+            ) -> Self {
+                Self(clone)
+            }
+        }
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {

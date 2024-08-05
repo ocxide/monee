@@ -124,32 +124,52 @@ pub mod application {
             fn backoffice_events_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::events::domain::repository::Repository> {
-                todo!()
+                Box::new(
+                    crate::backoffice::events::infrastructure::repository::SurrealRepository::new(
+                        self.database.clone(),
+                    ),
+                )
             }
 
             fn backoffice_wallets_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::wallets::domain::repository::Repository> {
-                todo!()
+                Box::new(
+                    crate::backoffice::wallets::infrastructure::repository::SurrealRepository::new(
+                        self.database.clone(),
+                    ),
+                )
             }
 
             fn backoffice_actors_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::actors::domain::repository::Repository> {
-                todo!()
+                Box::new(
+                    crate::backoffice::actors::infrastructure::repository::SurrealRepository::new(
+                        self.database.clone(),
+                    ),
+                )
             }
 
             fn backoffice_currencies_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::currencies::domain::repository::Repository>
             {
-                todo!()
+                Box::new(
+                    crate::backoffice::currencies::infrastructure::repository::SurrealRepository::new(
+                        self.database.clone(),
+                    ),
+                )
             }
 
             fn backoffice_item_tags_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::item_tags::domain::repository::Repository> {
-                todo!()
+                Box::new(
+                    crate::backoffice::item_tags::infrastructure::repository::SurrealRepository::new(
+                        self.database.clone(),
+                    ),
+                )
             }
         }
     }

@@ -1,7 +1,7 @@
 pub mod actors;
 pub mod currencies;
-pub mod wallets;
 pub mod item_tags;
+pub mod wallets;
 
 pub mod events {
     pub mod application {
@@ -95,6 +95,14 @@ pub mod events {
             use crate::backoffice::events::domain::{event::Buy, repository::Repository};
 
             pub struct SurrealRepository(crate::shared::infrastructure::database::Connection);
+
+            impl SurrealRepository {
+                pub fn new(
+                    connection: crate::shared::infrastructure::database::Connection,
+                ) -> Self {
+                    Self(connection)
+                }
+            }
 
             #[async_trait::async_trait]
             impl Repository for SurrealRepository {
