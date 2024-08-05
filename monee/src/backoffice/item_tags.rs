@@ -113,6 +113,38 @@ pub mod application {
             Unspecified(#[from] UnspecifiedError),
         }
     }
+
+    pub mod unlink {
+        use cream::from_context::FromContext;
+        use monee_core::item_tag::ItemTagId;
+
+        use crate::{
+            backoffice::item_tags::domain::repository::Repository,
+            shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
+        };
+
+        pub struct Unlink {
+            repository: Box<dyn Repository>,
+        }
+
+        impl<C: AppContext> FromContext<C> for Unlink {
+            fn from_context(context: &C) -> Self {
+                Self {
+                    repository: context.backoffice_item_tags_repository(),
+                }
+            }
+        }
+
+        impl Unlink {
+            pub async fn run(
+                &self,
+                parent_id: ItemTagId,
+                child_id: ItemTagId,
+            ) -> Result<(), UnspecifiedError> {
+                self.repository.unlink(parent_id, child_id).await
+            }
+        }
+    }
 }
 
 pub mod domain {
@@ -124,16 +156,24 @@ pub mod domain {
         #[async_trait::async_trait]
         pub trait Repository {
             async fn save(&self, id: ItemTagId, tag: ItemTag) -> Result<(), UniqueSaveError>;
+
             async fn check_relation(
                 &self,
                 target_tag: ItemTagId,
                 maybe_acestor: ItemTagId,
             ) -> Result<TagsRelation, UnspecifiedError>;
+
             async fn link(
                 &self,
                 parent_id: ItemTagId,
                 child_id: ItemTagId,
             ) -> Result<(), UniqueSaveError>;
+
+            async fn unlink(
+                &self,
+                parent_id: ItemTagId,
+                child_id: ItemTagId,
+            ) -> Result<(), UnspecifiedError>;
         }
 
         pub enum TagsRelation {
@@ -243,6 +283,18 @@ pub mod infrastructure {
                     ) => Err(UniqueSaveError::AlreadyExists),
                     Err(e) => Err(UniqueSaveError::Unspecified(e.into())),
                 }
+            }
+
+            async fn unlink(
+                &self,
+                parent_id: ItemTagId,
+                child_id: ItemTagId,
+            ) -> Result<(), UnspecifiedError> {
+                self.0.query("DELETE type::thing('item_tag', $parent_id)->contains WHERE out=type::thing('item_tag', $child_id)")
+                    .bind(("parent_id", parent_id)).bind(("child_id", child_id))
+                    .await?.check()?;
+
+                Ok(())
             }
         }
 
