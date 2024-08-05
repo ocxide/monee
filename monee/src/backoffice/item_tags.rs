@@ -4,8 +4,11 @@ pub mod application {
         use monee_core::item_tag::{ItemTag, ItemTagId};
 
         use crate::{
-            backoffice::item_tags::domain::repository::{Repository, SaveError},
-            shared::domain::context::AppContext,
+            backoffice::item_tags::domain::repository::Repository,
+            shared::{
+                domain::context::AppContext,
+                infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+            },
         };
 
         pub struct CreateOne {
@@ -21,9 +24,26 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(&self, tag: ItemTag) -> Result<(), SaveError> {
+            pub async fn run(&self, tag: ItemTag) -> Result<(), Error> {
                 let id = ItemTagId::new();
-                self.repository.save(id, tag).await
+                self.repository.save(id, tag).await.map_err(Error::from)
+            }
+        }
+
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error("Item tag already exists")]
+            AlreadyExists,
+            #[error(transparent)]
+            Unspecified(#[from] UnspecifiedError),
+        }
+
+        impl From<UniqueSaveError> for Error {
+            fn from(err: UniqueSaveError) -> Self {
+                match err {
+                    UniqueSaveError::AlreadyExists => Self::AlreadyExists,
+                    UniqueSaveError::Unspecified(err) => Self::Unspecified(err),
+                }
             }
         }
     }
@@ -33,8 +53,11 @@ pub mod application {
         use monee_core::item_tag::ItemTagId;
 
         use crate::{
-            backoffice::item_tags::domain::repository::Repository,
-            shared::{domain::context::AppContext, errors::InfrastructureError},
+            backoffice::item_tags::domain::repository::{Repository, TagsRelation},
+            shared::{
+                domain::context::AppContext,
+                infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+            },
         };
 
         pub struct Relate {
@@ -59,16 +82,20 @@ pub mod application {
                     return Err(Error::CyclicRelation);
                 }
 
+                // Check if child_id is already parent of parent_id
                 match self.repository.check_relation(parent_id, child_id).await? {
-                    None => return Err(Error::NotFound(parent_id)),
-                    Some(true) => return Err(Error::CyclicRelation),
-                    _ => {}
+                    TagsRelation::TargetNotFound => return Err(Error::NotFound(parent_id)),
+                    TagsRelation::Ancestor => return Err(Error::CyclicRelation),
+                    TagsRelation::NotRelated => {}
                 };
 
-                let linked = self.repository.link(parent_id, child_id).await?;
-                if !linked {
-                    return Err(Error::AlreadyContains);
-                }
+                self.repository
+                    .link(parent_id, child_id)
+                    .await
+                    .map_err(|e| match e {
+                        UniqueSaveError::Unspecified(e) => Error::Unspecified(e),
+                        UniqueSaveError::AlreadyExists => Error::AlreadyContains,
+                    })?;
 
                 Ok(())
             }
@@ -83,7 +110,7 @@ pub mod application {
             #[error("Item tag `{0}` not found")]
             NotFound(monee_core::item_tag::ItemTagId),
             #[error(transparent)]
-            Infrastructure(#[from] InfrastructureError),
+            Unspecified(#[from] UnspecifiedError),
         }
     }
 }
@@ -92,29 +119,27 @@ pub mod domain {
     pub mod repository {
         use monee_core::item_tag::{ItemTag, ItemTagId};
 
-        use crate::shared::errors::InfrastructureError;
+        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn save(&self, id: ItemTagId, tag: ItemTag) -> Result<(), SaveError>;
+            async fn save(&self, id: ItemTagId, tag: ItemTag) -> Result<(), UniqueSaveError>;
             async fn check_relation(
                 &self,
-                parent_id: ItemTagId,
-                child_id: ItemTagId,
-            ) -> Result<Option<bool>, InfrastructureError>;
+                target_tag: ItemTagId,
+                maybe_acestor: ItemTagId,
+            ) -> Result<TagsRelation, UnspecifiedError>;
             async fn link(
                 &self,
                 parent_id: ItemTagId,
                 child_id: ItemTagId,
-            ) -> Result<bool, InfrastructureError>;
+            ) -> Result<(), UniqueSaveError>;
         }
 
-        #[derive(thiserror::Error, Debug)]
-        pub enum SaveError {
-            #[error("Item tag already exists")]
-            AlreadyExists,
-            #[error(transparent)]
-            Infrastructure(#[from] InfrastructureError),
+        pub enum TagsRelation {
+            Ancestor,
+            NotRelated,
+            TargetNotFound,
         }
     }
 }
@@ -124,21 +149,24 @@ pub mod infrastructure {
         use monee_core::item_tag::{ItemTag, ItemTagId};
 
         use crate::{
-            backoffice::item_tags::domain::repository::{Repository, SaveError},
-            shared::{errors::InfrastructureError, infrastructure::database::Connection},
+            backoffice::item_tags::domain::repository::{Repository, TagsRelation},
+            shared::infrastructure::{
+                database::Connection,
+                errors::{UniqueSaveError, UnspecifiedError},
+            },
         };
 
         pub struct SurrealRepository(Connection);
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
-            async fn save(&self, id: ItemTagId, item_tag: ItemTag) -> Result<(), SaveError> {
+            async fn save(&self, id: ItemTagId, item_tag: ItemTag) -> Result<(), UniqueSaveError> {
                 self.0
                     .query("CREATE type::thing('item_tag', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", item_tag))
                     .await
-                    .map_err(InfrastructureError::new)?
+                    .map_err(UnspecifiedError::from)?
                     .check()
                     .map_err(|e| match e {
                         crate::shared::infrastructure::database::Error::Api(
@@ -146,8 +174,8 @@ pub mod infrastructure {
                         )
                         | crate::shared::infrastructure::database::Error::Db(
                             surrealdb::error::Db::IndexExists { .. },
-                        ) => SaveError::AlreadyExists,
-                        e => SaveError::Infrastructure(e.into()),
+                        ) => UniqueSaveError::AlreadyExists,
+                        e => UniqueSaveError::Unspecified(e.into()),
                     })?;
 
                 Ok(())
@@ -155,38 +183,38 @@ pub mod infrastructure {
 
             async fn check_relation(
                 &self,
-                parent_id: ItemTagId,
-                child_id: ItemTagId,
-            ) -> Result<Option<bool>, InfrastructureError> {
+                target_tag: ItemTagId,
+                maybe_ancestor: ItemTagId,
+            ) -> Result<TagsRelation, UnspecifiedError> {
                 let mut response = self.0
                     .query(
                         "SELECT <-contains<-item_tag as parents FROM ONLY type::thing('item_tag', $parent_id)",
                     )
-                    .bind(("parent_id", parent_id))
+                    .bind(("parent_id", target_tag))
                     .await?
                     .check()?;
 
                 let parents: Option<Vec<ParentTagId>> = response.take("parents")?;
 
                 let parents = match parents.as_deref() {
-                    Some([]) => return Ok(Some(false)),
+                    Some([]) => return Ok(TagsRelation::NotRelated),
                     Some(parents) => parents,
-                    None => return Ok(None),
+                    None => return Ok(TagsRelation::TargetNotFound),
                 };
 
-                if parents.iter().any(|p| p.0 == child_id) {
-                    return Ok(Some(true));
+                if parents.iter().any(|p| p.0 == maybe_ancestor) {
+                    return Ok(TagsRelation::Ancestor);
                 }
 
-                let has_relation = check_multi_relation(&self.0, parents, child_id).await?;
-                Ok(Some(has_relation))
+                let relation = check_multi_relation(&self.0, parents, maybe_ancestor).await?;
+                Ok(relation)
             }
 
             async fn link(
                 &self,
                 parent_id: ItemTagId,
                 child_id: ItemTagId,
-            ) -> Result<bool, InfrastructureError> {
+            ) -> Result<(), UniqueSaveError> {
                 let response = self
                     .0
                     .query("LET $parent_thing = type::thing('item_tag', $parent_id)")
@@ -194,18 +222,19 @@ pub mod infrastructure {
                     .query("LET $child_thing = type::thing('item_tag', $child_id)")
                     .bind(("child_id", child_id))
                     .query("RELATE $parent_thing->contains->$child_thing")
-                    .await?
+                    .await
+                    .map_err(UnspecifiedError::from)?
                     .check();
 
                 match response {
-                    Ok(_) => Ok(true),
+                    Ok(_) => Ok(()),
                     Err(
                         crate::shared::infrastructure::database::Error::Api(
                             surrealdb::error::Api::Query { .. },
                         )
                         | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                    ) => Ok(false),
-                    Err(e) => Err(InfrastructureError::new(e)),
+                    ) => Err(UniqueSaveError::AlreadyExists),
+                    Err(e) => Err(UniqueSaveError::Unspecified(e.into())),
                 }
             }
         }
@@ -219,7 +248,7 @@ pub mod infrastructure {
             connection: &crate::shared::infrastructure::database::Connection,
             parents: &[ParentTagId],
             child_id: monee_core::item_tag::ItemTagId,
-        ) -> Result<bool, InfrastructureError> {
+        ) -> Result<TagsRelation, UnspecifiedError> {
             let parents = parents
                 .iter()
                 .map(|p| {
@@ -242,11 +271,11 @@ pub mod infrastructure {
                 .collect();
 
             if grand_parents.is_empty() {
-                return Ok(false);
+                return Ok(TagsRelation::NotRelated);
             }
 
             if grand_parents.iter().any(|p| p.0 == child_id) {
-                return Ok(true);
+                return Ok(TagsRelation::Ancestor);
             }
 
             Box::pin(check_multi_relation(connection, &grand_parents, child_id)).await

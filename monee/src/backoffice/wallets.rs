@@ -4,11 +4,11 @@ pub mod application {
         use monee_core::WalletId;
 
         use crate::{
-            backoffice::wallets::domain::{
-                repository::{Repository, SaveError},
-                wallet::Wallet,
+            backoffice::wallets::domain::{repository::Repository, wallet::Wallet},
+            shared::{
+                domain::context::AppContext,
+                infrastructure::errors::{UniqueSaveError, UnspecifiedError},
             },
-            shared::domain::context::AppContext,
         };
 
         pub struct CreateOne {
@@ -24,10 +24,25 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(&self, wallet: Wallet) -> Result<(), SaveError> {
-                self.repository.save(WalletId::new(), wallet).await?;
+            pub async fn run(&self, wallet: Wallet) -> Result<(), Error> {
+                self.repository
+                    .save(WalletId::new(), wallet)
+                    .await
+                    .map_err(|e| match e {
+                        UniqueSaveError::Unspecified(e) => Error::Unspecified(e),
+                        UniqueSaveError::AlreadyExists => Error::AlreadyExists,
+                    })?;
+
                 Ok(())
             }
+        }
+
+        #[derive(thiserror::Error, Debug)]
+        pub enum Error {
+            #[error(transparent)]
+            Unspecified(#[from] UnspecifiedError),
+            #[error("Wallet name already exists")]
+            AlreadyExists,
         }
     }
 
@@ -73,27 +88,19 @@ pub mod domain {
     pub mod repository {
         use monee_core::WalletId;
 
-        use crate::shared::errors::InfrastructureError;
+        use crate::shared::{errors::InfrastructureError, infrastructure::errors::UniqueSaveError};
 
         use super::{wallet::Wallet, wallet_name::WalletName};
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), SaveError>;
+            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), UniqueSaveError>;
             async fn update(
                 &self,
                 id: WalletId,
                 name: Option<WalletName>,
                 description: String,
             ) -> Result<(), UpdateError>;
-        }
-
-        #[derive(thiserror::Error, Debug)]
-        pub enum SaveError {
-            #[error(transparent)]
-            Infrastructure(#[from] InfrastructureError),
-            #[error("Wallet name already exists")]
-            AlreadyExists,
         }
 
         #[derive(thiserror::Error, Debug)]
@@ -144,24 +151,27 @@ pub mod infrastructure {
 
         use crate::{
             backoffice::wallets::domain::{
-                repository::{Repository, SaveError, UpdateError},
+                repository::{Repository, UpdateError},
                 wallet::Wallet,
                 wallet_name::WalletName,
             },
-            shared::infrastructure::database::Connection,
+            shared::infrastructure::{
+                database::Connection,
+                errors::{UniqueSaveError, UnspecifiedError},
+            },
         };
 
         pub struct SurrealRepository(Connection);
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
-            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), SaveError> {
+            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), UniqueSaveError> {
                 let result = self.0
                     .query("INSERT INTO wallet (id, currency_id, name) VALUES ($id, $currency_id, $name)")
                     .bind(("id", id))
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
-                    .await.map_err(|e| SaveError::Infrastructure(e.into()))?.check();
+                    .await.map_err(UnspecifiedError::new)?.check();
 
                 match result {
                     Ok(_) => Ok(()),
@@ -170,8 +180,8 @@ pub mod infrastructure {
                             surrealdb::error::Api::Query { .. },
                         )
                         | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                    ) => Err(SaveError::AlreadyExists),
-                    Err(e) => Err(SaveError::Infrastructure(e.into())),
+                    ) => Err(UniqueSaveError::AlreadyExists),
+                    Err(e) => Err(UniqueSaveError::Unspecified(e.into())),
                 }
             }
 
@@ -189,7 +199,10 @@ pub mod infrastructure {
                     .await.map_err(|e| UpdateError::Infrastructure(e.into()))?.check();
 
                 match result {
-                    Ok(mut response) => match response.take(0).map_err(|e| UpdateError::Infrastructure(e.into()))? {
+                    Ok(mut response) => match response
+                        .take(0)
+                        .map_err(|e| UpdateError::Infrastructure(e.into()))?
+                    {
                         Some(()) => Ok(()),
                         None => Err(UpdateError::NotFound),
                     },
