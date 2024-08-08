@@ -1,6 +1,6 @@
 pub mod application {
     pub mod create_one {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::WalletId;
 
         use crate::{
@@ -11,16 +11,10 @@ pub mod application {
             },
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for CreateOne {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_wallets_repository(),
-                }
-            }
         }
 
         impl CreateOne {
@@ -47,7 +41,7 @@ pub mod application {
     }
 
     pub mod update_one {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::WalletId;
 
         use crate::{
@@ -58,16 +52,10 @@ pub mod application {
             shared::domain::context::AppContext,
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct UpdateOne {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for UpdateOne {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_wallets_repository(),
-                }
-            }
         }
 
         impl UpdateOne {
@@ -86,9 +74,10 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
+        use cream::context::FromContext;
         use monee_core::WalletId;
 
-        use crate::shared::{errors::InfrastructureError, infrastructure::errors::UniqueSaveError};
+        use crate::shared::{domain::context::AppContext, errors::InfrastructureError, infrastructure::errors::UniqueSaveError};
 
         use super::{wallet::Wallet, wallet_name::WalletName};
 
@@ -101,6 +90,12 @@ pub mod domain {
                 name: Option<WalletName>,
                 description: String,
             ) -> Result<(), UpdateError>;
+        }
+
+        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
+            fn from_context(context: &C) -> Self {
+                context.backoffice_wallets_repository()
+            }
         }
 
         #[derive(thiserror::Error, Debug)]

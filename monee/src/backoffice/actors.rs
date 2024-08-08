@@ -1,20 +1,30 @@
 pub mod domain {
     pub mod repository {
+        use cream::context::FromContext;
         use monee_core::actor::{Actor, ActorId};
 
-        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
+        use crate::shared::{
+            domain::context::AppContext,
+            infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+        };
 
         #[async_trait::async_trait]
         pub trait Repository {
             async fn save(&self, id: ActorId, actor: Actor) -> Result<(), UniqueSaveError>;
             async fn alias_resolve(&self, name: &str) -> Result<Option<ActorId>, UnspecifiedError>;
         }
+
+        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
+            fn from_context(context: &C) -> Self {
+                context.backoffice_actors_repository()
+            }
+        }
     }
 }
 
 pub mod application {
     pub mod create_one {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::actor::{Actor, ActorId};
 
         use crate::{
@@ -25,16 +35,10 @@ pub mod application {
             },
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for CreateOne {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_actors_repository(),
-                }
-            }
         }
 
         impl CreateOne {
@@ -59,7 +63,7 @@ pub mod application {
     }
 
     pub mod alias_resolve {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::actor::ActorId;
 
         use crate::{
@@ -67,16 +71,10 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct AliasResolve {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for AliasResolve {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_actors_repository(),
-                }
-            }
         }
 
         impl AliasResolve {
@@ -101,7 +99,9 @@ pub mod infrastructure {
 
         pub struct SurrealRepository(Connection);
         impl SurrealRepository {
-            pub(crate) fn new(clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>) -> Self {
+            pub(crate) fn new(
+                clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
+            ) -> Self {
                 Self(clone)
             }
         }

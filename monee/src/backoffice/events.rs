@@ -1,27 +1,21 @@
 pub mod application {
     pub mod add {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
 
         use crate::{
             backoffice::events::domain::{event::Event, repository::Repository},
             shared::domain::context::AppContext,
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct Add {
             repository: Box<dyn Repository>,
         }
 
-        impl<C: AppContext> FromContext<C> for Add {
-            fn from_context(ctx: &C) -> Self {
-                Self {
-                    repository: ctx.backoffice_events_repository(),
-                }
-            }
-        }
-
         impl Add {
             pub async fn run(&self, event: Event) -> Result<(), Error> {
-
+                todo!()
             }
         }
 
@@ -31,13 +25,21 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
-        use crate::shared::infrastructure::errors::UnspecifiedError;
+        use cream::context::FromContext;
+
+        use crate::shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError};
 
         use super::event::Event;
 
         #[async_trait::async_trait]
         pub trait Repository {
             async fn add(&self, event: Event) -> Result<(), UnspecifiedError>;
+        }
+
+        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
+            fn from_context(context: &C) -> Self {
+                context.backoffice_events_repository()
+            }
         }
     }
 

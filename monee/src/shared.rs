@@ -74,7 +74,7 @@ pub mod errors {
 
 pub mod application {
     pub mod cannonical_context {
-        use cream::{context::Context, cream_context::CreamContext};
+        use cream::context::{ContextExtend, CreamContext};
 
         use crate::shared::{domain::context::AppContext, errors::InfrastructureError};
 
@@ -96,10 +96,10 @@ pub mod application {
                 .await
                 .map_err(InfrastructureError::new)?;
 
-            let router = cream::event_router::EventRouter::default();
+            let router = cream::events::router::Router::default();
             // Add event handlers
 
-            let (port, socket) = cream::event_bus::create_channel();
+            let (port, socket) = cream::router_bus::create_channel();
 
             let ctx = CannocalContext {
                 cream_context: CreamContext::new(port),
@@ -109,7 +109,7 @@ pub mod application {
             let listen = {
                 let ctx = ctx.clone();
                 async move {
-                    cream::event_bus::EventBus::new(socket, ctx, router)
+                    cream::router_bus::RouterBus::new(socket, ctx, router)
                         .listen()
                         .await;
                 }
@@ -117,8 +117,6 @@ pub mod application {
 
             Ok((ctx, listen))
         }
-
-        impl Context for CannocalContext {}
 
         impl AppContext for CannocalContext {
             fn backoffice_events_repository(
@@ -172,14 +170,20 @@ pub mod application {
                 )
             }
         }
+
+        impl ContextExtend<CreamContext> for CannocalContext {
+            fn provide_context(&self) -> &CreamContext {
+                todo!()
+            }
+        }
     }
 }
 
 pub mod domain {
     pub mod context {
-        use cream::context::Context;
+        use cream::context::{ContextExtend, CreamContext};
 
-        pub trait AppContext: Context {
+        pub trait AppContext: ContextExtend<CreamContext> {
             fn backoffice_events_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::events::domain::repository::Repository>;

@@ -1,8 +1,12 @@
 pub mod domain {
     pub mod repository {
+        use cream::context::FromContext;
         use monee_core::{currency::Currency, CurrencyId};
 
-        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
+        use crate::shared::{
+            domain::context::AppContext,
+            infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+        };
 
         #[async_trait::async_trait]
         pub trait Repository {
@@ -13,12 +17,18 @@ pub mod domain {
                 code: &str,
             ) -> Result<Option<CurrencyId>, UnspecifiedError>;
         }
+
+        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
+            fn from_context(context: &C) -> Self {
+                context.backoffice_currencies_repository()
+            }
+        }
     }
 }
 
 pub mod application {
     pub mod save_one {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::{currency::Currency, CurrencyId};
 
         use crate::{
@@ -29,16 +39,10 @@ pub mod application {
             },
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct SaveOne {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for SaveOne {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_currencies_repository(),
-                }
-            }
         }
 
         impl SaveOne {
@@ -70,7 +74,7 @@ pub mod application {
     }
 
     pub mod code_resolve {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::CurrencyId;
 
         use crate::{
@@ -78,16 +82,10 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct CodeResolve {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for CodeResolve {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_currencies_repository(),
-                }
-            }
         }
 
         impl CodeResolve {
@@ -112,7 +110,9 @@ pub mod infrastructure {
 
         pub struct SurrealRepository(Connection);
         impl SurrealRepository {
-            pub(crate) fn new(clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>) -> Self {
+            pub(crate) fn new(
+                clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
+            ) -> Self {
                 Self(clone)
             }
         }

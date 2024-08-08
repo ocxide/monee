@@ -1,6 +1,6 @@
 pub mod application {
     pub mod create_one {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::item_tag::{ItemTag, ItemTagId};
 
         use crate::{
@@ -11,16 +11,10 @@ pub mod application {
             },
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for CreateOne {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_item_tags_repository(),
-                }
-            }
         }
 
         impl CreateOne {
@@ -49,7 +43,7 @@ pub mod application {
     }
 
     pub mod relate {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::item_tag::ItemTagId;
 
         use crate::{
@@ -60,16 +54,10 @@ pub mod application {
             },
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct Relate {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for Relate {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_item_tags_repository(),
-                }
-            }
         }
 
         impl Relate {
@@ -115,7 +103,7 @@ pub mod application {
     }
 
     pub mod unlink {
-        use cream::from_context::FromContext;
+        use cream::context::FromContext;
         use monee_core::item_tag::ItemTagId;
 
         use crate::{
@@ -123,16 +111,10 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
         };
 
+        #[derive(FromContext)]
+        #[from_context(C: AppContext)]
         pub struct Unlink {
             repository: Box<dyn Repository>,
-        }
-
-        impl<C: AppContext> FromContext<C> for Unlink {
-            fn from_context(context: &C) -> Self {
-                Self {
-                    repository: context.backoffice_item_tags_repository(),
-                }
-            }
         }
 
         impl Unlink {
@@ -149,9 +131,16 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
+        use cream::context::FromContext;
         use monee_core::item_tag::{ItemTag, ItemTagId};
 
-        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
+        use crate::shared::{domain::context::AppContext, infrastructure::errors::{UniqueSaveError, UnspecifiedError}};
+
+        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
+            fn from_context(context: &C) -> Self {
+                context.backoffice_item_tags_repository()
+            }
+        }
 
         #[async_trait::async_trait]
         pub trait Repository {
