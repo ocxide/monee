@@ -143,7 +143,7 @@ pub mod snapshopts {
 pub mod events {
     pub async fn add(
         connection: &crate::shared::infrastructure::database::Connection,
-        event: monee_core::Event,
+        event: monee_core::Operation,
     ) -> Result<(), crate::error::SnapshotOptError> {
         let mut snapshot_entry = crate::snapshot_io::read().await?;
         snapshot_entry.snapshot.apply(event.clone())?;
@@ -160,7 +160,7 @@ pub mod events {
     #[derive(serde::Deserialize)]
     pub struct EventRow {
         #[serde(flatten)]
-        pub event: monee_core::Event,
+        pub event: monee_core::Operation,
         pub created_at: crate::date::Datetime,
     }
 
@@ -419,7 +419,7 @@ pub mod wallets {
             let wallet_id = WalletId::new();
 
             let mut snapshot_entry = crate::snapshot_io::read().await?;
-            let event = monee_core::Event::Wallet(monee_core::WalletEvent::Create {
+            let event = monee_core::Operation::Wallet(monee_core::WalletOperation::Create {
                 wallet_id,
                 currency: currency_id,
             });

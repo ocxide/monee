@@ -25,7 +25,7 @@ pub mod build {
     pub struct EventRow {
         pub created_at: chrono::DateTime<chrono::Utc>,
         #[serde(flatten)]
-        pub event: monee_core::Event,
+        pub event: monee_core::Operation,
     }
 
     pub(crate) async fn build(

@@ -169,11 +169,21 @@ pub mod application {
                     ),
                 )
             }
+
+            fn backoffice_shared_snapshot_repository(
+                &self,
+            ) -> Box<dyn crate::backoffice::shared::domain::snapshot_repository::SnapshotRepository> {
+                Box::new(
+                    crate::backoffice::shared::infrastructure::snapshot_repository::SnapshotSurrealRepository::new(
+                        self.database.clone(),
+                    ),
+                )
+            }
         }
 
         impl ContextExtend<CreamContext> for CannocalContext {
             fn provide_context(&self) -> &CreamContext {
-                todo!()
+                &self.cream_context
             }
         }
     }
@@ -203,6 +213,10 @@ pub mod domain {
             fn backoffice_item_tags_repository(
                 &self,
             ) -> Box<dyn crate::backoffice::item_tags::domain::repository::Repository>;
+
+            fn backoffice_shared_snapshot_repository(
+                &self,
+            ) -> Box<dyn crate::backoffice::shared::domain::snapshot_repository::SnapshotRepository>;
         }
     }
 }

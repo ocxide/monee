@@ -291,15 +291,15 @@ macro_rules! sub_action {
     };
 }
 
-sub_action!(WalletEvent -> wallet_id: WalletId; { Create, Delete, Deposit, Deduct });
-sub_action!(DebtEvent -> debt_id: DebtId; { Incur, Forget, Accumulate, Amortize });
+sub_action!(WalletOperation -> wallet_id: WalletId; { Create, Delete, Deposit, Deduct });
+sub_action!(DebtOperation -> debt_id: DebtId; { Incur, Forget, Accumulate, Amortize });
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "group", rename_all = "snake_case")]
-pub enum Event {
-    Wallet(WalletEvent),
-    Loan(DebtEvent),
-    Debt(DebtEvent),
+pub enum Operation {
+    Wallet(WalletOperation),
+    Loan(DebtOperation),
+    Debt(DebtOperation),
 }
 
 #[derive(Debug)]
@@ -343,34 +343,34 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl Snapshot {
-    pub fn apply(&mut self, event: Event) -> Result<(), Error> {
-        fn extract_action(event: DebtEvent) -> (DebtId, money_record::Action) {
+    pub fn apply(&mut self, event: Operation) -> Result<(), Error> {
+        fn extract_action(event: DebtOperation) -> (DebtId, money_record::Action) {
             match event {
-                DebtEvent::Incur { debt_id, currency } => {
+                DebtOperation::Incur { debt_id, currency } => {
                     (debt_id, money_record::Action::Create(currency))
                 }
-                DebtEvent::Forget { debt_id } => (debt_id, money_record::Action::Remove),
-                DebtEvent::Accumulate { debt_id, amount } => {
+                DebtOperation::Forget { debt_id } => (debt_id, money_record::Action::Remove),
+                DebtOperation::Accumulate { debt_id, amount } => {
                     (debt_id, money_record::Action::Add(amount))
                 }
-                DebtEvent::Amortize { debt_id, amount } => {
+                DebtOperation::Amortize { debt_id, amount } => {
                     (debt_id, money_record::Action::Sub(amount))
                 }
             }
         }
 
         match event {
-            Event::Wallet(event) => {
+            Operation::Wallet(event) => {
                 let (wallet_id, action) = match event {
-                    WalletEvent::Create {
+                    WalletOperation::Create {
                         wallet_id,
                         currency,
                     } => (wallet_id, money_record::Action::Create(currency)),
-                    WalletEvent::Delete { wallet_id } => (wallet_id, money_record::Action::Remove),
-                    WalletEvent::Deposit { wallet_id, amount } => {
+                    WalletOperation::Delete { wallet_id } => (wallet_id, money_record::Action::Remove),
+                    WalletOperation::Deposit { wallet_id, amount } => {
                         (wallet_id, money_record::Action::Add(amount))
                     }
-                    WalletEvent::Deduct { wallet_id, amount } => {
+                    WalletOperation::Deduct { wallet_id, amount } => {
                         (wallet_id, money_record::Action::Sub(amount))
                     }
                 };
@@ -378,11 +378,11 @@ impl Snapshot {
                 self.wallets.apply(wallet_id, action).map_err(Error::Wallet)
             }
 
-            Event::Debt(event) => {
+            Operation::Debt(event) => {
                 let (debt_id, action) = extract_action(event);
                 self.debts.apply(debt_id, action).map_err(Error::Debt)
             }
-            Event::Loan(event) => {
+            Operation::Loan(event) => {
                 let (debt_id, action) = extract_action(event);
                 self.loans
                     .apply(debt_id, action)

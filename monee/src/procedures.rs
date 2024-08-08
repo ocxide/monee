@@ -23,7 +23,7 @@ mod common {
         db: &crate::shared::infrastructure::database::Connection,
         crate::snapshot_io::SnapshotEntry { mut snapshot, .. }: crate::snapshot_io::SnapshotEntry,
         procedure: CreateProcedure,
-        events: &[monee_core::Event],
+        events: &[monee_core::Operation],
         procedure_type: ProcedureType,
         post_fn: impl Fn(
             surrealdb::method::Query<crate::shared::infrastructure::database::Engine>,
@@ -66,8 +66,8 @@ pub mod register_balance {
         procedure: CreateProcedure,
         plan: Plan,
     ) -> Result<(), crate::error::SnapshotOptError> {
-        let events = [monee_core::Event::Wallet(
-            monee_core::WalletEvent::Deposit {
+        let events = [monee_core::Operation::Wallet(
+            monee_core::WalletOperation::Deposit {
                 wallet_id: plan.wallet_id,
                 amount: plan.amount,
             },
@@ -104,17 +104,17 @@ pub mod register_debt {
         procedure: CreateProcedure,
         plan: Plan,
         procedure_type: ProcedureType,
-        build_event: fn(monee_core::DebtEvent) -> monee_core::Event,
+        build_event: fn(monee_core::DebtOperation) -> monee_core::Operation,
         relation: &str,
     ) -> Result<(), crate::error::SnapshotOptError> {
         let debt_id = monee_core::DebtId::new();
 
         let events = [
-            (build_event)(monee_core::DebtEvent::Incur {
+            (build_event)(monee_core::DebtOperation::Incur {
                 currency: plan.currency,
                 debt_id,
             }),
-            (build_event)(monee_core::DebtEvent::Accumulate {
+            (build_event)(monee_core::DebtOperation::Accumulate {
                 debt_id,
                 amount: plan.amount,
             }),
@@ -145,7 +145,7 @@ pub mod register_debt {
             procedure,
             plan,
             ProcedureType::RegisterDebt,
-            |event| monee_core::Event::Debt(event),
+            |event| monee_core::Operation::Debt(event),
             "debts",
         )
         .await
@@ -161,7 +161,7 @@ pub mod register_debt {
             procedure,
             plan,
             ProcedureType::RegisterLoan,
-            |event| monee_core::Event::Loan(event),
+            |event| monee_core::Operation::Loan(event),
             "loans",
         )
         .await
@@ -206,11 +206,11 @@ pub mod move_value {
         }
 
         let events = [
-            monee_core::Event::Wallet(monee_core::WalletEvent::Deduct {
+            monee_core::Operation::Wallet(monee_core::WalletOperation::Deduct {
                 wallet_id: plan.from,
                 amount: plan.amount,
             }),
-            monee_core::Event::Wallet(monee_core::WalletEvent::Deposit {
+            monee_core::Operation::Wallet(monee_core::WalletOperation::Deposit {
                 wallet_id: plan.to,
                 amount: plan.amount,
             }),
@@ -248,7 +248,7 @@ pub mod buy {
     ) -> Result<(), crate::error::SnapshotOptError> {
         let entry = crate::snapshot_io::read().await?;
 
-        let events = [monee_core::Event::Wallet(monee_core::WalletEvent::Deduct {
+        let events = [monee_core::Operation::Wallet(monee_core::WalletOperation::Deduct {
             wallet_id: plan.wallet_id,
             amount: plan.amount,
         })];

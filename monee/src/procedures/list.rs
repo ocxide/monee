@@ -74,16 +74,16 @@ async fn get_debt(
         payment_promise: Option<crate::date::Datetime>,
     }
 
-    let events: Vec<monee_core::DebtEvent> = response.take(0)?;
+    let events: Vec<monee_core::DebtOperation> = response.take(0)?;
     let debt: Option<DebtRelation> = response.take(1)?;
 
     let detail = match (
-        <[monee_core::DebtEvent; 2] as TryFrom<_>>::try_from(events),
+        <[monee_core::DebtOperation; 2] as TryFrom<_>>::try_from(events),
         debt,
     ) {
         (
             Ok(
-                [monee_core::DebtEvent::Incur { debt_id, currency }, monee_core::DebtEvent::Accumulate { debt_id: _, amount }],
+                [monee_core::DebtOperation::Incur { debt_id, currency }, monee_core::DebtOperation::Accumulate { debt_id: _, amount }],
             ),
             Some(debt),
         ) => {
@@ -117,7 +117,7 @@ async fn get_detail(
 ) -> Result<ProcedureDetail, crate::shared::infrastructure::database::Error> {
     let detail = match procedure.procedure_type {
         super::ProcedureType::RegisterBalance => {
-            let event: Option<monee_core::WalletEvent> = db
+            let event: Option<monee_core::WalletOperation> = db
                 .query("SELECT * FROM ONLY $procedure->generated->event LIMIT 1")
                 .bind(("procedure", procedure.id.clone()))
                 .await?
@@ -125,7 +125,7 @@ async fn get_detail(
                 .take(0)?;
 
             match event {
-                Some(monee_core::WalletEvent::Deposit { wallet_id, amount }) => {
+                Some(monee_core::WalletOperation::Deposit { wallet_id, amount }) => {
                     let wallet_metadata = wallets.get(&wallet_id).expect("to get wallet");
                     let wallet = entry
                         .snapshot
@@ -159,19 +159,19 @@ async fn get_detail(
         }
 
         super::ProcedureType::MoveValue => {
-            let events: Vec<monee_core::WalletEvent> = db
+            let events: Vec<monee_core::WalletOperation> = db
                 .query("SELECT * FROM $procedure->generated->event ORDER BY created_at")
                 .bind(("procedure", procedure.id.clone()))
                 .await?
                 .check()?
                 .take(0)?;
 
-            match <[monee_core::WalletEvent; 2] as TryFrom<_>>::try_from(events) {
+            match <[monee_core::WalletOperation; 2] as TryFrom<_>>::try_from(events) {
                 Ok(
-                    [monee_core::WalletEvent::Deduct {
+                    [monee_core::WalletOperation::Deduct {
                         wallet_id: from_id,
                         amount,
-                    }, monee_core::WalletEvent::Deposit {
+                    }, monee_core::WalletOperation::Deposit {
                         wallet_id: to_id, ..
                     }],
                 ) => {
@@ -211,12 +211,12 @@ async fn get_detail(
                 .await?
                 .check()?;
 
-            let event: Option<monee_core::WalletEvent> = response.take(0)?;
+            let event: Option<monee_core::WalletOperation> = response.take(0)?;
             let items: Vec<String> = response.take((1, "name"))?;
             let this_actors: Vec<Entity<actor::ActorId, ()>> = response.take(2)?;
 
             match event {
-                Some(monee_core::WalletEvent::Deduct { wallet_id, amount }) => {
+                Some(monee_core::WalletOperation::Deduct { wallet_id, amount }) => {
                     let wallet_metadata = wallets.get(&wallet_id).expect("to get wallet");
                     let wallet = entry
                         .snapshot
