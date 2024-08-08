@@ -1,10 +1,10 @@
 pub mod application {
     pub mod create_one {
         use cream::context::FromContext;
-        use monee_core::item_tag::{ItemTag, ItemTagId};
+        use monee_core::ItemTagId;
 
         use crate::{
-            backoffice::item_tags::domain::repository::Repository,
+            backoffice::item_tags::domain::{item_tag::ItemTag, repository::Repository},
             shared::{
                 domain::context::AppContext,
                 infrastructure::errors::{UniqueSaveError, UnspecifiedError},
@@ -44,7 +44,7 @@ pub mod application {
 
     pub mod relate {
         use cream::context::FromContext;
-        use monee_core::item_tag::ItemTagId;
+        use monee_core::ItemTagId;
 
         use crate::{
             backoffice::item_tags::domain::repository::{Repository, TagsRelation},
@@ -96,7 +96,7 @@ pub mod application {
             #[error("Cyclic relation")]
             CyclicRelation,
             #[error("Item tag `{0}` not found")]
-            NotFound(monee_core::item_tag::ItemTagId),
+            NotFound(monee_core::ItemTagId),
             #[error(transparent)]
             Unspecified(#[from] UnspecifiedError),
         }
@@ -104,7 +104,7 @@ pub mod application {
 
     pub mod unlink {
         use cream::context::FromContext;
-        use monee_core::item_tag::ItemTagId;
+        use monee_core::ItemTagId;
 
         use crate::{
             backoffice::item_tags::domain::repository::Repository,
@@ -132,9 +132,14 @@ pub mod application {
 pub mod domain {
     pub mod repository {
         use cream::context::FromContext;
-        use monee_core::item_tag::{ItemTag, ItemTagId};
+        use monee_core::ItemTagId;
 
-        use crate::shared::{domain::context::AppContext, infrastructure::errors::{UniqueSaveError, UnspecifiedError}};
+        use crate::shared::{
+            domain::context::AppContext,
+            infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+        };
+
+        use super::item_tag::ItemTag;
 
         impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
             fn from_context(context: &C) -> Self {
@@ -171,14 +176,24 @@ pub mod domain {
             TargetNotFound,
         }
     }
+
+    pub mod item_tag {
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        pub struct ItemTag {
+            pub name: String,
+        }
+    }
 }
 
 pub mod infrastructure {
     pub mod repository {
-        use monee_core::item_tag::{ItemTag, ItemTagId};
+        use monee_core::ItemTagId;
 
         use crate::{
-            backoffice::item_tags::domain::repository::{Repository, TagsRelation},
+            backoffice::item_tags::domain::{
+                item_tag::ItemTag,
+                repository::{Repository, TagsRelation},
+            },
             shared::infrastructure::{
                 database::Connection,
                 errors::{UniqueSaveError, UnspecifiedError},
@@ -288,14 +303,12 @@ pub mod infrastructure {
         }
 
         #[derive(serde::Deserialize, Debug)]
-        struct ParentTagId(
-            #[serde(with = "crate::sql_id::string")] monee_core::item_tag::ItemTagId,
-        );
+        struct ParentTagId(#[serde(with = "crate::sql_id::string")] monee_core::ItemTagId);
 
         async fn check_multi_relation(
             connection: &crate::shared::infrastructure::database::Connection,
             parents: &[ParentTagId],
-            child_id: monee_core::item_tag::ItemTagId,
+            child_id: monee_core::ItemTagId,
         ) -> Result<TagsRelation, UnspecifiedError> {
             let parents = parents
                 .iter()

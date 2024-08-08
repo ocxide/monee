@@ -1,167 +1,10 @@
 mod amount;
 
-/// Generic simple, understandable ID with custom length
-mod tiny_id;
-
-pub mod alias {
-    #[derive(Debug, Clone)]
-    pub struct Alias(Box<str>);
-
-    impl Alias {
-        pub fn as_str(&self) -> &str {
-            &self.0
-        }
-    }
-
-    impl std::fmt::Display for Alias {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            self.0.fmt(f)
-        }
-    }
-
-    pub mod from_str {
-        use super::Alias;
-
-        #[derive(Debug)]
-        pub enum Error {
-            Empty,
-            Invalid,
-        }
-
-        impl std::fmt::Display for Error {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self {
-                    Error::Empty => write!(f, "Alias cannot be emtpy"),
-                    Error::Invalid => write!(
-                        f,
-                        "Alias must only contain 'a-z', 'A-Z', '0-9', '-', '_' characters"
-                    ),
-                }
-            }
-        }
-
-        impl std::error::Error for Error {}
-
-        impl std::str::FromStr for Alias {
-            type Err = Error;
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                if s.is_empty() {
-                    return Err(Error::Empty);
-                }
-
-                let is_valid = s
-                    .chars()
-                    .all(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_'));
-
-                if is_valid {
-                    Ok(Alias(s.into()))
-                } else {
-                    Err(Error::Invalid)
-                }
-            }
-        }
-    }
-}
-
 pub use amount::Amount;
-pub use currency::CurrencyId;
-pub use debt_id::DebtId;
 pub use money_record::{MoneyRecord, MoneyStorage};
-pub use wallet_id::WalletId;
 
-pub mod actor;
-
-pub mod currency {
-    pub use currency_id::CurrencyId;
-
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    pub struct Currency {
-        pub name: String,
-        pub symbol: String,
-        pub code: String,
-    }
-
-    mod currency_id {
-        type Id = crate::tiny_id::TinyId<4>;
-
-        #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
-        pub struct CurrencyId(Id);
-
-        crate::id_utils::impl_id!(CurrencyId, Id);
-    }
-}
-
-pub mod item_tag {
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    pub struct ItemTag {
-        pub name: String,
-    }
-
-    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
-    pub struct ItemTagId(crate::tiny_id::TinyId<4>);
-    crate::id_utils::impl_id!(ItemTagId, crate::tiny_id::TinyId<4>);
-}
-
-pub mod metadata {
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    #[serde(rename_all = "snake_case")]
-    pub struct WalletMetadata {
-        pub name: Option<String>,
-    }
-}
-
-mod wallet_id {
-    type Id = crate::tiny_id::TinyId<4>;
-
-    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
-    pub struct WalletId(Id);
-
-    crate::id_utils::impl_id!(WalletId, Id);
-}
-
-mod debt_id {
-    type Id = crate::tiny_id::TinyId<4>;
-
-    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
-    pub struct DebtId(Id);
-
-    crate::id_utils::impl_id!(DebtId, Id);
-}
-
-mod id_utils {
-    macro_rules! impl_id {
-        ($name:ident, $inner_id:ty) => {
-            impl $name {
-                pub fn new() -> Self {
-                    Self(<$inner_id>::new())
-                }
-            }
-
-            impl Default for $name {
-                fn default() -> Self {
-                    Self::new()
-                }
-            }
-
-            impl std::str::FromStr for $name {
-                type Err = <$inner_id as std::str::FromStr>::Err;
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    Ok(Self(s.parse()?))
-                }
-            }
-
-            impl std::fmt::Display for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    self.0.fmt(f)
-                }
-            }
-        };
-    }
-
-    pub(crate) use impl_id;
-}
+mod ids;
+pub use ids::*;
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Snapshot {
@@ -366,7 +209,9 @@ impl Snapshot {
                         wallet_id,
                         currency,
                     } => (wallet_id, money_record::Action::Create(currency)),
-                    WalletOperation::Delete { wallet_id } => (wallet_id, money_record::Action::Remove),
+                    WalletOperation::Delete { wallet_id } => {
+                        (wallet_id, money_record::Action::Remove)
+                    }
                     WalletOperation::Deposit { wallet_id, amount } => {
                         (wallet_id, money_record::Action::Add(amount))
                     }
@@ -384,9 +229,7 @@ impl Snapshot {
             }
             Operation::Loan(event) => {
                 let (debt_id, action) = extract_action(event);
-                self.loans
-                    .apply(debt_id, action)
-                    .map_err(Error::Loan)
+                self.loans.apply(debt_id, action).map_err(Error::Loan)
             }
         }
     }

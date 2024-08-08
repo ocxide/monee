@@ -1,12 +1,23 @@
 pub mod domain {
+    pub mod currency {
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        pub struct Currency {
+            pub name: String,
+            pub symbol: String,
+            pub code: String,
+        }
+    }
+
     pub mod repository {
         use cream::context::FromContext;
-        use monee_core::{currency::Currency, CurrencyId};
+        use monee_core::CurrencyId;
 
         use crate::shared::{
             domain::context::AppContext,
             infrastructure::errors::{UniqueSaveError, UnspecifiedError},
         };
+
+        use super::currency::Currency;
 
         #[async_trait::async_trait]
         pub trait Repository {
@@ -29,10 +40,10 @@ pub mod domain {
 pub mod application {
     pub mod save_one {
         use cream::context::FromContext;
-        use monee_core::{currency::Currency, CurrencyId};
+        use monee_core::CurrencyId;
 
         use crate::{
-            backoffice::currencies::domain::repository::Repository,
+            backoffice::currencies::domain::{currency::Currency, repository::Repository},
             shared::{
                 domain::context::AppContext,
                 infrastructure::errors::{UniqueSaveError, UnspecifiedError},
@@ -98,10 +109,10 @@ pub mod application {
 
 pub mod infrastructure {
     pub mod repository {
-        use monee_core::{currency::Currency, CurrencyId};
+        use monee_core::CurrencyId;
 
         use crate::{
-            backoffice::currencies::domain::repository::Repository,
+            backoffice::currencies::domain::{currency::Currency, repository::Repository},
             shared::infrastructure::{
                 database::{Connection, Entity},
                 errors::{UniqueSaveError, UnspecifiedError},

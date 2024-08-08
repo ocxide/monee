@@ -221,6 +221,6 @@ pub(crate) mod entity {
     impl_str_de!(monee_core::DebtId);
     impl_str_de!(monee_core::WalletId);
     impl_str_de!(monee_core::CurrencyId);
-    impl_str_de!(monee_core::actor::ActorId);
-    impl_str_de!(monee_core::item_tag::ItemTagId);
+    impl_str_de!(monee_core::ActorId);
+    impl_str_de!(monee_core::ItemTagId);
 }

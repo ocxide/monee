@@ -27,7 +27,9 @@ pub mod domain {
     pub mod repository {
         use cream::context::FromContext;
 
-        use crate::shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError};
+        use crate::shared::{
+            domain::context::AppContext, infrastructure::errors::UnspecifiedError,
+        };
 
         use super::event::Event;
 
@@ -44,7 +46,7 @@ pub mod domain {
     }
 
     pub mod event {
-        use monee_core::{actor::ActorId, item_tag::ItemTagId, Amount, CurrencyId, WalletId};
+        use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
 
         use crate::date::Datetime;
 

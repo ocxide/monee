@@ -5,7 +5,7 @@ edition = "2021"
 
 [workspace]
 resolver = "2"
-members = ["monee_core"]
+members = ["monee_core", "tiny_id"]
 
 [dependencies]
 monee_core = { path = "./monee_core" }
