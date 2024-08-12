@@ -1,82 +1,55 @@
-pub mod errors {
-    #[derive(Debug, thiserror::Error)]
-    #[error("infrastructure error: {0}")]
-    pub struct InfrastructureError(Box<dyn std::error::Error>);
-
-    impl InfrastructureError {
-        pub fn new<E>(error: E) -> Self
-        where
-            E: Into<Box<dyn std::error::Error>>,
-        {
-            Self(error.into())
-        }
-    }
-
-    #[derive(Debug, thiserror::Error)]
-    pub enum SnapshotOptError {
-        #[error(transparent)]
-        Infrastructure(#[from] InfrastructureError),
-
-        #[error(transparent)]
-        SnapshotApply(#[from] monee_core::Error),
-
-        #[error(transparent)]
-        Write(#[from] std::io::Error),
-
-        #[error(transparent)]
-        Read(#[from] crate::snapshot_io::ReadError),
-    }
-
-    #[derive(Debug, thiserror::Error)]
-    pub enum SnapshotWriteError {
-        #[error(transparent)]
-        Infrastructure(#[from] InfrastructureError),
-
-        #[error(transparent)]
-        SnapshotApply(#[from] monee_core::Error),
-
-        #[error(transparent)]
-        Write(#[from] std::io::Error),
-    }
-
-    impl From<SnapshotWriteError> for SnapshotOptError {
-        fn from(value: SnapshotWriteError) -> Self {
-            match value {
-                SnapshotWriteError::Infrastructure(error) => Self::Infrastructure(error),
-                SnapshotWriteError::SnapshotApply(error) => Self::SnapshotApply(error),
-                SnapshotWriteError::Write(error) => Self::Write(error),
-            }
-        }
-    }
-
-    impl From<SnapshotReadError> for SnapshotOptError {
-        fn from(value: SnapshotReadError) -> Self {
-            match value {
-                SnapshotReadError::Infrastructure(error) => Self::Infrastructure(error),
-                SnapshotReadError::SnapshotApply(error) => Self::SnapshotApply(error),
-                SnapshotReadError::Read(error) => Self::Read(error),
-            }
-        }
-    }
-
-    #[derive(Debug, thiserror::Error)]
-    pub enum SnapshotReadError {
-        #[error(transparent)]
-        Infrastructure(#[from] InfrastructureError),
-
-        #[error(transparent)]
-        SnapshotApply(#[from] monee_core::Error),
-
-        #[error(transparent)]
-        Read(#[from] crate::snapshot_io::ReadError),
-    }
-}
-
 pub mod domain {
+    pub mod errors {
+        #[derive(PartialEq, Eq)]
+        pub enum UniqueSaveStatus {
+            Created,
+            AlreadyExists,
+        }
+
+        impl UniqueSaveStatus {
+            pub fn is_ok(&self) -> bool {
+                matches!(self, UniqueSaveStatus::Created)
+            }
+        }
+
+        pub enum UniqueUpdateStatus {
+            Updated,
+            NotFound,
+            Conflict,
+        }
+
+        pub(crate) trait IntoDomainResult<T, E> {
+            fn into_domain_result(self) -> Result<T, E>;
+        }
+
+        impl
+            IntoDomainResult<
+                UniqueSaveStatus,
+                crate::shared::infrastructure::errors::InfrastructureError,
+            > for Result<surrealdb::Response, surrealdb::Error>
+        {
+            fn into_domain_result(
+                self,
+            ) -> Result<UniqueSaveStatus, crate::shared::infrastructure::errors::InfrastructureError>
+            {
+                match self {
+                    Ok(_) => Ok(UniqueSaveStatus::Created),
+                    Err(
+                        crate::shared::infrastructure::database::Error::Api(
+                            surrealdb::error::Api::Query { .. },
+                        )
+                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                    ) => Ok(UniqueSaveStatus::AlreadyExists),
+                    Err(e) => Err(e.into()),
+                }
+            }
+        }
+    }
+
     pub mod context {
         use cream::context::{ContextProvide, CreamContext};
 
-        use crate::shared::errors::InfrastructureError;
+        use crate::shared::infrastructure::errors::InfrastructureError;
 
         #[derive(Clone)]
         pub struct AppContext {
@@ -112,10 +85,10 @@ pub mod domain {
             }
         }
 
-        pub async fn setup() -> Result<(AppContext, impl std::future::Future<Output = ()>), InfrastructureError> {
-            let db = crate::shared::infrastructure::database::connect()
-                .await
-                .map_err(InfrastructureError::new)?;
+        pub async fn setup(
+        ) -> Result<(AppContext, impl std::future::Future<Output = ()>), InfrastructureError>
+        {
+            let db = crate::shared::infrastructure::database::connect().await?;
 
             let router = cream::events::router::Router::default();
             // Add event handlers

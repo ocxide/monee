@@ -25,13 +25,13 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
-        use crate::shared::infrastructure::errors::UnspecifiedError;
+        use crate::shared::infrastructure::errors::InfrastructureError;
 
         use super::event::Event;
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn add(&self, event: Event) -> Result<(), UnspecifiedError>;
+            async fn add(&self, event: Event) -> Result<(), InfrastructureError>;
         }
     }
 
@@ -87,7 +87,7 @@ pub mod infrastructure {
 
         use crate::{
             backoffice::events::domain::{event::Event, repository::Repository},
-            shared::{domain::context::DbContext, infrastructure::errors::UnspecifiedError},
+            shared::{domain::context::DbContext, infrastructure::errors::InfrastructureError},
         };
 
         #[derive(ContextProvide)]
@@ -102,7 +102,7 @@ pub mod infrastructure {
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
-            async fn add(&self, event: Event) -> Result<(), UnspecifiedError> {
+            async fn add(&self, event: Event) -> Result<(), InfrastructureError> {
                 self.0
                     .query("CREATE event CONTENT $event")
                     .bind(("event", event))

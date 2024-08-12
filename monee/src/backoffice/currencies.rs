@@ -11,18 +11,23 @@ pub mod domain {
     pub mod repository {
         use monee_core::CurrencyId;
 
-        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
+        use crate::shared::{
+            domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+        };
 
         use super::currency::Currency;
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn save(&self, id: CurrencyId, currency: Currency)
-                -> Result<(), UniqueSaveError>;
+            async fn save(
+                &self,
+                id: CurrencyId,
+                currency: Currency,
+            ) -> Result<UniqueSaveStatus, InfrastructureError>;
             async fn code_resolve(
                 &self,
                 code: &str,
-            ) -> Result<Option<CurrencyId>, UnspecifiedError>;
+            ) -> Result<Option<CurrencyId>, InfrastructureError>;
         }
     }
 }
@@ -35,8 +40,8 @@ pub mod application {
         use crate::{
             backoffice::currencies::domain::{currency::Currency, repository::Repository},
             shared::{
-                domain::context::AppContext,
-                infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+                domain::{context::AppContext, errors::UniqueSaveStatus},
+                infrastructure::errors::InfrastructureError,
             },
         };
 
@@ -47,29 +52,11 @@ pub mod application {
         }
 
         impl SaveOne {
-            pub async fn run(&self, currency: Currency) -> Result<(), Error> {
-                self.repository
-                    .save(CurrencyId::new(), currency)
-                    .await
-                    .map_err(Into::into)
-            }
-        }
-
-        #[derive(thiserror::Error, Debug)]
-        pub enum Error {
-            #[error(transparent)]
-            Unspecified(#[from] UnspecifiedError),
-
-            #[error("Currency already exists")]
-            RepeatedCode,
-        }
-
-        impl From<UniqueSaveError> for Error {
-            fn from(err: UniqueSaveError) -> Self {
-                match err {
-                    UniqueSaveError::AlreadyExists => Self::RepeatedCode,
-                    UniqueSaveError::Unspecified(err) => Self::Unspecified(err),
-                }
+            pub async fn run(
+                &self,
+                currency: Currency,
+            ) -> Result<UniqueSaveStatus, InfrastructureError> {
+                self.repository.save(CurrencyId::new(), currency).await
             }
         }
     }
@@ -80,7 +67,7 @@ pub mod application {
 
         use crate::{
             backoffice::currencies::domain::repository::Repository,
-            shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
+            shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
         #[derive(ContextProvide)]
@@ -90,7 +77,7 @@ pub mod application {
         }
 
         impl CodeResolve {
-            pub async fn run(&self, code: &str) -> Result<Option<CurrencyId>, UnspecifiedError> {
+            pub async fn run(&self, code: &str) -> Result<Option<CurrencyId>, InfrastructureError> {
                 self.repository.code_resolve(code).await
             }
         }
@@ -105,10 +92,13 @@ pub mod infrastructure {
         use crate::{
             backoffice::currencies::domain::{currency::Currency, repository::Repository},
             shared::{
-                domain::context::DbContext,
+                domain::{
+                    context::DbContext,
+                    errors::{IntoDomainResult, UniqueSaveStatus},
+                },
                 infrastructure::{
                     database::{Connection, Entity},
-                    errors::{UniqueSaveError, UnspecifiedError},
+                    errors::InfrastructureError,
                 },
             },
         };
@@ -123,7 +113,7 @@ pub mod infrastructure {
                 &self,
                 id: CurrencyId,
                 currency: Currency,
-            ) -> Result<(), UniqueSaveError> {
+            ) -> Result<UniqueSaveStatus, InfrastructureError> {
                 let response = self.0
                 .query(
                     "CREATE ONLY type::thing('currency', $id) SET name = $name, symbol = $symbol, code = $code",
@@ -132,25 +122,16 @@ pub mod infrastructure {
                 .bind(("name", currency.name))
                 .bind(("symbol", currency.symbol))
                 .bind(("code", currency.code))
-                .await.map_err(UnspecifiedError::from)?
+                .await?
                 .check();
 
-                match response {
-                    Err(
-                        crate::shared::infrastructure::database::Error::Api(
-                            surrealdb::error::Api::Query { .. },
-                        )
-                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                    ) => Err(UniqueSaveError::AlreadyExists),
-                    Err(e) => Err(UniqueSaveError::Unspecified(e.into())),
-                    Ok(_) => Ok(()),
-                }
+                response.into_domain_result()
             }
 
             async fn code_resolve(
                 &self,
                 code: &str,
-            ) -> Result<Option<CurrencyId>, UnspecifiedError> {
+            ) -> Result<Option<CurrencyId>, InfrastructureError> {
                 let mut response = self
                     .0
                     .query("SELECT id FROM currency WHERE code = $code")

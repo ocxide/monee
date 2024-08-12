@@ -2,14 +2,23 @@ pub mod domain {
     pub mod repository {
         use monee_core::ActorId;
 
-        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
+        use crate::shared::{
+            domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+        };
 
         use super::actor::Actor;
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn save(&self, id: ActorId, actor: Actor) -> Result<(), UniqueSaveError>;
-            async fn alias_resolve(&self, name: &str) -> Result<Option<ActorId>, UnspecifiedError>;
+            async fn save(
+                &self,
+                id: ActorId,
+                actor: Actor,
+            ) -> Result<UniqueSaveStatus, InfrastructureError>;
+            async fn alias_resolve(
+                &self,
+                name: &str,
+            ) -> Result<Option<ActorId>, InfrastructureError>;
         }
     }
 
@@ -75,8 +84,8 @@ pub mod application {
         use crate::{
             backoffice::actors::domain::{actor::Actor, repository::Repository},
             shared::{
-                domain::context::AppContext,
-                infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+                domain::{context::AppContext, errors::UniqueSaveStatus},
+                infrastructure::errors::InfrastructureError,
             },
         };
 
@@ -87,23 +96,9 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(&self, actor: Actor) -> Result<(), Error> {
-                self.repository
-                    .save(ActorId::new(), actor)
-                    .await
-                    .map_err(|e| match e {
-                        UniqueSaveError::AlreadyExists => Error::AlreadyExists,
-                        UniqueSaveError::Unspecified(e) => Error::Unspecified(e),
-                    })
+            pub async fn run(&self, actor: Actor) -> Result<UniqueSaveStatus, InfrastructureError> {
+                self.repository.save(ActorId::new(), actor).await
             }
-        }
-
-        #[derive(thiserror::Error, Debug)]
-        pub enum Error {
-            #[error(transparent)]
-            Unspecified(#[from] UnspecifiedError),
-            #[error("Actor already exists")]
-            AlreadyExists,
         }
     }
 
@@ -113,7 +108,7 @@ pub mod application {
 
         use crate::{
             backoffice::actors::domain::repository::Repository,
-            shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
+            shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
         #[derive(ContextProvide)]
@@ -123,7 +118,7 @@ pub mod application {
         }
 
         impl AliasResolve {
-            pub async fn run(&self, name: &str) -> Result<Option<ActorId>, UnspecifiedError> {
+            pub async fn run(&self, name: &str) -> Result<Option<ActorId>, InfrastructureError> {
                 self.repository.alias_resolve(name).await
             }
         }
@@ -138,10 +133,10 @@ pub mod infrastructure {
         use crate::{
             backoffice::actors::domain::{actor::Actor, repository::Repository},
             shared::{
-                domain::context::DbContext,
+                domain::{context::DbContext, errors::UniqueSaveStatus},
                 infrastructure::{
                     database::{Connection, Entity},
-                    errors::{UniqueSaveError, UnspecifiedError},
+                    errors::InfrastructureError,
                 },
             },
         };
@@ -152,32 +147,35 @@ pub mod infrastructure {
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
-            async fn save(&self, id: ActorId, actor: Actor) -> Result<(), UniqueSaveError> {
+            async fn save(
+                &self,
+                id: ActorId,
+                actor: Actor,
+            ) -> Result<UniqueSaveStatus, InfrastructureError> {
                 let result = self
                     .0
                     .query("CREATE type::thing('actor', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", actor))
-                    .await
-                    .map_err(UnspecifiedError::from)?
+                    .await?
                     .check();
 
                 match result {
-                    Ok(_) => Ok(()),
+                    Ok(_) => Ok(UniqueSaveStatus::Created),
                     Err(
                         crate::shared::infrastructure::database::Error::Api(
                             surrealdb::error::Api::Query { .. },
                         )
                         | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                    ) => Err(UniqueSaveError::AlreadyExists),
-                    Err(e) => Err(UniqueSaveError::Unspecified(e.into())),
+                    ) => Ok(UniqueSaveStatus::AlreadyExists),
+                    Err(e) => Err(e.into()),
                 }
             }
 
             async fn alias_resolve(
                 &self,
                 alias: &str,
-            ) -> Result<Option<ActorId>, UnspecifiedError> {
+            ) -> Result<Option<ActorId>, InfrastructureError> {
                 let mut response = self
                     .0
                     .query("SELECT id FROM ONLY actor WHERE alias = $alias LIMIT 1")

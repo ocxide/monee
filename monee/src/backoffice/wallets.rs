@@ -8,8 +8,8 @@ pub mod application {
                 repository::Repository, wallet::Wallet, wallet_created::WalletCreated,
             },
             shared::{
-                domain::context::AppContext,
-                infrastructure::errors::{UniqueSaveError, UnspecifiedError},
+                domain::{context::AppContext, errors::UniqueSaveStatus},
+                infrastructure::errors::InfrastructureError,
             },
         };
 
@@ -21,28 +21,27 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(&self, wallet: Wallet) -> Result<(), Error> {
+            pub async fn run(
+                &self,
+                wallet: Wallet,
+            ) -> Result<UniqueSaveStatus, InfrastructureError> {
                 let id = WalletId::new();
                 let currency_id = wallet.currency_id;
 
-                self.repository
-                    .save(id, wallet)
-                    .await
-                    .map_err(|e| match e {
-                        UniqueSaveError::Unspecified(e) => Error::Unspecified(e),
-                        UniqueSaveError::AlreadyExists => Error::AlreadyExists,
-                    })?;
+                let result = self.repository.save(id, wallet).await?;
+                if !result.is_ok() {
+                    return Ok(result);
+                }
 
                 self.bus.publish(WalletCreated { id, currency_id });
-
-                Ok(())
+                Ok(UniqueSaveStatus::Created)
             }
         }
 
         #[derive(thiserror::Error, Debug)]
         pub enum Error {
             #[error(transparent)]
-            Unspecified(#[from] UnspecifiedError),
+            Unspecified(#[from] InfrastructureError),
             #[error("Wallet name already exists")]
             AlreadyExists,
         }
@@ -84,13 +83,19 @@ pub mod domain {
     pub mod repository {
         use monee_core::WalletId;
 
-        use crate::shared::{errors::InfrastructureError, infrastructure::errors::UniqueSaveError};
+        use crate::shared::{
+            domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+        };
 
         use super::{wallet::Wallet, wallet_name::WalletName};
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), UniqueSaveError>;
+            async fn save(
+                &self,
+                id: WalletId,
+                wallet: Wallet,
+            ) -> Result<UniqueSaveStatus, InfrastructureError>;
             async fn update(
                 &self,
                 id: WalletId,
@@ -106,7 +111,7 @@ pub mod domain {
             #[error("Wallet name already exists")]
             AlreadyExists,
             #[error(transparent)]
-            Infrastructure(InfrastructureError),
+            Unspecified(InfrastructureError),
         }
     }
 
@@ -173,11 +178,11 @@ pub mod infrastructure {
                 wallet_name::WalletName,
             },
             shared::{
-                domain::context::DbContext,
-                infrastructure::{
-                    database::Connection,
-                    errors::{UniqueSaveError, UnspecifiedError},
+                domain::{
+                    context::DbContext,
+                    errors::{IntoDomainResult, UniqueSaveStatus},
                 },
+                infrastructure::{database::Connection, errors::InfrastructureError},
             },
         };
 
@@ -187,24 +192,20 @@ pub mod infrastructure {
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
-            async fn save(&self, id: WalletId, wallet: Wallet) -> Result<(), UniqueSaveError> {
+            async fn save(
+                &self,
+                id: WalletId,
+                wallet: Wallet,
+            ) -> Result<UniqueSaveStatus, InfrastructureError> {
                 let result = self.0
                     .query("INSERT INTO wallet (id, currency_id, name) VALUES ($id, $currency_id, $name)")
                     .bind(("id", id))
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
-                    .await.map_err(UnspecifiedError::new)?.check();
+                    .await?
+                    .check();
 
-                match result {
-                    Ok(_) => Ok(()),
-                    Err(
-                        crate::shared::infrastructure::database::Error::Api(
-                            surrealdb::error::Api::Query { .. },
-                        )
-                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                    ) => Err(UniqueSaveError::AlreadyExists),
-                    Err(e) => Err(UniqueSaveError::Unspecified(e.into())),
-                }
+                result.into_domain_result()
             }
 
             async fn update(
@@ -218,12 +219,12 @@ pub mod infrastructure {
                     .bind(("id", id))
                     .bind(("name", name))
                     .bind(("description", description))
-                    .await.map_err(|e| UpdateError::Infrastructure(e.into()))?.check();
+                    .await.map_err(|e| UpdateError::Unspecified(e.into()))?.check();
 
                 match result {
                     Ok(mut response) => match response
                         .take(0)
-                        .map_err(|e| UpdateError::Infrastructure(e.into()))?
+                        .map_err(|e| UpdateError::Unspecified(e.into()))?
                     {
                         Some(()) => Ok(()),
                         None => Err(UpdateError::NotFound),
@@ -234,7 +235,7 @@ pub mod infrastructure {
                         )
                         | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
                     ) => Err(UpdateError::AlreadyExists),
-                    Err(e) => Err(UpdateError::Infrastructure(e.into())),
+                    Err(e) => Err(UpdateError::Unspecified(e.into())),
                 }
             }
         }

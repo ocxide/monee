@@ -2,12 +2,12 @@ pub mod domain {
     pub mod repository {
         use monee_core::Snapshot;
 
-        use crate::shared::infrastructure::errors::UnspecifiedError;
+        use crate::shared::infrastructure::errors::InfrastructureError;
 
         #[async_trait::async_trait]
         pub trait SnapshotRepository: Send + Sync {
-            async fn read(&self) -> Result<Snapshot, UnspecifiedError>;
-            async fn save(&self, snapshot: &Snapshot) -> Result<(), UnspecifiedError>;
+            async fn read(&self) -> Result<Snapshot, InfrastructureError>;
+            async fn save(&self, snapshot: &Snapshot) -> Result<(), InfrastructureError>;
         }
     }
 }
@@ -61,7 +61,7 @@ pub mod application {
 
         use crate::{
             backoffice::snapshot::domain::repository::SnapshotRepository,
-            shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
+            shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
         #[derive(ContextProvide)]
@@ -71,7 +71,7 @@ pub mod application {
         }
 
         impl SnapshotRead {
-            pub async fn read(&self) -> Result<monee_core::Snapshot, UnspecifiedError> {
+            pub async fn read(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
                 // TODO: sync the snapshot with new events
                 self.repository.read().await
             }
@@ -87,7 +87,7 @@ pub mod infrastructure {
             backoffice::snapshot::domain::repository::SnapshotRepository,
             shared::{
                 domain::context::DbContext,
-                infrastructure::{database::Connection, errors::UnspecifiedError},
+                infrastructure::{database::Connection, errors::InfrastructureError},
             },
         };
 
@@ -97,11 +97,11 @@ pub mod infrastructure {
 
         #[async_trait::async_trait]
         impl SnapshotRepository for SnapshotSurrealRepository {
-            async fn read(&self) -> Result<monee_core::Snapshot, UnspecifiedError> {
+            async fn read(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
                 todo!()
             }
 
-            async fn save(&self, _snapshot: &monee_core::Snapshot) -> Result<(), UnspecifiedError> {
+            async fn save(&self, _snapshot: &monee_core::Snapshot) -> Result<(), InfrastructureError> {
                 todo!()
             }
         }
