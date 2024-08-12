@@ -170,12 +170,12 @@ pub mod application {
                 )
             }
 
-            fn backoffice_shared_snapshot_repository(
+            fn backoffice_snapshot_repository(
                 &self,
-            ) -> Box<dyn crate::backoffice::shared::domain::snapshot_repository::SnapshotRepository>
+            ) -> Box<dyn crate::backoffice::snapshot::domain::repository::SnapshotRepository>
             {
                 Box::new(
-                    crate::backoffice::shared::infrastructure::snapshot_repository::SnapshotSurrealRepository::new(
+                    crate::backoffice::snapshot::infrastructure::snapshot_repository::SnapshotSurrealRepository::new(
                         self.database.clone(),
                     ),
                 )
@@ -192,7 +192,7 @@ pub mod application {
 
 pub mod domain {
     pub mod context {
-        use cream::context::{ContextExtend, CreamContext};
+        use cream::context::{ContextExtend, CreamContext, FromContext};
 
         pub trait AppContext: ContextExtend<CreamContext> {
             fn backoffice_events_repository(
@@ -215,9 +215,19 @@ pub mod domain {
                 &self,
             ) -> Box<dyn crate::backoffice::item_tags::domain::repository::Repository>;
 
-            fn backoffice_shared_snapshot_repository(
+            fn backoffice_snapshot_repository(
                 &self,
-            ) -> Box<dyn crate::backoffice::shared::domain::snapshot_repository::SnapshotRepository>;
+            ) -> Box<dyn crate::backoffice::snapshot::domain::repository::SnapshotRepository>;
+        }
+
+        impl<C> FromContext<C> for cream::event_bus::EventBusPort
+        where
+            C: AppContext,
+        {
+            fn from_context(ctx: &C) -> Self {
+                let cream_context = ctx.provide_context();
+                Self::from_context(cream_context)
+            }
         }
     }
 

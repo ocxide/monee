@@ -1,10 +1,12 @@
 pub mod application {
     pub mod create_one {
-        use cream::context::FromContext;
+        use cream::{context::FromContext, event_bus::EventBusPort};
         use monee_core::WalletId;
 
         use crate::{
-            backoffice::wallets::domain::{repository::Repository, wallet::Wallet},
+            backoffice::wallets::domain::{
+                repository::Repository, wallet::Wallet, wallet_created::WalletCreated,
+            },
             shared::{
                 domain::context::AppContext,
                 infrastructure::errors::{UniqueSaveError, UnspecifiedError},
@@ -15,17 +17,23 @@ pub mod application {
         #[from_context(C: AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
+            bus: EventBusPort,
         }
 
         impl CreateOne {
             pub async fn run(&self, wallet: Wallet) -> Result<(), Error> {
+                let id = WalletId::new();
+                let currency_id = wallet.currency_id;
+
                 self.repository
-                    .save(WalletId::new(), wallet)
+                    .save(id, wallet)
                     .await
                     .map_err(|e| match e {
                         UniqueSaveError::Unspecified(e) => Error::Unspecified(e),
                         UniqueSaveError::AlreadyExists => Error::AlreadyExists,
                     })?;
+
+                self.bus.publish(WalletCreated { id, currency_id });
 
                 Ok(())
             }
@@ -77,7 +85,10 @@ pub mod domain {
         use cream::context::FromContext;
         use monee_core::WalletId;
 
-        use crate::shared::{domain::context::AppContext, errors::InfrastructureError, infrastructure::errors::UniqueSaveError};
+        use crate::shared::{
+            domain::context::AppContext, errors::InfrastructureError,
+            infrastructure::errors::UniqueSaveError,
+        };
 
         use super::{wallet::Wallet, wallet_name::WalletName};
 
@@ -135,6 +146,26 @@ pub mod domain {
                     Some(c) => Err(Error::InvalidCharacter(c)),
                     None => Ok(Self(value)),
                 }
+            }
+        }
+    }
+
+    pub mod wallet_created {
+        use cream::events::DomainEvent;
+
+        #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+        pub struct WalletCreated {
+            pub id: monee_core::WalletId,
+            pub currency_id: monee_core::CurrencyId,
+        }
+
+        impl DomainEvent for WalletCreated {
+            fn name(&self) -> &'static str {
+                "backoffice.wallets.created"
+            }
+
+            fn version(&self) -> &'static str {
+                "1.0.0"
             }
         }
     }
