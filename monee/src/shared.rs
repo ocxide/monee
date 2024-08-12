@@ -72,26 +72,47 @@ pub mod errors {
     }
 }
 
-pub mod application {
-    pub mod cannonical_context {
-        use cream::context::{ContextExtend, CreamContext};
+pub mod domain {
+    pub mod context {
+        use cream::context::{ContextProvide, CreamContext};
 
-        use crate::shared::{domain::context::AppContext, errors::InfrastructureError};
+        use crate::shared::errors::InfrastructureError;
 
         #[derive(Clone)]
-        pub struct CannocalContext {
-            cream_context: CreamContext,
-            database: crate::shared::infrastructure::database::Connection,
+        pub struct AppContext {
+            cream: CreamContext,
+            db: DbContext,
         }
 
-        #[derive(Debug, thiserror::Error)]
-        pub enum Error {
-            #[error(transparent)]
-            Infrastructure(#[from] InfrastructureError),
+        #[derive(Clone)]
+        pub struct DbContext(crate::shared::infrastructure::database::Connection);
+
+        impl ContextProvide<crate::shared::infrastructure::database::Connection> for DbContext {
+            fn provide(&self) -> crate::shared::infrastructure::database::Connection {
+                self.0.clone()
+            }
         }
 
-        pub async fn setup(
-        ) -> Result<(CannocalContext, impl std::future::Future<Output = ()>), Error> {
+        trait ContextExtend<C> {
+            fn provide_context(&self) -> &C;
+        }
+
+        impl ContextExtend<DbContext> for AppContext {
+            fn provide_context(&self) -> &DbContext {
+                &self.db
+            }
+        }
+
+        impl<S> ContextProvide<S> for AppContext
+        where
+            CreamContext: ContextProvide<S>,
+        {
+            fn provide(&self) -> S {
+                self.cream.provide()
+            }
+        }
+
+        pub async fn setup() -> Result<(AppContext, impl std::future::Future<Output = ()>), InfrastructureError> {
             let db = crate::shared::infrastructure::database::connect()
                 .await
                 .map_err(InfrastructureError::new)?;
@@ -101,9 +122,9 @@ pub mod application {
 
             let (port, socket) = cream::router_bus::create_channel();
 
-            let ctx = CannocalContext {
-                cream_context: CreamContext::new(port),
-                database: db,
+            let ctx = AppContext {
+                cream: CreamContext::new(port),
+                db: DbContext(db),
             };
 
             let listen = {
@@ -118,116 +139,52 @@ pub mod application {
             Ok((ctx, listen))
         }
 
-        impl AppContext for CannocalContext {
-            fn backoffice_events_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::events::domain::repository::Repository> {
-                Box::new(
-                    crate::backoffice::events::infrastructure::repository::SurrealRepository::new(
-                        self.database.clone(),
-                    ),
-                )
-            }
+        mod provide_maps {
+            use crate::backoffice::{
+                actors::{
+                    domain::repository::Repository as ActorsRepository,
+                    infrastructure::repository::SurrealRepository as ActorsSurrealRepository,
+                },
+                currencies::{
+                    domain::repository::Repository as CurrenciesRepository,
+                    infrastructure::repository::SurrealRepository as CurrenciesSurrealRepository,
+                },
+                events::{
+                    domain::repository::Repository as EventsRepository,
+                    infrastructure::repository::SurrealRepository as EventsSurrealRepository,
+                },
+                item_tags::{
+                    domain::repository::Repository as ItemTagsRepository,
+                    infrastructure::repository::SurrealRepository as ItemTagsSurrealRepository,
+                },
+                snapshot::{
+                    domain::repository::SnapshotRepository,
+                    infrastructure::snapshot_repository::SnapshotSurrealRepository,
+                },
+                wallets::{
+                    domain::repository::Repository as WalletsRepository,
+                    infrastructure::repository::SurrealRepository as WalletsSurrealRepository,
+                },
+            };
 
-            fn backoffice_wallets_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::wallets::domain::repository::Repository> {
-                Box::new(
-                    crate::backoffice::wallets::infrastructure::repository::SurrealRepository::new(
-                        self.database.clone(),
-                    ),
-                )
-            }
+            use super::DbContext;
 
-            fn backoffice_actors_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::actors::domain::repository::Repository> {
-                Box::new(
-                    crate::backoffice::actors::infrastructure::repository::SurrealRepository::new(
-                        self.database.clone(),
-                    ),
-                )
-            }
+            macro_rules! provide_map(($service: path; $real_service: path, $ctx: ident) => {
+                impl cream::context::ContextProvide<Box<dyn $service>> for super::AppContext {
+                    fn provide(&self) -> Box<dyn $service> {
+                        let ctx = <Self as super::ContextExtend<$ctx>>::provide_context(self);
+                        let real_service: $real_service = ctx.provide();
+                        Box::new(real_service)
+                    }
+                }
+            });
 
-            fn backoffice_currencies_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::currencies::domain::repository::Repository>
-            {
-                Box::new(
-                    crate::backoffice::currencies::infrastructure::repository::SurrealRepository::new(
-                        self.database.clone(),
-                    ),
-                )
-            }
-
-            fn backoffice_item_tags_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::item_tags::domain::repository::Repository> {
-                Box::new(
-                    crate::backoffice::item_tags::infrastructure::repository::SurrealRepository::new(
-                        self.database.clone(),
-                    ),
-                )
-            }
-
-            fn backoffice_snapshot_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::snapshot::domain::repository::SnapshotRepository>
-            {
-                Box::new(
-                    crate::backoffice::snapshot::infrastructure::snapshot_repository::SnapshotSurrealRepository::new(
-                        self.database.clone(),
-                    ),
-                )
-            }
-        }
-
-        impl ContextExtend<CreamContext> for CannocalContext {
-            fn provide_context(&self) -> &CreamContext {
-                &self.cream_context
-            }
-        }
-    }
-}
-
-pub mod domain {
-    pub mod context {
-        use cream::context::{ContextExtend, CreamContext, FromContext};
-
-        pub trait AppContext: ContextExtend<CreamContext> {
-            fn backoffice_events_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::events::domain::repository::Repository>;
-
-            fn backoffice_wallets_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::wallets::domain::repository::Repository>;
-
-            fn backoffice_actors_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::actors::domain::repository::Repository>;
-
-            fn backoffice_currencies_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::currencies::domain::repository::Repository>;
-
-            fn backoffice_item_tags_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::item_tags::domain::repository::Repository>;
-
-            fn backoffice_snapshot_repository(
-                &self,
-            ) -> Box<dyn crate::backoffice::snapshot::domain::repository::SnapshotRepository>;
-        }
-
-        impl<C> FromContext<C> for cream::event_bus::EventBusPort
-        where
-            C: AppContext,
-        {
-            fn from_context(ctx: &C) -> Self {
-                let cream_context = ctx.provide_context();
-                Self::from_context(cream_context)
-            }
+            provide_map!(SnapshotRepository; SnapshotSurrealRepository, DbContext);
+            provide_map!(WalletsRepository; WalletsSurrealRepository, DbContext);
+            provide_map!(ActorsRepository; ActorsSurrealRepository, DbContext);
+            provide_map!(CurrenciesRepository; CurrenciesSurrealRepository, DbContext);
+            provide_map!(ItemTagsRepository; ItemTagsSurrealRepository, DbContext);
+            provide_map!(EventsRepository; EventsSurrealRepository, DbContext);
         }
     }
 

@@ -1,6 +1,6 @@
 pub mod application {
     pub mod create_one {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -11,8 +11,8 @@ pub mod application {
             },
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
         }
@@ -43,7 +43,7 @@ pub mod application {
     }
 
     pub mod relate {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -54,8 +54,8 @@ pub mod application {
             },
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct Relate {
             repository: Box<dyn Repository>,
         }
@@ -103,7 +103,7 @@ pub mod application {
     }
 
     pub mod unlink {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -111,8 +111,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct Unlink {
             repository: Box<dyn Repository>,
         }
@@ -131,21 +131,11 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
-        use cream::context::FromContext;
         use monee_core::ItemTagId;
 
-        use crate::shared::{
-            domain::context::AppContext,
-            infrastructure::errors::{UniqueSaveError, UnspecifiedError},
-        };
+        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
 
         use super::item_tag::ItemTag;
-
-        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
-            fn from_context(context: &C) -> Self {
-                context.backoffice_item_tags_repository()
-            }
-        }
 
         #[async_trait::async_trait]
         pub trait Repository {
@@ -187,6 +177,7 @@ pub mod domain {
 
 pub mod infrastructure {
     pub mod repository {
+        use cream::context::ContextProvide;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -194,20 +185,18 @@ pub mod infrastructure {
                 item_tag::ItemTag,
                 repository::{Repository, TagsRelation},
             },
-            shared::infrastructure::{
-                database::Connection,
-                errors::{UniqueSaveError, UnspecifiedError},
+            shared::{
+                domain::context::DbContext,
+                infrastructure::{
+                    database::Connection,
+                    errors::{UniqueSaveError, UnspecifiedError},
+                },
             },
         };
 
+        #[derive(ContextProvide)]
+        #[provider_context(DbContext)]
         pub struct SurrealRepository(Connection);
-        impl SurrealRepository {
-            pub(crate) fn new(
-                clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
-            ) -> Self {
-                Self(clone)
-            }
-        }
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {

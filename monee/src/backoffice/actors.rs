@@ -1,12 +1,8 @@
 pub mod domain {
     pub mod repository {
-        use cream::context::FromContext;
         use monee_core::ActorId;
 
-        use crate::shared::{
-            domain::context::AppContext,
-            infrastructure::errors::{UniqueSaveError, UnspecifiedError},
-        };
+        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
 
         use super::actor::Actor;
 
@@ -14,12 +10,6 @@ pub mod domain {
         pub trait Repository {
             async fn save(&self, id: ActorId, actor: Actor) -> Result<(), UniqueSaveError>;
             async fn alias_resolve(&self, name: &str) -> Result<Option<ActorId>, UnspecifiedError>;
-        }
-
-        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
-            fn from_context(context: &C) -> Self {
-                context.backoffice_actors_repository()
-            }
         }
     }
 
@@ -79,7 +69,7 @@ pub mod domain {
 
 pub mod application {
     pub mod create_one {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::ActorId;
 
         use crate::{
@@ -90,8 +80,8 @@ pub mod application {
             },
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
         }
@@ -118,7 +108,7 @@ pub mod application {
     }
 
     pub mod alias_resolve {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::ActorId;
 
         use crate::{
@@ -126,8 +116,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct AliasResolve {
             repository: Box<dyn Repository>,
         }
@@ -142,24 +132,23 @@ pub mod application {
 
 pub mod infrastructure {
     pub mod repository {
+        use cream::context::ContextProvide;
         use monee_core::ActorId;
 
         use crate::{
             backoffice::actors::domain::{actor::Actor, repository::Repository},
-            shared::infrastructure::{
-                database::{Connection, Entity},
-                errors::{UniqueSaveError, UnspecifiedError},
+            shared::{
+                domain::context::DbContext,
+                infrastructure::{
+                    database::{Connection, Entity},
+                    errors::{UniqueSaveError, UnspecifiedError},
+                },
             },
         };
 
+        #[derive(ContextProvide)]
+        #[provider_context(DbContext)]
         pub struct SurrealRepository(Connection);
-        impl SurrealRepository {
-            pub(crate) fn new(
-                clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
-            ) -> Self {
-                Self(clone)
-            }
-        }
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {

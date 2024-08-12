@@ -9,13 +9,9 @@ pub mod domain {
     }
 
     pub mod repository {
-        use cream::context::FromContext;
         use monee_core::CurrencyId;
 
-        use crate::shared::{
-            domain::context::AppContext,
-            infrastructure::errors::{UniqueSaveError, UnspecifiedError},
-        };
+        use crate::shared::infrastructure::errors::{UniqueSaveError, UnspecifiedError};
 
         use super::currency::Currency;
 
@@ -28,18 +24,12 @@ pub mod domain {
                 code: &str,
             ) -> Result<Option<CurrencyId>, UnspecifiedError>;
         }
-
-        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
-            fn from_context(context: &C) -> Self {
-                context.backoffice_currencies_repository()
-            }
-        }
     }
 }
 
 pub mod application {
     pub mod save_one {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::CurrencyId;
 
         use crate::{
@@ -50,8 +40,8 @@ pub mod application {
             },
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct SaveOne {
             repository: Box<dyn Repository>,
         }
@@ -85,7 +75,7 @@ pub mod application {
     }
 
     pub mod code_resolve {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
         use monee_core::CurrencyId;
 
         use crate::{
@@ -93,8 +83,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::UnspecifiedError},
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct CodeResolve {
             repository: Box<dyn Repository>,
         }
@@ -109,24 +99,23 @@ pub mod application {
 
 pub mod infrastructure {
     pub mod repository {
+        use cream::context::ContextProvide;
         use monee_core::CurrencyId;
 
         use crate::{
             backoffice::currencies::domain::{currency::Currency, repository::Repository},
-            shared::infrastructure::{
-                database::{Connection, Entity},
-                errors::{UniqueSaveError, UnspecifiedError},
+            shared::{
+                domain::context::DbContext,
+                infrastructure::{
+                    database::{Connection, Entity},
+                    errors::{UniqueSaveError, UnspecifiedError},
+                },
             },
         };
 
+        #[derive(ContextProvide)]
+        #[provider_context(DbContext)]
         pub struct SurrealRepository(Connection);
-        impl SurrealRepository {
-            pub(crate) fn new(
-                clone: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
-            ) -> Self {
-                Self(clone)
-            }
-        }
 
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {

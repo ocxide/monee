@@ -1,14 +1,14 @@
 pub mod application {
     pub mod add {
-        use cream::context::FromContext;
+        use cream::context::ContextProvide;
 
         use crate::{
             backoffice::events::domain::{event::Event, repository::Repository},
             shared::domain::context::AppContext,
         };
 
-        #[derive(FromContext)]
-        #[from_context(C: AppContext)]
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
         pub struct Add {
             repository: Box<dyn Repository>,
         }
@@ -25,23 +25,13 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
-        use cream::context::FromContext;
-
-        use crate::shared::{
-            domain::context::AppContext, infrastructure::errors::UnspecifiedError,
-        };
+        use crate::shared::infrastructure::errors::UnspecifiedError;
 
         use super::event::Event;
 
         #[async_trait::async_trait]
         pub trait Repository {
             async fn add(&self, event: Event) -> Result<(), UnspecifiedError>;
-        }
-
-        impl<C: AppContext> FromContext<C> for Box<dyn Repository> {
-            fn from_context(context: &C) -> Self {
-                context.backoffice_events_repository()
-            }
         }
     }
 
@@ -93,11 +83,15 @@ pub mod domain {
 
 pub mod infrastructure {
     pub mod repository {
+        use cream::context::ContextProvide;
+
         use crate::{
             backoffice::events::domain::{event::Event, repository::Repository},
-            shared::infrastructure::errors::UnspecifiedError,
+            shared::{domain::context::DbContext, infrastructure::errors::UnspecifiedError},
         };
 
+        #[derive(ContextProvide)]
+        #[provider_context(DbContext)]
         pub struct SurrealRepository(crate::shared::infrastructure::database::Connection);
 
         impl SurrealRepository {
