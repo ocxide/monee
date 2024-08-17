@@ -20,9 +20,10 @@ async fn init(connection: &Connection) -> Result<()> {
         .check()?;
 
     connection
-        .query("DEFINE TABLE wallet_metadata")
-        .query("DEFINE FIELD name ON wallet_metadata TYPE option<string>")
-        .query("DEFINE INDEX wallet_metadata_name ON wallet_metadata FIELDS name UNIQUE")
+        .query("DEFINE TABLE wallet")
+        .query("DEFINE FIELD name ON wallet TYPE option<string>")
+        .query("DEFINE FIELD currency_id ON wallet TYPE record<currency>")
+        .query("DEFINE INDEX wallet_name ON wallet_metadata FIELDS name UNIQUE")
         .await?
         .check()?;
 
@@ -36,19 +37,6 @@ async fn init(connection: &Connection) -> Result<()> {
         .check()?;
 
     connection
-        .query("DEFINE TABLE procedure")
-        .query("DEFINE FIELD created_at ON procedure VALUE time::now()")
-        .await?
-        .check()?;
-
-    connection
-        .query("DEFINE TABLE generated")
-        .query("DEFINE FIELD in ON generated TYPE record<procedure>")
-        .query("DEFINE FIELD out ON generated TYPE record<event>")
-        .await?
-        .check()?;
-
-    connection
         .query("DEFINE TABLE actor")
         .query("DEFINE FIELD name ON actor TYPE string")
         .query("DEFINE FIELD type ON actor TYPE string")
@@ -58,49 +46,9 @@ async fn init(connection: &Connection) -> Result<()> {
         .check()?;
 
     connection
-        .query("DEFINE TABLE debts")
-        .query("DEFINE FIELD in ON debts TYPE record<procedure>")
-        .query("DEFINE FIELD out ON debts TYPE record<actor>")
-        .query("DEFINE FIELD payment_promise ON debts TYPE option<datetime>")
-        .await?
-        .check()?;
-
-    connection
-        .query("DEFINE TABLE loans")
-        .query("DEFINE FIELD in ON loans TYPE record<procedure>")
-        .query("DEFINE FIELD out ON loans TYPE record<actor>")
-        .query("DEFINE FIELD payment_promise ON loans TYPE option<datetime>")
-        .await?
-        .check()?;
-
-    connection
         .query("DEFINE TABLE item_tag")
         .query("DEFINE FIELD name ON item_tag TYPE string")
         .query("DEFINE INDEX item_tag_name ON item_tag FIELDS name UNIQUE")
-        .await?
-        .check()?;
-
-    connection
-        .query("DEFINE TABLE contains")
-        .query("DEFINE FIELD in ON contains TYPE record<item_tag>")
-        .query("DEFINE FIELD out ON contains TYPE record<item_tag>")
-        .query("DEFINE INDEX contains_item_tag ON contains FIELDS in, out UNIQUE")
-        .await?
-        .check()?;
-
-    connection
-        .query("DEFINE TABLE bought")
-        .query("DEFINE FIELD in ON bought TYPE record<procedure>")
-        .query("DEFINE FIELD out ON bought TYPE record<item_tag>")
-        .query("DEFINE INDEX bought_u ON bought FIELDS in, out UNIQUE")
-        .await?
-        .check()?;
-
-    connection
-        .query("DEFINE TABLE bought_from")
-        .query("DEFINE FIELD in ON bought_from TYPE record<procedure>")
-        .query("DEFINE FIELD out ON bought_from TYPE record<actor>")
-        .query("DEFINE INDEX bought_from_u ON bought_from FIELDS in, out UNIQUE")
         .await?
         .check()?;
 

@@ -186,7 +186,7 @@ pub mod domain {
         }
 
         #[derive(serde::Serialize, serde::Deserialize)]
-        #[serde(rename_all = "snake_case")]
+        #[serde(rename_all = "snake_case", tag = "type")]
         pub enum Event {
             Buy(Buy),
             MoveValue(MoveValue),
