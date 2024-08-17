@@ -234,3 +234,21 @@ impl Snapshot {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn it_creates_debt() {
+        let mut snapshot = Snapshot::default();
+        let debt_id = DebtId::new();
+        let currency = CurrencyId::new();
+
+        let action = DebtOperation::Incur { debt_id, currency };
+
+        snapshot.apply(Operation::Debt(action)).unwrap();
+
+        assert_eq!(snapshot.debts.as_ref().len(), 1);
+    }
+}
