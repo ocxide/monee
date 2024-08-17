@@ -126,7 +126,7 @@ pub mod application {
                 let debt_id = DebtId::new();
                 [
                     monee_core::DebtOperation::Incur {
-                        currency: self.currency,
+                        currency: self.currency_id,
                         debt_id,
                     },
                     monee_core::DebtOperation::Accumulate {
@@ -159,7 +159,7 @@ pub mod domain {
         #[derive(serde::Serialize, serde::Deserialize)]
         pub struct DebtRegister {
             pub amount: Amount,
-            pub currency: CurrencyId,
+            pub currency_id: CurrencyId,
             pub actor_id: ActorId,
             pub payment_promise: Option<Datetime>,
         }
@@ -200,6 +200,7 @@ pub mod domain {
 pub mod infrastructure {
     pub mod repository {
         use cream::context::ContextProvide;
+        use surrealdb::sql::Id;
 
         use crate::{
             backoffice::events::domain::{event::Event, repository::Repository},
@@ -219,11 +220,43 @@ pub mod infrastructure {
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
             async fn add(&self, event: Event) -> Result<(), InfrastructureError> {
-                self.0
-                    .query("CREATE event CONTENT $event")
-                    .bind(("event", event))
-                    .await?
-                    .check()?;
+                match &event {
+                    Event::Buy(buy) => {
+                        let actors = buy
+                            .actors
+                            .iter()
+                            .map(|actor_id| surrealdb::sql::Thing {
+                                tb: "actor".into(),
+                                id: Id::String(actor_id.to_string()),
+                            })
+                            .collect::<Vec<_>>();
+
+                        self.0
+                            .query("CREATE event 
+SET type='buy', item=type::thing('item_tag', $item), amount=$amount, wallet_id=type::thing('wallet', $wallet_id), actors=$actors")
+                                .bind(buy).bind(("actors", actors))
+                    }
+                    Event::RegisterBalance(register) => {
+                        self.0
+                            .query("CREATE event SET type='register_balance', wallet_id=type::thing('wallet', $wallet_id), amount=$amount")
+                            .bind(register)
+                    }
+                    Event::RegisterDebt(debt) => {
+                        self.0
+                            .query("CREATE event SET type='register_debt', amount=$amount, currency_id=type::thing('currency', $currency_id), actor_id=type::thing('actor', $actor_id)")
+                            .bind(debt)
+                    }
+                    Event::RegisterLoan(loan) => {
+                        self.0
+                            .query("CREATE event SET type='register_loan', amount=$amount, currency_id=type::thing('currency', $currency_id), actor_id=type::thing('actor', $actor_id)")
+                            .bind(loan)
+                    }
+                    Event::MoveValue(move_value) => {
+                        self.0
+                            .query("CREATE event SET type='move_value', from=type::thing('wallet', $from), to=type::thing('wallet', $to), amount=$amount")
+                            .bind(move_value)
+                    }
+                }.await?.check()?;
 
                 Ok(())
             }

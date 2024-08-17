@@ -88,6 +88,15 @@ pub mod domain {
         #[derive(Clone)]
         pub struct DbContext(crate::shared::infrastructure::database::Connection);
 
+        #[cfg(test)]
+        impl DbContext {
+            pub(crate) fn new(
+                connection: crate::shared::infrastructure::database::Connection,
+            ) -> Self {
+                Self(connection)
+            }
+        }
+
         impl ContextProvide<crate::shared::infrastructure::database::Connection> for DbContext {
             fn provide(&self) -> crate::shared::infrastructure::database::Connection {
                 self.0.clone()

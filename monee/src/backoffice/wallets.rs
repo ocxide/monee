@@ -120,15 +120,18 @@ pub mod domain {
 
         pub struct Wallet {
             pub currency_id: monee_core::CurrencyId,
-            pub name: Option<WalletName>,
+            pub name: WalletName,
             pub description: String,
         }
     }
 
     pub mod wallet_name {
+        use std::str::FromStr;
+
         #[derive(Debug, serde::Serialize, serde::Deserialize)]
         pub struct WalletName(String);
 
+        #[derive(Debug)]
         pub enum Error {
             InvalidCharacter(char),
         }
@@ -137,10 +140,21 @@ pub mod domain {
             type Error = Error;
 
             fn try_from(value: String) -> Result<Self, Self::Error> {
-                match value.chars().find(|c| !c.is_alphanumeric()) {
+                match value
+                    .chars()
+                    .find(|c| !matches!(*c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_'))
+                {
                     Some(c) => Err(Error::InvalidCharacter(c)),
                     None => Ok(Self(value)),
                 }
+            }
+        }
+
+        impl FromStr for WalletName {
+            type Err = Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Self::try_from(s.to_string())
             }
         }
     }
@@ -198,7 +212,7 @@ pub mod infrastructure {
                 wallet: Wallet,
             ) -> Result<UniqueSaveStatus, InfrastructureError> {
                 let result = self.0
-                    .query("INSERT INTO wallet (id, currency_id, name) VALUES ($id, $currency_id, $name)")
+                    .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name")
                     .bind(("id", id))
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
@@ -237,6 +251,36 @@ pub mod infrastructure {
                     ) => Err(UpdateError::AlreadyExists),
                     Err(e) => Err(UpdateError::Unspecified(e.into())),
                 }
+            }
+        }
+
+        #[cfg(all(test, feature = "db_test"))]
+        mod test {
+            use monee_core::CurrencyId;
+
+            use super::*;
+
+            #[test]
+            fn can_save() {
+                return;
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
+                    let db = crate::shared::infrastructure::database::connect().await.unwrap();
+                    let ctx = crate::shared::domain::context::DbContext::new(db.clone());
+                    let wallet_repo: crate::backoffice::wallets::infrastructure::repository::SurrealRepository = ctx.provide();
+
+                    let id = WalletId::new();
+                    let wallet = Wallet {
+                        currency_id: CurrencyId::new(),
+                        name: "foo".parse().unwrap(),
+                        description: "description".into(),
+                    };
+                    wallet_repo.save(id, wallet).await.unwrap();
+
+                    let mut response = db.query("SELECT count() as count FROM wallet").await.unwrap();
+                    let count: Option<i32> = response.take("count").unwrap();
+
+                    assert_eq!(count, Some(1));
+                });
             }
         }
     }
