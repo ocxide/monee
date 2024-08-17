@@ -9,7 +9,7 @@ pub mod application {
                     event::{Buy, DebtRegister, Event, MoveValue, RegisterBalance},
                     repository::Repository,
                 },
-                snapshot::domain::repository::SnapshotRepository,
+                snapshot::application::snapshot_io::SnapshotIO,
             },
             shared::{domain::context::AppContext, infrastructure::errors::AppError},
         };
@@ -18,18 +18,18 @@ pub mod application {
         #[provider_context(AppContext)]
         pub struct Add {
             repository: Box<dyn Repository>,
-            snapshot_repository: Box<dyn SnapshotRepository>,
+            snapshot_io: SnapshotIO,
         }
 
         impl Add {
             pub async fn run(&self, event: Event) -> Result<(), AppError<Error>> {
-                let mut snapshot = self.snapshot_repository.read_last().await?;
+                let mut snapshot = self.snapshot_io.read_last().await?;
                 if let Err(e) = apply_event(&mut snapshot, &event) {
                     return Err(AppError::App(e));
                 }
 
                 self.repository.add(event).await?;
-                self.snapshot_repository.save(&snapshot).await?;
+                self.snapshot_io.save(&snapshot).await?;
 
                 Ok(())
             }

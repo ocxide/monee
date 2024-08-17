@@ -6,8 +6,9 @@ pub mod domain {
 
         #[async_trait::async_trait]
         pub trait SnapshotRepository: Send + Sync {
-            async fn read_last(&self) -> Result<Snapshot, InfrastructureError>;
+            async fn read_last(&self) -> Result<Option<Snapshot>, InfrastructureError>;
             async fn save(&self, snapshot: &Snapshot) -> Result<(), InfrastructureError>;
+            async fn delete_all(&self) -> Result<(), InfrastructureError>;
         }
     }
 }
@@ -16,22 +17,25 @@ pub mod application {
     pub mod on_wallet_created {
         use cream::{context::ContextProvide, events::Handler};
 
-        use crate::{
-            backoffice::snapshot::domain::repository::SnapshotRepository,
-            shared::domain::context::AppContext,
-        };
+        use crate::shared::domain::context::AppContext;
+
+        use super::snapshot_io::SnapshotIO;
 
         #[derive(ContextProvide)]
         #[provider_context(AppContext)]
         pub struct OnWalletCreated {
-            repository: Box<dyn SnapshotRepository>,
+            snapshot_io: SnapshotIO,
         }
 
         impl Handler for OnWalletCreated {
             type Event = crate::backoffice::wallets::domain::wallet_created::WalletCreated;
 
             async fn handle(&self, event: Self::Event) -> Result<(), cream::events::Error> {
-                let mut snapshot = self.repository.read_last().await.expect("to read snapshot");
+                let mut snapshot = self
+                    .snapshot_io
+                    .read_last()
+                    .await
+                    .expect("to read snapshot");
 
                 // If snapshot already has this wallet, do nothing
                 let result = snapshot.apply(monee_core::Operation::Wallet(
@@ -42,11 +46,45 @@ pub mod application {
                 ));
 
                 if result.is_ok() {
-                    self.repository
+                    self.snapshot_io
                         .save(&snapshot)
                         .await
                         .expect("to save snapshot");
                 }
+
+                Ok(())
+            }
+        }
+    }
+
+    pub mod snapshot_io {
+        use cream::context::ContextProvide;
+
+        use crate::{
+            backoffice::snapshot::domain::repository::SnapshotRepository,
+            shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
+        };
+
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
+        pub struct SnapshotIO {
+            repository: Box<dyn SnapshotRepository>,
+        }
+
+        impl SnapshotIO {
+            pub async fn read_last(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
+                self.repository
+                    .read_last()
+                    .await
+                    .map(|snapshot| snapshot.unwrap_or_default())
+            }
+
+            pub async fn save(
+                &self,
+                snapshot: &monee_core::Snapshot,
+            ) -> Result<(), InfrastructureError> {
+                self.repository.delete_all().await?;
+                self.repository.save(snapshot).await?;
 
                 Ok(())
             }
@@ -72,12 +110,32 @@ pub mod infrastructure {
 
         #[async_trait::async_trait]
         impl SnapshotRepository for SnapshotSurrealRepository {
-            async fn read_last(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
-                todo!()
+            async fn read_last(&self) -> Result<Option<monee_core::Snapshot>, InfrastructureError> {
+                let mut response = self
+                    .0
+                    .query("SELECT * FROM ONLY snapshot ORDER BY created_at DESC LIMIT 1")
+                    .await?
+                    .check()?;
+
+                Ok(response.take(0)?)
             }
 
-            async fn save(&self, _snapshot: &monee_core::Snapshot) -> Result<(), InfrastructureError> {
-                todo!()
+            async fn save(
+                &self,
+                snapshot: &monee_core::Snapshot,
+            ) -> Result<(), InfrastructureError> {
+                self.0
+                    .query("CREATE snapshot CONTENT $snapshot")
+                    .bind(("snapshot", snapshot))
+                    .await?
+                    .check()?;
+
+                Ok(())
+            }
+
+            async fn delete_all(&self) -> Result<(), InfrastructureError> {
+                self.0.query("DELETE FROM snapshot").await?.check()?;
+                Ok(())
             }
         }
     }
