@@ -18,4 +18,19 @@ pub mod errors {
             Self::Unspecified(UnspecifiedError(err.into()))
         }
     }
+
+    pub enum AppError<E> {
+        App(E),
+        Infrastructure(InfrastructureError),
+    }
+
+    impl<E> From<InfrastructureError> for AppError<E> {
+        fn from(value: InfrastructureError) -> Self {
+            Self::Infrastructure(value)
+        }
+    }
+
+    pub trait IntoAppResult<E> {
+        fn into_app_result(self) -> Result<(), AppError<E>>;
+    }
 }

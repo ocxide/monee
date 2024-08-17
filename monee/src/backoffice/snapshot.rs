@@ -6,7 +6,7 @@ pub mod domain {
 
         #[async_trait::async_trait]
         pub trait SnapshotRepository: Send + Sync {
-            async fn read(&self) -> Result<Snapshot, InfrastructureError>;
+            async fn read_last(&self) -> Result<Snapshot, InfrastructureError>;
             async fn save(&self, snapshot: &Snapshot) -> Result<(), InfrastructureError>;
         }
     }
@@ -21,12 +21,9 @@ pub mod application {
             shared::domain::context::AppContext,
         };
 
-        use super::snapshot_read::SnapshotRead;
-
         #[derive(ContextProvide)]
         #[provider_context(AppContext)]
         pub struct OnWalletCreated {
-            snapshot_read: SnapshotRead,
             repository: Box<dyn SnapshotRepository>,
         }
 
@@ -34,7 +31,7 @@ pub mod application {
             type Event = crate::backoffice::wallets::domain::wallet_created::WalletCreated;
 
             async fn handle(&self, event: Self::Event) -> Result<(), cream::events::Error> {
-                let mut snapshot = self.snapshot_read.read().await.expect("to read snapshot");
+                let mut snapshot = self.repository.read_last().await.expect("to read snapshot");
 
                 // If snapshot already has this wallet, do nothing
                 let result = snapshot.apply(monee_core::Operation::Wallet(
@@ -52,28 +49,6 @@ pub mod application {
                 }
 
                 Ok(())
-            }
-        }
-    }
-
-    pub mod snapshot_read {
-        use cream::context::ContextProvide;
-
-        use crate::{
-            backoffice::snapshot::domain::repository::SnapshotRepository,
-            shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
-        };
-
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
-        pub struct SnapshotRead {
-            repository: Box<dyn SnapshotRepository>,
-        }
-
-        impl SnapshotRead {
-            pub async fn read(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
-                // TODO: sync the snapshot with new events
-                self.repository.read().await
             }
         }
     }
@@ -97,7 +72,7 @@ pub mod infrastructure {
 
         #[async_trait::async_trait]
         impl SnapshotRepository for SnapshotSurrealRepository {
-            async fn read(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
+            async fn read_last(&self) -> Result<monee_core::Snapshot, InfrastructureError> {
                 todo!()
             }
 

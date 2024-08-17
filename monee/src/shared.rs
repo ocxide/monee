@@ -1,5 +1,7 @@
 pub mod domain {
     pub mod errors {
+        use crate::shared::infrastructure::errors::IntoAppResult;
+
         #[derive(PartialEq, Eq)]
         pub enum UniqueSaveStatus {
             Created,
@@ -16,6 +18,10 @@ pub mod domain {
             Updated,
             NotFound,
             Conflict,
+        }
+
+        pub enum UniqueSaveError {
+            AlreadyExists,
         }
 
         pub(crate) trait IntoDomainResult<T, E> {
@@ -41,6 +47,28 @@ pub mod domain {
                         | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
                     ) => Ok(UniqueSaveStatus::AlreadyExists),
                     Err(e) => Err(e.into()),
+                }
+            }
+        }
+
+        impl IntoAppResult<UniqueSaveError> for Result<surrealdb::Response, surrealdb::Error> {
+            fn into_app_result(
+                self,
+            ) -> Result<(), crate::shared::infrastructure::errors::AppError<UniqueSaveError>>
+            {
+                match self {
+                    Ok(_) => Ok(()),
+                    Err(
+                        crate::shared::infrastructure::database::Error::Api(
+                            surrealdb::error::Api::Query { .. },
+                        )
+                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
+                    ) => Err(crate::shared::infrastructure::errors::AppError::App(
+                        UniqueSaveError::AlreadyExists,
+                    )),
+                    Err(e) => Err(
+                        crate::shared::infrastructure::errors::AppError::Infrastructure(e.into()),
+                    ),
                 }
             }
         }
