@@ -7,7 +7,7 @@ pub mod domain {
         #[async_trait::async_trait]
         pub trait SnapshotRepository: Send + Sync {
             async fn read_last(&self) -> Result<Option<Snapshot>, InfrastructureError>;
-            async fn save(&self, snapshot: &Snapshot) -> Result<(), InfrastructureError>;
+            async fn save(&self, snapshot: Snapshot) -> Result<(), InfrastructureError>;
             async fn delete_all(&self) -> Result<(), InfrastructureError>;
         }
     }
@@ -40,14 +40,14 @@ pub mod application {
                 // If snapshot already has this wallet, do nothing
                 let result = snapshot.apply(monee_core::Operation::Wallet(
                     monee_core::WalletOperation::Create {
-                        currency: event.currency_id,
+                        currency_id: event.currency_id,
                         wallet_id: event.id,
                     },
                 ));
 
                 if result.is_ok() {
                     self.snapshot_io
-                        .save(&snapshot)
+                        .save(snapshot)
                         .await
                         .expect("to save snapshot");
                 }
@@ -81,7 +81,7 @@ pub mod application {
 
             pub async fn save(
                 &self,
-                snapshot: &monee_core::Snapshot,
+                snapshot: monee_core::Snapshot,
             ) -> Result<(), InfrastructureError> {
                 self.repository.delete_all().await?;
                 self.repository.save(snapshot).await?;
@@ -95,12 +95,16 @@ pub mod application {
 pub mod infrastructure {
     pub mod snapshot_repository {
         use cream::context::ContextProvide;
+        use monee_core::{DebtId, MoneyMap, Snapshot, WalletId};
 
         use crate::{
             backoffice::snapshot::domain::repository::SnapshotRepository,
             shared::{
                 domain::context::DbContext,
-                infrastructure::{database::Connection, errors::InfrastructureError},
+                infrastructure::{
+                    database::{Connection, Entity},
+                    errors::InfrastructureError,
+                },
             },
         };
 
@@ -108,25 +112,68 @@ pub mod infrastructure {
         #[provider_context(DbContext)]
         pub struct SnapshotSurrealRepository(Connection);
 
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct SurrealSnapshot {
+            wallets: Vec<Entity<WalletId, monee_core::Wallet>>,
+            debts: Vec<Entity<DebtId, monee_core::Debt>>,
+            loans: Vec<Entity<DebtId, monee_core::Debt>>,
+        }
+
+        impl From<Snapshot> for SurrealSnapshot {
+            fn from(snapshot: Snapshot) -> Self {
+                Self {
+                    wallets: snapshot.wallets.into_iter().map(Entity::from).collect(),
+                    debts: snapshot.debts.into_iter().map(Entity::from).collect(),
+                    loans: snapshot.loans.into_iter().map(Entity::from).collect(),
+                }
+            }
+        }
+
+        impl From<SurrealSnapshot> for Snapshot {
+            fn from(snapshot: SurrealSnapshot) -> Self {
+                Self {
+                    // Build from surraldb, its supossed to be valid data
+                    wallets: unsafe {
+                        MoneyMap::from_iter_unchecked(
+                            snapshot.wallets.into_iter().map(Entity::into_inner),
+                        )
+                    },
+                    // Build from surraldb, its supossed to be valid data
+                    debts: unsafe {
+                        MoneyMap::from_iter_unchecked(
+                            snapshot.debts.into_iter().map(Entity::into_inner),
+                        )
+                    },
+                    // Build from surraldb, its supossed to be valid data
+                    loans: unsafe {
+                        MoneyMap::from_iter_unchecked(
+                            snapshot.loans.into_iter().map(Entity::into_inner),
+                        )
+                    },
+                }
+            }
+        }
+
         #[async_trait::async_trait]
         impl SnapshotRepository for SnapshotSurrealRepository {
-            async fn read_last(&self) -> Result<Option<monee_core::Snapshot>, InfrastructureError> {
+            async fn read_last(&self) -> Result<Option<Snapshot>, InfrastructureError> {
                 let mut response = self
                     .0
                     .query("SELECT * FROM ONLY snapshot ORDER BY created_at DESC LIMIT 1")
                     .await?
                     .check()?;
 
-                Ok(response.take(0)?)
+                let snapshot: Option<SurrealSnapshot> = response.take(0)?;
+                Ok(snapshot.map(From::from))
             }
 
             async fn save(
                 &self,
-                snapshot: &monee_core::Snapshot,
+                snapshot: monee_core::Snapshot,
             ) -> Result<(), InfrastructureError> {
                 self.0
                     .query("CREATE snapshot CONTENT $snapshot")
-                    .bind(("snapshot", snapshot))
+                    .bind(("snapshot", SurrealSnapshot::from(snapshot)))
                     .await?
                     .check()?;
 

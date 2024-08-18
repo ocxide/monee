@@ -29,7 +29,7 @@ pub mod application {
                 }
 
                 self.repository.add(event).await?;
-                self.snapshot_io.save(&snapshot).await?;
+                self.snapshot_io.save(snapshot).await?;
 
                 Ok(())
             }
@@ -66,17 +66,15 @@ pub mod application {
                 Event::MoveValue(MoveValue { amount, to, from }) => {
                     let from_wallet = snapshot
                         .wallets
-                        .as_ref()
                         .get(from)
                         .ok_or(MoveValueError::WalletNotFound(*from))?;
 
                     let to_wallet = snapshot
                         .wallets
-                        .as_ref()
                         .get(to)
                         .ok_or(MoveValueError::WalletNotFound(*to))?;
 
-                    if from_wallet.currency != to_wallet.currency {
+                    if from_wallet.money.currency_id != to_wallet.money.currency_id {
                         return Err(MoveValueError::CurrenciesNonEqual.into());
                     }
 
@@ -126,7 +124,8 @@ pub mod application {
                 let debt_id = DebtId::new();
                 [
                     monee_core::DebtOperation::Incur {
-                        currency: self.currency_id,
+                        currency_id: self.currency_id,
+                        actor_id: self.actor_id,
                         debt_id,
                     },
                     monee_core::DebtOperation::Accumulate {

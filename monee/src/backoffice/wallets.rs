@@ -128,7 +128,7 @@ pub mod domain {
     pub mod wallet_name {
         use std::str::FromStr;
 
-        #[derive(Debug, serde::Serialize, serde::Deserialize)]
+        #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         pub struct WalletName(String);
 
         #[derive(Debug)]

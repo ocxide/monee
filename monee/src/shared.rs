@@ -195,6 +195,11 @@ pub mod domain {
             provide_map!(CurrenciesRepository; CurrenciesSurrealRepository, DbContext);
             provide_map!(ItemTagsRepository; ItemTagsSurrealRepository, DbContext);
             provide_map!(EventsRepository; EventsSurrealRepository, DbContext);
+            provide_map!(
+                crate::reports::snapshot::domain::repository::Repository;
+                crate::reports::snapshot::infrastructure::repository::SurrealRepository,
+                DbContext
+            );
         }
     }
 
