@@ -1,5 +1,3 @@
-mod sql_id;
-
 pub mod error;
 pub mod log;
 pub mod ops;

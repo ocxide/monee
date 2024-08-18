@@ -104,7 +104,7 @@ pub mod infrastructure {
             shared::{
                 domain::context::DbContext,
                 infrastructure::{
-                    database::{entity_key::EntityKey, Connection, Entity},
+                    database::{EntityKey, Connection, Entity},
                     errors::InfrastructureError,
                 },
             },

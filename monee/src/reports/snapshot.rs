@@ -60,7 +60,6 @@ pub mod application {
 
         #[derive(serde::Deserialize)]
         pub struct WalletDto {
-            #[serde(with = "crate::sql_id::string")]
             pub currency_id: CurrencyId,
             pub name: WalletName,
             pub description: String,
@@ -74,7 +73,7 @@ pub mod application {
             backoffice::snapshot::application::snapshot_io::SnapshotIO,
             reports::snapshot::domain::{
                 repository::Repository,
-                snapshot::{Money, Snapshot, Wallet},
+                snapshot::{Snapshot, Wallet},
             },
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };

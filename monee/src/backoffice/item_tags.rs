@@ -168,7 +168,7 @@ pub mod infrastructure {
                     context::DbContext,
                     errors::{IntoDomainResult, UniqueSaveStatus},
                 },
-                infrastructure::{database::Connection, errors::InfrastructureError},
+                infrastructure::{database::{Connection, EntityKey}, errors::InfrastructureError},
             },
         };
 
@@ -207,7 +207,7 @@ pub mod infrastructure {
                     .await?
                     .check()?;
 
-                let parents: Option<Vec<ParentTagId>> = response.take("parents")?;
+                let parents: Option<Vec<EntityKey<ItemTagId>>> = response.take("parents")?;
 
                 let parents = match parents.as_deref() {
                     Some([]) => return Ok(TagsRelation::NotRelated),
@@ -254,12 +254,10 @@ pub mod infrastructure {
             }
         }
 
-        #[derive(serde::Deserialize, Debug)]
-        struct ParentTagId(#[serde(with = "crate::sql_id::string")] monee_core::ItemTagId);
 
         async fn check_multi_relation(
             connection: &crate::shared::infrastructure::database::Connection,
-            parents: &[ParentTagId],
+            parents: &[EntityKey<ItemTagId>],
             child_id: monee_core::ItemTagId,
         ) -> Result<TagsRelation, InfrastructureError> {
             let parents = parents
@@ -276,7 +274,7 @@ pub mod infrastructure {
                 .await?
                 .check()?;
 
-            let grand_parents: Vec<Vec<ParentTagId>> = response.take("parents")?;
+            let grand_parents: Vec<Vec<EntityKey<ItemTagId>>> = response.take("parents")?;
             let grand_parents: Vec<_> = grand_parents
                 .into_iter()
                 .filter(|p| !p.is_empty())
