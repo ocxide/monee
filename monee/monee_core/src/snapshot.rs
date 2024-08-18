@@ -7,11 +7,14 @@ pub use money::{Money, MoneyMap};
 mod money;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Wallet(Money);
+pub struct Wallet {
+    #[serde(flatten)]
+    pub money: Money,
+}
 
 impl AsMut<Money> for Wallet {
     fn as_mut(&mut self) -> &mut Money {
-        &mut self.0
+        &mut self.money
     }
 }
 
@@ -20,14 +23,15 @@ impl MoneyHost for Wallet {
     type Data = ();
 
     fn create(money: Money, _: Self::Data) -> Self {
-        Self(money)
+        Self { money }
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Debt {
-    money: Money,
-    actor_id: ActorId,
+    #[serde(flatten)]
+    pub money: Money,
+    pub actor_id: ActorId,
 }
 
 impl AsMut<Money> for Debt {

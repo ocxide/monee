@@ -3,8 +3,8 @@ use std::{collections::HashMap, hash::Hash};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Money {
-    amount: Amount,
-    currency_id: CurrencyId,
+    pub amount: Amount,
+    pub currency_id: CurrencyId,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -73,6 +73,18 @@ impl<M: MoneyHost> MoneyMap<M> {
         }
     }
 
+    /// # Safety
+    ///
+    /// Creates a MoneyMap bypassing any domain rule.
+    /// You must ensure that the data source is valid.
+    /// Eg: Database, file save, etc.
+    pub unsafe fn from_iter_unchecked<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = (M::Key, M)>,
+    {
+        Self(iter.collect())
+    }
+
     pub fn get(&self, k: &M::Key) -> Option<&M> {
         self.0.get(k)
     }
@@ -105,4 +117,3 @@ pub enum MoneyError {
     CannotSub,
     AlreadyExists,
 }
-
