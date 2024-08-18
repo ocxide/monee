@@ -118,7 +118,7 @@ pub(crate) mod entity {
         trait SqlIdSe {
             const TABLE: &'static str;
 
-            fn into_id(&self) -> surrealdb::sql::Id;
+            fn create_id(&self) -> surrealdb::sql::Id;
         }
 
         #[derive(Serialize)]
@@ -139,7 +139,7 @@ pub(crate) mod entity {
             {
                 let thing = surrealdb::sql::Thing {
                     tb: K::TABLE.to_owned(),
-                    id: self.0.into_id(),
+                    id: self.0.create_id(),
                 };
 
                 EntitySe {
@@ -152,14 +152,14 @@ pub(crate) mod entity {
 
         impl SqlIdSe for DebtId {
             const TABLE: &'static str = "debt";
-            fn into_id(&self) -> surrealdb::sql::Id {
+            fn create_id(&self) -> surrealdb::sql::Id {
                 surrealdb::sql::Id::String(self.to_string())
             }
         }
 
         impl SqlIdSe for WalletId {
             const TABLE: &'static str = "wallet";
-            fn into_id(&self) -> surrealdb::sql::Id {
+            fn create_id(&self) -> surrealdb::sql::Id {
                 surrealdb::sql::Id::String(self.to_string())
             }
         }
