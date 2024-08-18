@@ -94,6 +94,74 @@ pub async fn connect() -> surrealdb::Result<Connection> {
 
 pub use entity::Entity;
 
+pub(crate) mod entity_key {
+    use monee_core::{ActorId, CurrencyId, DebtId, WalletId};
+    use serde::{Deserialize, Serialize};
+
+    use super::entity::de::SqlIdDe;
+
+    pub struct EntityKey<K>(pub K);
+
+    impl<'de, K: SqlIdDe> Deserialize<'de> for EntityKey<K> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let id = <K as SqlIdDe>::deserialize(deserializer)?;
+            Ok(Self(id))
+        }
+    }
+
+    // All ids should be lightweight, so its ok to impl Copy
+    pub(in super::super) trait SqlIdSe: Copy {
+        const TABLE: &'static str;
+
+        fn into_id(self) -> surrealdb::sql::Id;
+    }
+
+    impl<K: SqlIdSe> Serialize for EntityKey<K> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let thing = surrealdb::sql::Thing {
+                tb: K::TABLE.to_owned(),
+                id: self.0.into_id(),
+            };
+
+            thing.serialize(serializer)
+        }
+    }
+
+    impl SqlIdSe for DebtId {
+        const TABLE: &'static str = "debt";
+        fn into_id(self) -> surrealdb::sql::Id {
+            surrealdb::sql::Id::String(self.to_string())
+        }
+    }
+
+    impl SqlIdSe for WalletId {
+        const TABLE: &'static str = "wallet";
+        fn into_id(self) -> surrealdb::sql::Id {
+            surrealdb::sql::Id::String(self.to_string())
+        }
+    }
+
+    impl SqlIdSe for ActorId {
+        const TABLE: &'static str = "actor";
+        fn into_id(self) -> surrealdb::sql::Id {
+            surrealdb::sql::Id::String(self.to_string())
+        }
+    }
+
+    impl SqlIdSe for CurrencyId {
+        const TABLE: &'static str = "currency";
+        fn into_id(self) -> surrealdb::sql::Id {
+            surrealdb::sql::Id::String(self.to_string())
+        }
+    }
+}
+
 pub(crate) mod entity {
     #[derive(Debug, Clone)]
     pub struct Entity<K, T>(pub K, pub T);
@@ -110,16 +178,11 @@ pub(crate) mod entity {
         }
     }
 
-    mod se {
+    pub(in super::super) mod se {
+        use crate::shared::infrastructure::database::entity_key::{EntityKey, SqlIdSe};
+
         use super::Entity;
-        use monee_core::{DebtId, WalletId};
         use serde::Serialize;
-
-        trait SqlIdSe {
-            const TABLE: &'static str;
-
-            fn create_id(&self) -> surrealdb::sql::Id;
-        }
 
         #[derive(Serialize)]
         struct EntitySe<'a, K, T> {
@@ -137,39 +200,21 @@ pub(crate) mod entity {
             where
                 S: serde::Serializer,
             {
-                let thing = surrealdb::sql::Thing {
-                    tb: K::TABLE.to_owned(),
-                    id: self.0.create_id(),
-                };
-
+                let id = EntityKey::<K>(self.0);
                 EntitySe {
-                    id: &thing,
+                    id: &id,
                     value: &self.1,
                 }
                 .serialize(serializer)
             }
         }
-
-        impl SqlIdSe for DebtId {
-            const TABLE: &'static str = "debt";
-            fn create_id(&self) -> surrealdb::sql::Id {
-                surrealdb::sql::Id::String(self.to_string())
-            }
-        }
-
-        impl SqlIdSe for WalletId {
-            const TABLE: &'static str = "wallet";
-            fn create_id(&self) -> surrealdb::sql::Id {
-                surrealdb::sql::Id::String(self.to_string())
-            }
-        }
     }
 
-    mod de {
+    pub(in super::super) mod de {
         use super::Entity;
         use serde::Deserialize;
 
-        trait SqlIdDe: Sized + serde::de::DeserializeOwned {
+        pub trait SqlIdDe: Sized + serde::de::DeserializeOwned {
             fn deserialize<'de, D: serde::Deserializer<'de>>(
                 deserializer: D,
             ) -> Result<Self, D::Error>;
