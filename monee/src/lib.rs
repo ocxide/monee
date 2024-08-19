@@ -23,9 +23,6 @@ fn create_local_path() -> std::path::PathBuf {
     path
 }
 
-// TODO remove
-pub use crate::shared::infrastructure::database::Entity;
-
 pub mod backoffice;
 pub mod reports;
 pub mod shared;
