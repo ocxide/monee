@@ -1,13 +1,12 @@
 pub mod domain {
     pub mod repository {
-        use crate::{
-            reports::snapshot::application::snapshot_deps_dto::SnapshotDepsDto,
-            shared::infrastructure::errors::InfrastructureError,
-        };
+        use crate::shared::infrastructure::errors::InfrastructureError;
+
+        use super::snapshot::Snapshot;
 
         #[async_trait::async_trait]
         pub trait Repository {
-            async fn read_deps(&self) -> Result<SnapshotDepsDto, InfrastructureError>;
+            async fn read(&self) -> Result<Snapshot, InfrastructureError>;
         }
     }
 
@@ -24,8 +23,10 @@ pub mod domain {
         pub struct Snapshot {
             pub wallets: HashMap<WalletId, (Wallet, Money)>,
             pub debts: HashMap<DebtId, (Debt, Money)>,
+            pub loans: HashMap<DebtId, (Debt, Money)>,
         }
 
+        #[derive(serde::Deserialize)]
         pub struct Money {
             pub amount: Amount,
             pub currency: Currency,
@@ -35,6 +36,7 @@ pub mod domain {
             pub actor: Actor,
         }
 
+        #[derive(serde::Deserialize)]
         pub struct Wallet {
             pub name: WalletName,
             pub description: String,
@@ -43,76 +45,24 @@ pub mod domain {
 }
 
 pub mod application {
-    pub mod snapshot_deps_dto {
-        use crate::backoffice::wallets::domain::wallet_name::WalletName;
-        use crate::shared::infrastructure::database::Entity;
-        use monee_core::{ActorId, CurrencyId, WalletId};
-
-        use crate::backoffice::{
-            actors::domain::actor::Actor, currencies::domain::currency::Currency,
-        };
-
-        pub struct SnapshotDepsDto {
-            pub actors: Vec<Entity<ActorId, Actor>>,
-            pub wallets: Vec<Entity<WalletId, WalletDto>>,
-            pub currencies: Vec<Entity<CurrencyId, Currency>>,
-        }
-
-        #[derive(serde::Deserialize)]
-        pub struct WalletDto {
-            pub currency_id: CurrencyId,
-            pub name: WalletName,
-            pub description: String,
-        }
-    }
-
     pub mod snapshot_report {
         use cream::context::ContextProvide;
 
         use crate::{
-            backoffice::snapshot::application::snapshot_io::SnapshotIO,
-            reports::snapshot::domain::{
-                repository::Repository,
-                snapshot::{Snapshot, Wallet},
-            },
+            reports::snapshot::domain::{repository::Repository, snapshot::Snapshot},
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
-
-        use super::snapshot_deps_dto::SnapshotDepsDto;
 
         #[derive(ContextProvide)]
         #[provider_context(AppContext)]
         pub struct SnapshotReport {
             repository: Box<dyn Repository>,
-            snapshot_io: SnapshotIO,
         }
 
         impl SnapshotReport {
             pub async fn run(&self) -> Result<Snapshot, InfrastructureError> {
-                let snapshot = self.snapshot_io.read_last().await?;
-                let SnapshotDepsDto {
-                    wallets,
-                    actors,
-                    currencies,
-                } = self.repository.read_deps().await?;
-
-                let wallets = snapshot.wallets.into_iter().map(|(id, snapshot_wallet)| {
-                    let wallet = wallets.iter().find(|w| w.0 == id).expect("to find wallet");
-                    let currency = currencies
-                        .iter()
-                        .find(|c| c.0 == wallet.1.currency_id)
-                        .expect("to find currency");
-
-                    (
-                        Wallet {
-                            name: wallet.1.name.clone(),
-                            description: wallet.1.description.clone(),
-                        },
-                        snapshot_wallet.money.clone(),
-                    )
-                });
-
-                todo!()
+                // TODO: ensure the snapshot is up-to-date
+                self.repository.read().await
             }
         }
     }
@@ -121,13 +71,13 @@ pub mod application {
 pub mod infrastructure {
     pub mod repository {
         use cream::context::ContextProvide;
-        use monee_core::{ActorId, CurrencyId, WalletId};
+        use monee_core::{Amount, DebtId, WalletId};
 
         use crate::{
             backoffice::{actors::domain::actor::Actor, currencies::domain::currency::Currency},
-            reports::snapshot::{
-                application::snapshot_deps_dto::{SnapshotDepsDto, WalletDto},
-                domain,
+            reports::snapshot::domain::{
+                self,
+                snapshot::{Debt, Money, Snapshot, Wallet},
             },
             shared::{
                 domain::context::DbContext,
@@ -142,25 +92,89 @@ pub mod infrastructure {
         #[provider_context(DbContext)]
         pub struct SurrealRepository(Connection);
 
+        #[derive(serde::Deserialize, Default)]
+        struct SnapshotDto {
+            wallets: Vec<SurrealWallet>,
+            debts: Vec<Entity<DebtId, SurrealDebt>>,
+            loans: Vec<Entity<DebtId, SurrealDebt>>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SurrealMoney {
+            amount: Amount,
+            #[serde(rename = "currency_id")]
+            currency: Currency,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SurrealWallet {
+            #[serde(rename = "id")]
+            data: Entity<WalletId, Wallet>,
+            #[serde(flatten)]
+            money: SurrealMoney,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SurrealDebt {
+            #[serde(flatten)]
+            money: SurrealMoney,
+            #[serde(flatten)]
+            data: SurrealDebtData,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SurrealDebtData {
+            #[serde(rename = "actor_id")]
+            actor: Actor,
+        }
+
+        impl From<SurrealMoney> for Money {
+            fn from(value: SurrealMoney) -> Self {
+                Money {
+                    amount: value.amount,
+                    currency: value.currency,
+                }
+            }
+        }
+
+        impl From<SurrealDebtData> for Debt {
+            fn from(value: SurrealDebtData) -> Self {
+                Debt { actor: value.actor }
+            }
+        }
+
         #[async_trait::async_trait]
         impl domain::repository::Repository for SurrealRepository {
-            async fn read_deps(&self) -> Result<SnapshotDepsDto, InfrastructureError> {
+            async fn read(&self) -> Result<Snapshot, InfrastructureError> {
                 let mut response = self
                     .0
-                    .query("SELECT * FROM actor")
-                    .query("SELECT * FROM wallet")
-                    .query("SELECT * FROM currency")
+                    .query(
+                        "SELECT * FROM snapshot FETCH 
+wallets.currency_id, wallets.id,
+debts.currency_id, debts.actor_id, 
+loans.currency_id, loans.actor_id",
+                    )
                     .await?
                     .check()?;
 
-                let actors: Vec<Entity<ActorId, Actor>> = response.take(0)?;
-                let wallets: Vec<Entity<WalletId, WalletDto>> = response.take(1)?;
-                let currencies: Vec<Entity<CurrencyId, Currency>> = response.take(2)?;
-
-                Ok(SnapshotDepsDto {
-                    actors,
-                    wallets,
-                    currencies,
+                let snapshot: Option<SnapshotDto> = response.take(0)?;
+                let snapshot = snapshot.unwrap_or_default();
+                Ok(Snapshot {
+                    wallets: snapshot
+                        .wallets
+                        .into_iter()
+                        .map(|w| (w.data.0, (w.data.1, w.money.into())))
+                        .collect(),
+                    debts: snapshot
+                        .debts
+                        .into_iter()
+                        .map(|d| (d.0, (d.1.data.into(), d.1.money.into())))
+                        .collect(),
+                    loans: snapshot
+                        .loans
+                        .into_iter()
+                        .map(|d| (d.0, (d.1.data.into(), d.1.money.into())))
+                        .collect(),
                 })
             }
         }
