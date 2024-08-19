@@ -126,10 +126,16 @@ pub mod domain {
     }
 
     pub mod wallet_name {
-        use std::str::FromStr;
+        use std::{fmt::Display, str::FromStr};
 
         #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         pub struct WalletName(String);
+
+        impl Display for WalletName {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
 
         #[derive(Debug)]
         pub enum Error {

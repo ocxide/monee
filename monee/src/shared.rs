@@ -85,10 +85,19 @@ pub mod domain {
             db: DbContext,
         }
 
+        impl AppContext {
+            pub fn provide<S>(&self) -> S
+            where
+                Self: ContextProvide<S>,
+            {
+                <Self as ContextProvide<S>>::provide(self)
+            }
+        }
+
         #[derive(Clone)]
         pub struct DbContext(crate::shared::infrastructure::database::Connection);
 
-        #[cfg(test)]
+        #[cfg(all(test, feature = "db_test"))]
         impl DbContext {
             pub(crate) fn new(
                 connection: crate::shared::infrastructure::database::Connection,
