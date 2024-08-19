@@ -1,3 +1,26 @@
+pub mod application {
+    pub mod get_events {
+        use cream::context::ContextProvide;
+
+        use crate::{
+            reports::events::domain::{event::Event, repository::Repository},
+            shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
+        };
+
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
+        pub struct GetEvents {
+            repository: Box<dyn Repository>,
+        }
+
+        impl GetEvents {
+            pub async fn run(&self) -> Result<Vec<Event>, InfrastructureError> {
+                self.repository.get_all().await
+            }
+        }
+    }
+}
+
 pub mod domain {
     pub mod repository {
         use crate::shared::infrastructure::errors::InfrastructureError;
@@ -43,10 +66,10 @@ pub mod domain {
 
         #[derive(serde::Deserialize, Debug)]
         pub struct DebtRegister {
-            amount: Amount,
-            currency: Currency,
-            actor: Actor,
-            payment_promise: Option<crate::date::Datetime>,
+            pub amount: Amount,
+            pub currency: Currency,
+            pub actor: Actor,
+            pub payment_promise: Option<crate::date::Datetime>,
         }
     }
 }
@@ -102,7 +125,7 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
                 tokio::runtime::Runtime::new().unwrap().block_on(async {
                     let db = crate::shared::infrastructure::database::connect().await.unwrap();
                     let ctx = crate::shared::domain::context::DbContext::new(db);
-                    
+
                     let repo: super::SurrealRepository = ctx.provide();
                     let save_repo: crate::backoffice::events::infrastructure::repository::SurrealRepository = ctx.provide();
 

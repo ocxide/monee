@@ -200,6 +200,11 @@ pub mod domain {
                 crate::reports::snapshot::infrastructure::repository::SurrealRepository,
                 DbContext
             );
+            provide_map!(
+                crate::reports::events::domain::repository::Repository;
+                crate::reports::events::infrastructure::repository::SurrealRepository,
+                DbContext
+            );
         }
     }
 
