@@ -120,14 +120,18 @@ mod entity {
         impl<K: SqlId> SqlIdDeserializator<K> for StringId {
             fn deserialize_id<'de, D: Deserializer<'de>>(deserializer: D) -> Result<K, D::Error> {
                 #[derive(serde::Deserialize)]
+                struct SqlTable<I> {
+                    id: I,
+                }
+
+                #[derive(serde::Deserialize)]
                 struct StringSqlIdDeserialize<K> {
                     #[serde(rename = "String")]
                     field: K,
                 }
 
-                let StringSqlIdDeserialize { field } =
-                    StringSqlIdDeserialize::deserialize(deserializer)?;
-                Ok(field)
+                let val = SqlTable::<StringSqlIdDeserialize::<K>>::deserialize(deserializer)?;
+                Ok(val.id.field)
             }
         }
     }
