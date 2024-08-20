@@ -11,8 +11,11 @@ pub mod domain {
     pub mod repository {
         use monee_core::CurrencyId;
 
-        use crate::shared::{
-            domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+        use crate::{
+            prelude::AppError,
+            shared::{
+                domain::errors::UniqueSaveError, infrastructure::errors::InfrastructureError,
+            },
         };
 
         use super::currency::Currency;
@@ -23,7 +26,8 @@ pub mod domain {
                 &self,
                 id: CurrencyId,
                 currency: Currency,
-            ) -> Result<UniqueSaveStatus, InfrastructureError>;
+            ) -> Result<(), AppError<UniqueSaveError>>;
+
             async fn code_resolve(
                 &self,
                 code: &str,
@@ -39,10 +43,8 @@ pub mod application {
 
         use crate::{
             backoffice::currencies::domain::{currency::Currency, repository::Repository},
-            shared::{
-                domain::{context::AppContext, errors::UniqueSaveStatus},
-                infrastructure::errors::InfrastructureError,
-            },
+            prelude::AppError,
+            shared::domain::{context::AppContext, errors::UniqueSaveError},
         };
 
         #[derive(ContextProvide)]
@@ -52,10 +54,7 @@ pub mod application {
         }
 
         impl SaveOne {
-            pub async fn run(
-                &self,
-                currency: Currency,
-            ) -> Result<UniqueSaveStatus, InfrastructureError> {
+            pub async fn run(&self, currency: Currency) -> Result<(), AppError<UniqueSaveError>> {
                 self.repository.save(CurrencyId::new(), currency).await
             }
         }
@@ -91,14 +90,12 @@ pub mod infrastructure {
 
         use crate::{
             backoffice::currencies::domain::{currency::Currency, repository::Repository},
+            prelude::AppError,
             shared::{
-                domain::{
-                    context::DbContext,
-                    errors::{IntoDomainResult, UniqueSaveStatus},
-                },
+                domain::{context::DbContext, errors::UniqueSaveError},
                 infrastructure::{
                     database::{Connection, Entity},
-                    errors::InfrastructureError,
+                    errors::{InfrastructureError, IntoAppResult},
                 },
             },
         };
@@ -113,7 +110,7 @@ pub mod infrastructure {
                 &self,
                 id: CurrencyId,
                 currency: Currency,
-            ) -> Result<UniqueSaveStatus, InfrastructureError> {
+            ) -> Result<(), AppError<UniqueSaveError>> {
                 let response = self.0
                 .query(
                     "CREATE ONLY type::thing('currency', $id) SET name = $name, symbol = $symbol, code = $code",
@@ -122,10 +119,10 @@ pub mod infrastructure {
                 .bind(("name", currency.name))
                 .bind(("symbol", currency.symbol))
                 .bind(("code", currency.code))
-                .await?
+                .await.map_err(InfrastructureError::from)?
                 .check();
 
-                response.into_domain_result()
+                response.into_app_result()
             }
 
             async fn code_resolve(
