@@ -25,7 +25,9 @@ mod error {
 
 use alias::MaybeAlias;
 use clap::Parser;
-use monee::backoffice::wallets::domain::wallet_name::WalletName;
+use monee::{
+    backoffice::wallets::domain::wallet_name::WalletName, shared::domain::errors::UniqueSaveError,
+};
 use monee_core::CurrencyId;
 
 #[derive(clap::Parser)]
@@ -77,11 +79,18 @@ async fn main() -> miette::Result<()> {
                     currency_id,
                 };
 
-                service
-                    .run(wallet)
-                    .await
-                    .map_err(|e| error::PanicError::new(e).into_final_report(&ctx))
-                    .map(|_| ())
+                service.run(wallet).await.map_err(|e| match e {
+                    monee::shared::infrastructure::errors::AppError::Infrastructure(e) => {
+                        error::PanicError::new(e).into_final_report(&ctx)
+                    }
+
+                    monee::shared::infrastructure::errors::AppError::App(
+                        UniqueSaveError::AlreadyExists,
+                    ) => miette::diagnostic! {
+                        "Wallet with this name already exists"
+                    }
+                    .into(),
+                })
             }
         },
     }
