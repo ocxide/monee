@@ -132,6 +132,49 @@ mod events_commands {
     }
 }
 
+mod currency_events {
+    use monee::{
+        backoffice::currencies::domain::{
+            currency::Currency, currency_code::CurrencyCode, currency_name::CurrencyName,
+            currency_symbol::CurrencySymbol,
+        },
+        prelude::AppContext,
+    };
+
+    use crate::prelude::MapAppErr;
+
+    #[derive(clap::Subcommand)]
+    pub enum CurrencyCommand {
+        Create {
+            #[arg(short, long)]
+            name: CurrencyName,
+
+            #[arg(short, long)]
+            code: CurrencyCode,
+
+            #[arg(short, long)]
+            symbol: CurrencySymbol,
+        },
+    }
+
+    pub async fn run(ctx: &AppContext, command: CurrencyCommand) -> miette::Result<()> {
+        match command {
+            CurrencyCommand::Create { name, code, symbol } => {
+                let service =
+                    ctx.provide::<monee::backoffice::currencies::application::save_one::SaveOne>();
+
+                let currency = Currency { code, name, symbol };
+                service.run(currency).await.map_app_err(ctx, |_| {
+                    miette::diagnostic! {
+                        "Duplicated currency code",
+                    }
+                    .into()
+                })
+            }
+        }
+    }
+}
+
 #[derive(clap::Parser)]
 struct CliParser {
     #[command(subcommand)]
@@ -148,6 +191,11 @@ enum Command {
     Events {
         #[command(subcommand)]
         command: events_commands::EventCommand,
+    },
+
+    Currency {
+        #[command(subcommand)]
+        command: currency_events::CurrencyCommand,
     },
 }
 
@@ -210,5 +258,7 @@ async fn run(ctx: &AppContext, cli: CliParser) -> miette::Result<()> {
         Command::Events {
             command: events_commands::EventCommand::Add { command },
         } => events_commands::run(ctx, command).await,
+
+        Command::Currency { command } => currency_events::run(ctx, command).await,
     }
 }
