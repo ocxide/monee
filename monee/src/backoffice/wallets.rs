@@ -8,8 +8,8 @@ pub mod application {
                 repository::Repository, wallet::Wallet, wallet_created::WalletCreated,
             },
             shared::{
-                domain::{context::AppContext, errors::UniqueSaveStatus},
-                infrastructure::errors::InfrastructureError,
+                domain::{context::AppContext, errors::UniqueSaveError},
+                infrastructure::errors::{AppError, InfrastructureError},
             },
         };
 
@@ -21,20 +21,14 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(
-                &self,
-                wallet: Wallet,
-            ) -> Result<UniqueSaveStatus, InfrastructureError> {
+            pub async fn run(&self, wallet: Wallet) -> Result<(), AppError<UniqueSaveError>> {
                 let id = WalletId::new();
                 let currency_id = wallet.currency_id;
 
-                let result = self.repository.save(id, wallet).await?;
-                if !result.is_ok() {
-                    return Ok(result);
-                }
-
+                self.repository.save(id, wallet).await?;
                 self.bus.publish(WalletCreated { id, currency_id });
-                Ok(UniqueSaveStatus::Created)
+
+                Ok(())
             }
         }
 
@@ -84,7 +78,8 @@ pub mod domain {
         use monee_core::WalletId;
 
         use crate::shared::{
-            domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+            domain::errors::UniqueSaveError,
+            infrastructure::errors::{AppError, InfrastructureError},
         };
 
         use super::{wallet::Wallet, wallet_name::WalletName};
@@ -95,7 +90,7 @@ pub mod domain {
                 &self,
                 id: WalletId,
                 wallet: Wallet,
-            ) -> Result<UniqueSaveStatus, InfrastructureError>;
+            ) -> Result<(), AppError<UniqueSaveError>>;
             async fn update(
                 &self,
                 id: WalletId,
@@ -199,11 +194,11 @@ pub mod infrastructure {
                 wallet_name::WalletName,
             },
             shared::{
-                domain::{
-                    context::DbContext,
-                    errors::{IntoDomainResult, UniqueSaveStatus},
+                domain::{context::DbContext, errors::UniqueSaveError},
+                infrastructure::{
+                    database::Connection,
+                    errors::{AppError, InfrastructureError, IntoAppResult},
                 },
-                infrastructure::{database::Connection, errors::InfrastructureError},
             },
         };
 
@@ -217,16 +212,16 @@ pub mod infrastructure {
                 &self,
                 id: WalletId,
                 wallet: Wallet,
-            ) -> Result<UniqueSaveStatus, InfrastructureError> {
+            ) -> Result<(), AppError<UniqueSaveError>> {
                 let result = self.0
                     .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name")
                     .bind(("id", id))
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
-                    .await?
+                    .await.map_err(InfrastructureError::from)?
                     .check();
 
-                result.into_domain_result()
+                result.into_app_result()
             }
 
             async fn update(
