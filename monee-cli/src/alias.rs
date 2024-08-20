@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
+use monee::prelude::AppContext;
 
-use monee::shared::domain::context::AppContext;
-use monee_core::CurrencyId;
+use crate::error::PanicError;
 
 pub trait AliasedId: Sized + FromStr + Clone {
     type Alias: FromStr + Display + Clone;
@@ -35,13 +35,7 @@ where
             Ok(None) => Err({
                 miette::miette!(code = "NotFound", "Could not resolve alias `{}`", alias_str)
             }),
-            Err(err) => Err({
-                miette::miette!(
-                    code = "InfrastructureError",
-                    "Unknown error resolving alias: {}",
-                    err
-                )
-            }),
+            Err(err) => Err(PanicError::new(err).into_final_report(ctx)),
         }
     }
 }
@@ -78,17 +72,37 @@ where
     }
 }
 
-impl AliasedId for CurrencyId {
-    type Alias = String;
+mod impl_trait {
+    use monee::{backoffice::wallets::domain::wallet_name::WalletName, prelude::AppContext};
+    use monee_core::{CurrencyId, WalletId};
 
-    async fn resolve(
-        ctx: &AppContext,
-        alias: Self::Alias,
-    ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
-    {
-        let service = ctx
-            .provide::<monee::backoffice::currencies::application::code_resolve::CodeResolve>();
-        service.run(&alias).await
+    use super::AliasedId;
+
+    impl AliasedId for CurrencyId {
+        type Alias = String;
+
+        async fn resolve(
+            ctx: &AppContext,
+            alias: Self::Alias,
+        ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
+        {
+            let service = ctx
+                .provide::<monee::backoffice::currencies::application::code_resolve::CodeResolve>();
+            service.run(&alias).await
+        }
+    }
+
+    impl AliasedId for WalletId {
+        type Alias = WalletName;
+
+        async fn resolve(
+            ctx: &AppContext,
+            alias: Self::Alias,
+        ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
+        {
+            let service = ctx
+                .provide::<monee::backoffice::wallets::application::name_resolve::NameResolve>();
+            service.run(&alias).await
+        }
     }
 }
-

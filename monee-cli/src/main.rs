@@ -1,8 +1,16 @@
 mod alias;
 mod date;
 
+mod prelude {
+    pub use crate::error::LogAndErr;
+    pub use crate::error::MapAppErr;
+}
+
 mod error {
-    use monee::shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError};
+    use monee::shared::{
+        domain::context::AppContext,
+        infrastructure::errors::{AppError, InfrastructureError},
+    };
 
     pub struct PanicError(InfrastructureError);
 
@@ -21,14 +29,106 @@ mod error {
             .into()
         }
     }
+
+    pub trait LogAndErr<T> {
+        fn log_err(self, ctx: &AppContext) -> Result<T, miette::Error>;
+    }
+
+    impl<T> LogAndErr<T> for Result<T, InfrastructureError> {
+        fn log_err(self, ctx: &AppContext) -> Result<T, miette::Error> {
+            self.map_err(|e| {
+                let err = PanicError::new(e);
+                err.into_final_report(ctx)
+            })
+        }
+    }
+
+    pub trait MapAppErr<T, E> {
+        fn map_app_err(
+            self,
+            ctx: &AppContext,
+            mapper: impl FnOnce(E) -> miette::Error,
+        ) -> Result<T, miette::Error>;
+    }
+
+    impl<T, E> MapAppErr<T, E> for Result<T, AppError<E>> {
+        fn map_app_err(
+            self,
+            ctx: &AppContext,
+            mapper: impl FnOnce(E) -> miette::Error,
+        ) -> Result<T, miette::Error> {
+            self.map_err(|e| match e {
+                AppError::Infrastructure(e) => PanicError::new(e).into_final_report(ctx),
+                AppError::App(e) => mapper(e),
+            })
+        }
+    }
 }
 
 use alias::MaybeAlias;
 use clap::Parser;
 use monee::{
-    backoffice::wallets::domain::wallet_name::WalletName, shared::domain::errors::UniqueSaveError,
+    backoffice::wallets::domain::wallet_name::WalletName, prelude::AppError,
+    shared::domain::errors::UniqueSaveError,
 };
 use monee_core::CurrencyId;
+
+mod events_commands {
+    use crate::prelude::MapAppErr;
+    use monee::{
+        backoffice::events::domain::event::{Event, RegisterBalance},
+        prelude::AppContext,
+    };
+    use monee_core::{Amount, WalletId};
+
+    use crate::alias::MaybeAlias;
+
+    #[derive(clap::Subcommand)]
+    pub enum EventCommand {
+        Add {
+            #[command(subcommand)]
+            command: AddEventCommand,
+        },
+    }
+
+    #[derive(clap::Subcommand)]
+    pub enum AddEventCommand {
+        RegisterBalance {
+            #[arg(short, long)]
+            wallet: MaybeAlias<WalletId>,
+            #[arg(short, long)]
+            amount: Amount,
+        },
+    }
+
+    pub async fn run(ctx: &AppContext, command: AddEventCommand) -> Result<(), miette::Error> {
+        let service = ctx.provide::<monee::backoffice::events::application::add::Add>();
+
+        let event = match command {
+            AddEventCommand::RegisterBalance { wallet, amount } => {
+                let wallet_id = wallet.resolve(ctx).await?;
+                Event::RegisterBalance(RegisterBalance { amount, wallet_id })
+            }
+        };
+
+        service.run(event).await.map_app_err(ctx, |err| match err {
+            monee::backoffice::events::application::add::Error::Apply(e) => miette::diagnostic! {
+                "Failed to apply event {}", e
+            }
+            .into(),
+
+            monee::backoffice::events::application::add::Error::MoveValue(e) => {
+                miette::diagnostic! {
+                    "Failed to move value {}",
+                    match e {
+                        monee::backoffice::events::application::add::MoveValueError::WalletNotFound(_) => "wallet not found",
+                        monee::backoffice::events::application::add::MoveValueError::CurrenciesNonEqual => "currencies are not equal",
+                    }
+                }.into()
+            }
+        })
+    }
+}
 
 #[derive(clap::Parser)]
 struct CliParser {
@@ -41,6 +141,11 @@ enum Command {
     Wallet {
         #[command(subcommand)]
         command: WalletCommand,
+    },
+
+    Events {
+        #[command(subcommand)]
+        command: events_commands::EventCommand,
     },
 }
 
@@ -80,18 +185,20 @@ async fn main() -> miette::Result<()> {
                 };
 
                 service.run(wallet).await.map_err(|e| match e {
-                    monee::shared::infrastructure::errors::AppError::Infrastructure(e) => {
+                    AppError::Infrastructure(e) => {
                         error::PanicError::new(e).into_final_report(&ctx)
                     }
 
-                    monee::shared::infrastructure::errors::AppError::App(
-                        UniqueSaveError::AlreadyExists,
-                    ) => miette::diagnostic! {
+                    AppError::App(UniqueSaveError::AlreadyExists) => miette::diagnostic! {
                         "Wallet with this name already exists"
                     }
                     .into(),
                 })
             }
         },
+
+        Command::Events {
+            command: events_commands::EventCommand::Add { command },
+        } => events_commands::run(&ctx, command).await,
     }
 }
