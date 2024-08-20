@@ -137,8 +137,9 @@ pub mod domain {
             }
         }
 
-        #[derive(Debug)]
+        #[derive(Debug, thiserror::Error)]
         pub enum Error {
+            #[error("Invalid character: {0:?}")]
             InvalidCharacter(char),
         }
 

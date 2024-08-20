@@ -1,133 +1,158 @@
-mod args;
-mod commands;
 mod date;
-mod diagnostics;
-mod json_diagnostic;
-mod tasks {
-    use std::future::Future;
 
-    /// Blocks a single thread
-    /// Do persistent operation such as write to db and filesystem
-    /// Enables IO & Clock
-    pub fn block_single<F: Future>(fut: F) -> F::Output {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to build tokio runtime")
-            .block_on(fut)
-    }
-
-    pub fn block_multi<F: Future>(fut: F) -> F::Output {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to build tokio runtime")
-            .block_on(fut)
-    }
-
-    pub async fn use_db() -> miette::Result<monee::database::Connection> {
-        match monee::database::connect().await {
-            Ok(conn) => Ok(conn),
-            Err(e) => {
-                monee::log::write_error_log(e);
-
-                let diagnostic = miette::diagnostic!(
-                    severity = miette::Severity::Error,
-                    code = "io::database",
-                    help = "Check if database is running and accessible from this machine",
-                    "Failed to connect to database",
-                );
-
-                Err(diagnostic.into())
-            }
-        }
-    }
-}
-
+use alias::MaybeAlias;
 use clap::Parser;
+use monee::backoffice::wallets::domain::wallet_name::WalletName;
+use monee_core::CurrencyId;
 
 #[derive(clap::Parser)]
 struct CliParser {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Command,
 }
 
 #[derive(clap::Subcommand)]
-enum Commands {
-    History(crate::commands::history::Args),
-    Events,
-    Show,
-    Snapshot {
-        #[arg(short, long)]
-        output: Option<std::path::PathBuf>,
-    },
-    Rebuild,
-    Sync,
-    Wallets {
+enum Command {
+    Wallet {
         #[command(subcommand)]
-        command: commands::wallets::WalletCommand,
+        command: WalletCommand,
     },
-    Currencies {
-        #[command(subcommand)]
-        command: commands::currencies::CurrencyCommand,
-    },
-    Actors {
-        #[command(subcommand)]
-        command: commands::actors::ActorsCommand,
-    },
-    Debts {
-        #[command(subcommand)]
-        command: commands::debts::DebtsCommand,
-    },
-    ItemTags {
-        #[command(subcommand)]
-        command: commands::item_tags::ItemTagsCommand,
-    },
-    Do(crate::commands::do_command::DoCommand),
 }
 
-fn main() -> miette::Result<()> {
+#[derive(clap::Subcommand)]
+enum WalletCommand {
+    Create {
+        currency: MaybeAlias<CurrencyId>,
+        name: WalletName,
+        description: String,
+    },
+}
+
+mod alias {
+    use std::{fmt::Display, str::FromStr};
+
+    use monee::shared::domain::context::AppContext;
+    use monee_core::CurrencyId;
+
+    pub trait AliasedId: Sized + FromStr + Clone {
+        type Alias: FromStr + Display + Clone;
+
+        async fn resolve(
+            ctx: &AppContext,
+            alias: Self::Alias,
+        ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>;
+    }
+
+    #[derive(Clone)]
+    pub enum MaybeAlias<I: AliasedId> {
+        Alias(I::Alias),
+        Id(I),
+    }
+
+    #[allow(private_bounds)]
+    impl<I> MaybeAlias<I>
+    where
+        I: AliasedId,
+    {
+        pub async fn resolve(self, ctx: &AppContext) -> Result<I, miette::Error> {
+            let alias = match self {
+                Self::Id(id) => return Ok(id),
+                Self::Alias(alias) => alias,
+            };
+
+            let alias_str = alias.to_string();
+            match I::resolve(ctx, alias).await {
+                Ok(Some(id)) => Ok(id),
+                Ok(None) => Err({
+                    miette::miette!(code = "NotFound", "Could not resolve alias `{}`", alias_str)
+                }),
+                Err(err) => Err({
+                    miette::miette!(
+                        code = "InfrastructureError",
+                        "Unknown error resolving alias: {}",
+                        err
+                    )
+                }),
+            }
+        }
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum ParseError<I>
+    where
+        I: AliasedId,
+        I::Err: std::error::Error + Send + Sync + 'static,
+        <I::Alias as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+    {
+        #[error(transparent)]
+        Alias(<I::Alias as FromStr>::Err),
+        #[error(transparent)]
+        Id(<I as FromStr>::Err),
+    }
+
+    impl<I> std::str::FromStr for MaybeAlias<I>
+    where
+        I: AliasedId,
+        I::Err: std::error::Error + Send + Sync + 'static,
+        <I::Alias as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+    {
+        type Err = ParseError<I>;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            if let Some(id) = s.strip_prefix("id:") {
+                let id = I::from_str(id).map_err(ParseError::Id)?;
+                return Ok(Self::Id(id));
+            }
+
+            let alias = I::Alias::from_str(s).map_err(ParseError::Alias)?;
+            Ok(Self::Alias(alias))
+        }
+    }
+
+    impl AliasedId for CurrencyId {
+        type Alias = String;
+
+        async fn resolve(
+            ctx: &AppContext,
+            alias: Self::Alias,
+        ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
+        {
+            let service = ctx
+                .provide::<monee::backoffice::currencies::application::code_resolve::CodeResolve>();
+            service.run(&alias).await
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> miette::Result<()> {
+    let (ctx, main_task) = monee::shared::domain::context::setup()
+        .await
+        .expect("To setup context");
+
+    tokio::spawn(main_task);
+
     let cli = CliParser::parse();
     match cli.command {
-        Commands::Events => {
-            commands::events::handle()?;
-        }
-        Commands::Show => {
-            commands::snapshot::show()?;
-        }
-        Commands::History(args) => {
-            commands::history::handle(args)?;
-        }
-        Commands::Snapshot { output } => {
-            commands::snapshot_write(output)?;
-        }
-        Commands::Rebuild => {
-            commands::rebuild()?;
-        }
-        Commands::Sync => {
-            commands::sync()?;
-        }
-        Commands::Wallets { command } => commands::wallets::handle(command)?,
-        Commands::Currencies { command } => match command {
-            commands::currencies::CurrencyCommand::List => {
-                commands::currencies::list()?;
-            }
-            commands::currencies::CurrencyCommand::Create { name, symbol, code } => {
-                commands::currencies::create(name, symbol, code)?;
+        Command::Wallet { command } => match command {
+            WalletCommand::Create {
+                currency,
+                name,
+                description,
+            } => {
+                let service =
+                    ctx.provide::<monee::backoffice::wallets::application::create_one::CreateOne>();
+
+                let currency_id = currency.resolve(&ctx).await?;
+                let wallet = monee::backoffice::wallets::domain::wallet::Wallet {
+                    description,
+                    name,
+                    currency_id,
+                };
+
+                service.run(wallet).await.expect("To create wallet");
             }
         },
-        Commands::Debts { command } => {
-            commands::debts::handle(command)?;
-        }
-        Commands::ItemTags { command } => {
-            commands::item_tags::handle(command)?;
-        }
-        Commands::Do(command) => {
-            crate::commands::do_command::handle(command)?;
-        }
-        Commands::Actors { command } => {
-            commands::actors::handle(command)?;
-        }
     }
 
     Ok(())
