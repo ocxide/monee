@@ -1,4 +1,28 @@
 pub mod application {
+    pub mod name_resolve {
+        use cream::context::ContextProvide;
+
+        use crate::{
+            backoffice::wallets::domain::{repository::Repository, wallet_name::WalletName},
+            prelude::{AppContext, InfrastructureError},
+        };
+
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
+        pub struct NameResolve {
+            repository: Box<dyn Repository>,
+        }
+
+        impl NameResolve {
+            pub async fn run(
+                &self,
+                name: &WalletName,
+            ) -> Result<Option<monee_core::WalletId>, InfrastructureError> {
+                self.repository.find_by_name(name).await
+            }
+        }
+    }
+
     pub mod create_one {
         use cream::{context::ContextProvide, event_bus::EventBusPort};
         use monee_core::WalletId;
@@ -91,12 +115,18 @@ pub mod domain {
                 id: WalletId,
                 wallet: Wallet,
             ) -> Result<(), AppError<UniqueSaveError>>;
+
             async fn update(
                 &self,
                 id: WalletId,
                 name: Option<WalletName>,
                 description: String,
             ) -> Result<(), UpdateError>;
+
+            async fn find_by_name(
+                &self,
+                name: &WalletName,
+            ) -> Result<Option<WalletId>, InfrastructureError>;
         }
 
         #[derive(thiserror::Error, Debug)]
@@ -196,7 +226,7 @@ pub mod infrastructure {
             shared::{
                 domain::{context::DbContext, errors::UniqueSaveError},
                 infrastructure::{
-                    database::Connection,
+                    database::{Connection, EntityKey},
                     errors::{AppError, InfrastructureError, IntoAppResult},
                 },
             },
@@ -253,6 +283,21 @@ pub mod infrastructure {
                     ) => Err(UpdateError::AlreadyExists),
                     Err(e) => Err(UpdateError::Unspecified(e.into())),
                 }
+            }
+
+            async fn find_by_name(
+                &self,
+                name: &WalletName,
+            ) -> Result<Option<WalletId>, InfrastructureError> {
+                let mut response = self
+                    .0
+                    .query("SELECT VALUE id FROM wallet WHERE name = $name")
+                    .bind(("name", name))
+                    .await
+                    .map_err(InfrastructureError::from)?;
+
+                let wallet_id: Option<EntityKey<WalletId>> = response.take(0).map_err(InfrastructureError::from)?;
+                Ok(wallet_id.map(|w| w.0))
             }
         }
 
