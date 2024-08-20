@@ -67,9 +67,11 @@ mod error {
 
 use alias::MaybeAlias;
 use clap::Parser;
+use error::MapAppErr;
 use monee::{
-    backoffice::wallets::domain::wallet_name::WalletName, prelude::AppError,
-    shared::domain::errors::UniqueSaveError,
+    backoffice::wallets::domain::wallet_name::WalletName,
+    prelude::AppError,
+    shared::domain::{context::AppContext, errors::UniqueSaveError},
 };
 use monee_core::CurrencyId;
 
@@ -152,8 +154,13 @@ enum Command {
 #[derive(clap::Subcommand)]
 enum WalletCommand {
     Create {
+        #[arg(short, long)]
         currency: MaybeAlias<CurrencyId>,
+
+        #[arg(short, long)]
         name: WalletName,
+
+        #[arg(short, long)]
         description: String,
     },
 }
@@ -164,9 +171,16 @@ async fn main() -> miette::Result<()> {
         .await
         .expect("To setup context");
 
-    tokio::spawn(main_task);
+    let handle = tokio::spawn(main_task);
 
     let cli = CliParser::parse();
+    run(&ctx, cli).await?;
+
+    handle.abort();
+    Ok(())
+}
+
+async fn run(ctx: &AppContext, cli: CliParser) -> miette::Result<()> {
     match cli.command {
         Command::Wallet { command } => match command {
             WalletCommand::Create {
@@ -177,19 +191,15 @@ async fn main() -> miette::Result<()> {
                 let service =
                     ctx.provide::<monee::backoffice::wallets::application::create_one::CreateOne>();
 
-                let currency_id = currency.resolve(&ctx).await?;
+                let currency_id = currency.resolve(ctx).await?;
                 let wallet = monee::backoffice::wallets::domain::wallet::Wallet {
                     description,
                     name,
                     currency_id,
                 };
 
-                service.run(wallet).await.map_err(|e| match e {
-                    AppError::Infrastructure(e) => {
-                        error::PanicError::new(e).into_final_report(&ctx)
-                    }
-
-                    AppError::App(UniqueSaveError::AlreadyExists) => miette::diagnostic! {
+                service.run(wallet).await.map_app_err(ctx, |e| match e {
+                    UniqueSaveError::AlreadyExists => miette::diagnostic! {
                         "Wallet with this name already exists"
                     }
                     .into(),
@@ -199,6 +209,6 @@ async fn main() -> miette::Result<()> {
 
         Command::Events {
             command: events_commands::EventCommand::Add { command },
-        } => events_commands::run(&ctx, command).await,
+        } => events_commands::run(ctx, command).await,
     }
 }
