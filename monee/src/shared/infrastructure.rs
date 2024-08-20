@@ -34,3 +34,16 @@ pub mod errors {
         fn into_app_result(self) -> Result<(), AppError<E>>;
     }
 }
+
+pub mod logging {
+    use crate::shared::domain::logging::LogRepository;
+
+    pub struct FileLogRepository;
+
+    impl LogRepository for FileLogRepository {
+        fn log(&self, message: std::fmt::Arguments) -> Result<(), super::errors::InfrastructureError> {
+            println!("Unhandable error: {}", message);
+            Ok(())
+        }
+    }
+}

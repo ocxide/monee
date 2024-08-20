@@ -1,4 +1,38 @@
+pub mod application {
+    pub mod logging {
+        use cream::context::ContextProvide;
+
+        use crate::shared::{
+            domain::{context::AppContext, logging::LogRepository},
+            infrastructure::errors::InfrastructureError,
+        };
+
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
+        pub struct LogService {
+            repository: Box<dyn LogRepository>,
+        }
+
+        impl LogService {
+            pub fn error(&self, err: InfrastructureError) {
+                let result = self.repository.log(format_args!("{:?}", err));
+                if let Err(e) = result {
+                    println!("error logging error: {:?}", e);
+                }
+            }
+        }
+    }
+}
+
 pub mod domain {
+    pub mod logging {
+        use crate::shared::infrastructure::errors::InfrastructureError;
+
+        pub trait LogRepository {
+            fn log(&self, message: std::fmt::Arguments) -> Result<(), InfrastructureError>;
+        }
+    }
+
     pub mod errors {
         use crate::shared::infrastructure::errors::IntoAppResult;
 
@@ -214,6 +248,16 @@ pub mod domain {
                 crate::reports::events::infrastructure::repository::SurrealRepository,
                 DbContext
             );
+
+            impl
+                cream::context::ContextProvide<
+                    Box<dyn crate::shared::domain::logging::LogRepository>,
+                > for super::AppContext
+            {
+                fn provide(&self) -> Box<dyn crate::shared::domain::logging::LogRepository> {
+                    Box::new(crate::shared::infrastructure::logging::FileLogRepository)
+                }
+            }
         }
     }
 
