@@ -2,8 +2,11 @@ pub mod domain {
     pub mod repository {
         use monee_core::ActorId;
 
-        use crate::shared::{
-            domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+        use crate::{
+            prelude::AppError,
+            shared::{
+                domain::errors::UniqueSaveError, infrastructure::errors::InfrastructureError,
+            },
         };
 
         use super::{actor::Actor, actor_alias::ActorAlias};
@@ -14,7 +17,7 @@ pub mod domain {
                 &self,
                 id: ActorId,
                 actor: Actor,
-            ) -> Result<UniqueSaveStatus, InfrastructureError>;
+            ) -> Result<(), AppError<UniqueSaveError>>;
             async fn alias_resolve(
                 &self,
                 name: &ActorAlias,
@@ -117,10 +120,8 @@ pub mod application {
 
         use crate::{
             backoffice::actors::domain::{actor::Actor, repository::Repository},
-            shared::{
-                domain::{context::AppContext, errors::UniqueSaveStatus},
-                infrastructure::errors::InfrastructureError,
-            },
+            prelude::AppError,
+            shared::domain::{context::AppContext, errors::UniqueSaveError},
         };
 
         #[derive(ContextProvide)]
@@ -130,7 +131,7 @@ pub mod application {
         }
 
         impl CreateOne {
-            pub async fn run(&self, actor: Actor) -> Result<UniqueSaveStatus, InfrastructureError> {
+            pub async fn run(&self, actor: Actor) -> Result<(), AppError<UniqueSaveError>> {
                 self.repository.save(ActorId::new(), actor).await
             }
         }
@@ -152,7 +153,10 @@ pub mod application {
         }
 
         impl AliasResolve {
-            pub async fn run(&self, name: &ActorAlias) -> Result<Option<ActorId>, InfrastructureError> {
+            pub async fn run(
+                &self,
+                name: &ActorAlias,
+            ) -> Result<Option<ActorId>, InfrastructureError> {
                 self.repository.alias_resolve(name).await
             }
         }
@@ -165,12 +169,15 @@ pub mod infrastructure {
         use monee_core::ActorId;
 
         use crate::{
-            backoffice::actors::domain::{actor::Actor, actor_alias::ActorAlias, repository::Repository},
+            backoffice::actors::domain::{
+                actor::Actor, actor_alias::ActorAlias, repository::Repository,
+            },
+            prelude::AppError,
             shared::{
-                domain::{context::DbContext, errors::UniqueSaveStatus},
+                domain::{context::DbContext, errors::UniqueSaveError},
                 infrastructure::{
                     database::{Connection, Entity},
-                    errors::InfrastructureError,
+                    errors::{InfrastructureError, IntoAppResult},
                 },
             },
         };
@@ -185,25 +192,17 @@ pub mod infrastructure {
                 &self,
                 id: ActorId,
                 actor: Actor,
-            ) -> Result<UniqueSaveStatus, InfrastructureError> {
+            ) -> Result<(), AppError<UniqueSaveError>> {
                 let result = self
                     .0
                     .query("CREATE type::thing('actor', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", actor))
-                    .await?
+                    .await
+                    .map_err(InfrastructureError::from)?
                     .check();
 
-                match result {
-                    Ok(_) => Ok(UniqueSaveStatus::Created),
-                    Err(
-                        crate::shared::infrastructure::database::Error::Api(
-                            surrealdb::error::Api::Query { .. },
-                        )
-                        | surrealdb::Error::Db(surrealdb::error::Db::IndexExists { .. }),
-                    ) => Ok(UniqueSaveStatus::AlreadyExists),
-                    Err(e) => Err(e.into()),
-                }
+                result.into_app_result()
             }
 
             async fn alias_resolve(
