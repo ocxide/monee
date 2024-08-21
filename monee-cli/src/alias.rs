@@ -1,5 +1,5 @@
-use std::{fmt::Display, str::FromStr};
 use monee::prelude::AppContext;
+use std::{fmt::Display, str::FromStr};
 
 use crate::error::PanicError;
 
@@ -73,8 +73,14 @@ where
 }
 
 mod impl_trait {
-    use monee::{backoffice::wallets::domain::wallet_name::WalletName, prelude::AppContext};
-    use monee_core::{CurrencyId, WalletId};
+    use monee::{
+        backoffice::{
+            actors::domain::actor_alias::ActorAlias, item_tags::domain::item_name::ItemName,
+            wallets::domain::wallet_name::WalletName,
+        },
+        prelude::AppContext,
+    };
+    use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
 
     use super::AliasedId;
 
@@ -100,8 +106,34 @@ mod impl_trait {
             alias: Self::Alias,
         ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
         {
+            let service =
+                ctx.provide::<monee::backoffice::wallets::application::name_resolve::NameResolve>();
+            service.run(&alias).await
+        }
+    }
+
+    impl AliasedId for ActorId {
+        type Alias = ActorAlias;
+        async fn resolve(
+            ctx: &AppContext,
+            alias: Self::Alias,
+        ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
+        {
             let service = ctx
-                .provide::<monee::backoffice::wallets::application::name_resolve::NameResolve>();
+                .provide::<monee::backoffice::actors::application::alias_resolve::AliasResolve>();
+            service.run(&alias).await
+        }
+    }
+
+    impl AliasedId for ItemTagId {
+        type Alias = ItemName;
+        async fn resolve(
+            ctx: &AppContext,
+            alias: Self::Alias,
+        ) -> Result<Option<Self>, monee::shared::infrastructure::errors::InfrastructureError>
+        {
+            let service = ctx
+                .provide::<monee::backoffice::item_tags::application::name_resolve::NameResolve>();
             service.run(&alias).await
         }
     }

@@ -50,12 +50,18 @@ pub mod wallet {
 }
 
 pub mod events {
+    use std::future::Future;
+
     use crate::prelude::MapAppErr;
     use monee::{
-        backoffice::events::domain::event::{Event, RegisterBalance},
+        backoffice::events::domain::event::{Buy, Event, RegisterBalance},
         prelude::AppContext,
     };
-    use monee_core::{Amount, WalletId};
+    use monee_core::{ActorId, Amount, ItemTagId, WalletId};
+    use tokio::{
+        task::{JoinSet, LocalSet},
+        try_join,
+    };
 
     use crate::alias::MaybeAlias;
 
@@ -75,6 +81,33 @@ pub mod events {
             #[arg(short, long)]
             amount: Amount,
         },
+
+        Buy {
+            #[arg(short, long)]
+            item: MaybeAlias<ItemTagId>,
+
+            #[arg(short, long)]
+            actors: Vec<MaybeAlias<ActorId>>,
+
+            #[arg(short, long)]
+            wallet: MaybeAlias<WalletId>,
+
+            #[arg(short, long)]
+            amount: Amount,
+        },
+    }
+
+    async fn try_join_collect<T: 'static + Send, E: 'static + Send>(
+        futs: impl Iterator<Item = impl Future<Output = Result<T, E>> + 'static + Send>,
+    ) -> Result<Vec<T>, E> {
+        let mut set: JoinSet<_> = futs.collect();
+
+        let mut res = Vec::new();
+        while let Some(next) = set.join_next().await {
+            res.push(next.expect("to join")?);
+        }
+
+        Ok(res)
     }
 
     pub async fn run(ctx: &AppContext, command: AddEventCommand) -> Result<(), miette::Error> {
@@ -84,6 +117,29 @@ pub mod events {
             AddEventCommand::RegisterBalance { wallet, amount } => {
                 let wallet_id = wallet.resolve(ctx).await?;
                 Event::RegisterBalance(RegisterBalance { amount, wallet_id })
+            }
+
+            AddEventCommand::Buy {
+                item,
+                actors,
+                wallet,
+                amount,
+            } => {
+                let wallet_id = wallet.resolve(ctx);
+                let item_id = item.resolve(ctx);
+                let actors = try_join_collect(actors.into_iter().map(|actor| {
+                    let ctx = ctx.clone();
+                    async move { actor.resolve(&ctx).await }
+                }));
+
+                let (wallet_id, item_id, actors) = try_join!(wallet_id, item_id, actors)?;
+
+                Event::Buy(Buy {
+                    actors: actors.into(),
+                    amount,
+                    item: item_id,
+                    wallet_id,
+                })
             }
         };
 
