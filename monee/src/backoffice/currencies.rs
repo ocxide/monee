@@ -100,7 +100,7 @@ pub mod domain {
     pub mod currency_code {
         use std::{char, fmt::Display, str::FromStr};
 
-        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone)]
         pub struct CurrencyCode([char; CODE_LENGTH]);
 
         impl Display for CurrencyCode {
@@ -144,6 +144,41 @@ pub mod domain {
                 } else {
                     Err(Error::NotAlphabetic)
                 }
+            }
+        }
+
+        impl serde::Serialize for CurrencyCode {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                let arr = [self.0[0] as u8, self.0[1] as u8, self.0[2] as u8];
+                unsafe { std::str::from_utf8_unchecked(&arr) }.serialize(serializer)
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for CurrencyCode {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                // TODO: this can be more efficient, but I dont care now
+                let s = String::deserialize(deserializer)?;
+                s.parse().map_err(serde::de::Error::custom)
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            #[test]
+            fn serializes_as_str() {
+                let code: CurrencyCode = "ABC".parse().unwrap();
+                assert_eq!(
+                    serde_json::to_value(&code).unwrap(),
+                    serde_json::Value::String("ABC".to_owned())
+                );
             }
         }
     }
@@ -226,12 +261,10 @@ pub mod infrastructure {
             ) -> Result<(), AppError<UniqueSaveError>> {
                 let response = self.0
                 .query(
-                    "CREATE ONLY type::thing('currency', $id) SET name = $name, symbol = $symbol, code = $code",
+                    "CREATE type::thing('currency', $id) SET name = $name, symbol = $symbol, code = $code",
                 )
                 .bind(("id", id))
-                .bind(("name", currency.name))
-                .bind(("symbol", currency.symbol))
-                .bind(("code", currency.code))
+                .bind(currency)
                 .await.map_err(InfrastructureError::from)?
                 .check();
 
