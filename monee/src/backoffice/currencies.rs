@@ -41,10 +41,16 @@ pub mod domain {
     }
 
     pub mod currency_symbol {
-        use std::str::FromStr;
+        use std::{fmt::Display, str::FromStr};
 
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct CurrencySymbol(String);
+
+        impl Display for CurrencySymbol {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
 
         #[derive(Debug, thiserror::Error)]
         pub enum Error {

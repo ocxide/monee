@@ -12,7 +12,7 @@ pub mod domain {
         use super::{actor::Actor, actor_alias::ActorAlias};
 
         #[async_trait::async_trait]
-        pub trait Repository: 'static + Send + Sync  {
+        pub trait Repository: 'static + Send + Sync {
             async fn save(
                 &self,
                 id: ActorId,
@@ -38,8 +38,16 @@ pub mod domain {
     }
 
     pub mod actor_name {
+        use std::fmt::Display;
+
         #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
         pub struct ActorName(String);
+
+        impl Display for ActorName {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
 
         impl From<String> for ActorName {
             fn from(value: String) -> Self {

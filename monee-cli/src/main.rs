@@ -78,6 +78,8 @@ struct CliParser {
 
 #[derive(clap::Subcommand)]
 enum Command {
+    Show(commands::show::Args),
+
     Wallet {
         #[command(subcommand)]
         command: commands::wallet::WalletCommand,
@@ -125,5 +127,7 @@ async fn run(ctx: &AppContext, cli: CliParser) -> miette::Result<()> {
         Command::Currency { command } => commands::currency::run(ctx, command).await,
 
         Command::Actor { command } => commands::actor::run(ctx, command).await,
+
+        Command::Show(args) => commands::show::run(ctx, args).await,
     }
 }

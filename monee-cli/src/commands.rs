@@ -58,10 +58,7 @@ pub mod events {
         prelude::AppContext,
     };
     use monee_core::{ActorId, Amount, ItemTagId, WalletId};
-    use tokio::{
-        task::{JoinSet, LocalSet},
-        try_join,
-    };
+    use tokio::{task::JoinSet, try_join};
 
     use crate::alias::MaybeAlias;
 
@@ -252,5 +249,66 @@ pub mod actor {
                 })
             }
         }
+    }
+}
+
+pub mod show {
+    use std::fmt::Display;
+
+    use monee::{reports::snapshot::domain::snapshot::Money, shared::domain::context::AppContext};
+
+    use crate::prelude::LogAndErr;
+
+    #[derive(clap::Args)]
+    pub struct Args;
+
+    struct MoneyCli(Money);
+
+    impl Display for MoneyCli {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let MoneyCli(money) = self;
+            write!(
+                f,
+                "{} {}{}",
+                money.currency.code, money.currency.symbol, money.amount
+            )
+        }
+    }
+
+    fn print_entity<T>(
+        entities: impl ExactSizeIterator<Item = (T, Money)>,
+        entity_display: impl Fn(T),
+    ) {
+        if entities.len() == 0 {
+            println!("\t<Empty>");
+        }
+        for (entity, money) in entities {
+            print!("\t");
+            (entity_display)(entity);
+            println!(" => {}", MoneyCli(money));
+        }
+    }
+
+    pub async fn run(ctx: &AppContext, _: Args) -> miette::Result<()> {
+        let service =
+            ctx.provide::<monee::reports::snapshot::application::snapshot_report::SnapshotReport>();
+        let snapshot = service.run().await.log_err(ctx)?;
+
+        println!("Wallets:");
+        print_entity(snapshot.wallets.into_values(), |wallet| {
+            print!("{}", wallet.name);
+        });
+
+        println!("Debts:");
+        print_entity(snapshot.debts.into_values(), |debt| {
+            print!("Debt with '{}'", debt.actor.name);
+        });
+
+        println!("Loans:");
+        print_entity(snapshot.loans.into_values(), |debt| {
+            print!("Loan to '{}'", debt.actor.name);
+        });
+
+        Ok(())
     }
 }
