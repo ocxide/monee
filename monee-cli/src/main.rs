@@ -98,6 +98,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::currency::CurrencyCommand,
     },
+
+    Actor {
+        #[command(subcommand)]
+        command: commands::actor::ActorCommand,
+    },
 }
 
 #[derive(clap::Subcommand)]
@@ -161,5 +166,7 @@ async fn run(ctx: &AppContext, cli: CliParser) -> miette::Result<()> {
         } => commands::events::run(ctx, command).await,
 
         Command::Currency { command } => commands::currency::run(ctx, command).await,
+
+        Command::Actor { command } => commands::actor::run(ctx, command).await,
     }
 }

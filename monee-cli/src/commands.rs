@@ -97,3 +97,53 @@ pub mod currency {
         }
     }
 }
+
+pub mod actor {
+    use monee::{
+        backoffice::actors::domain::{
+            actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType,
+        },
+        prelude::AppContext,
+    };
+
+    use crate::prelude::MapAppErr;
+
+    #[derive(clap::Subcommand)]
+    pub enum ActorCommand {
+        Create {
+            #[arg(short, long)]
+            name: ActorName,
+
+            #[arg(short, long)]
+            r#type: ActorType,
+
+            #[arg(short, long)]
+            alias: Option<ActorAlias>,
+        },
+    }
+
+    pub async fn run(ctx: &AppContext, command: ActorCommand) -> miette::Result<()> {
+        match command {
+            ActorCommand::Create {
+                name,
+                r#type,
+                alias,
+            } => {
+                let service =
+                    ctx.provide::<monee::backoffice::actors::application::create_one::CreateOne>();
+
+                let actor = monee::backoffice::actors::domain::actor::Actor {
+                    name,
+                    actor_type: r#type,
+                    alias,
+                };
+                service.run(actor).await.map_app_err(ctx, |_| {
+                    miette::diagnostic! {
+                        "Duplicated actor alias",
+                    }
+                    .into()
+                })
+            }
+        }
+    }
+}
