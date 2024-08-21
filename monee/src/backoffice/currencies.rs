@@ -98,10 +98,10 @@ pub mod domain {
     }
 
     pub mod currency_code {
-        use std::{char, fmt::Display, str::FromStr};
+        use std::{fmt::Display, str::FromStr};
 
         #[derive(Debug, Clone)]
-        pub struct CurrencyCode([char; CODE_LENGTH]);
+        pub struct CurrencyCode(Inner);
 
         impl Display for CurrencyCode {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,28 +122,42 @@ pub mod domain {
         }
 
         pub const CODE_LENGTH: usize = 3;
-
-        fn extract_chars(s: &str) -> Option<[char; CODE_LENGTH]> {
-            let mut chars = s.chars();
-            let slice = [chars.next()?, chars.next()?, chars.next()?];
-            if chars.next().is_some() {
-                return None;
-            }
-
-            Some(slice)
-        }
+        type Inner = [u8; CODE_LENGTH];
 
         impl FromStr for CurrencyCode {
             type Err = Error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let arr = extract_chars(s).ok_or(Error::InvalidLength)?;
-
-                if arr.iter().copied().all(char::is_alphabetic) {
-                    Ok(Self(arr))
-                } else {
-                    Err(Error::NotAlphabetic)
+                if s.len() != CODE_LENGTH {
+                    return Err(Error::InvalidLength);
                 }
+
+                let mut buf: Inner = Default::default();
+                for (buf_c, c) in std::iter::zip(buf.iter_mut(), s.chars()) {
+                    if !c.is_alphabetic() {
+                        return Err(Error::NotAlphabetic);
+                    }
+
+                    let byte: u8 = c
+                        .to_ascii_uppercase()
+                        .try_into()
+                        .map_err(|_| Error::NotAlphabetic)?;
+                    *buf_c = byte;
+                }
+
+                Ok(Self(buf))
+            }
+        }
+
+        impl AsRef<str> for CurrencyCode {
+            fn as_ref(&self) -> &str {
+                unsafe { std::str::from_utf8_unchecked(&self.0) }
+            }
+        }
+
+        impl PartialEq<str> for CurrencyCode {
+            fn eq(&self, other: &str) -> bool {
+                self.as_ref() == other
             }
         }
 
@@ -152,8 +166,7 @@ pub mod domain {
             where
                 S: serde::Serializer,
             {
-                let arr = [self.0[0] as u8, self.0[1] as u8, self.0[2] as u8];
-                unsafe { std::str::from_utf8_unchecked(&arr) }.serialize(serializer)
+                self.as_ref().serialize(serializer)
             }
         }
 
@@ -179,6 +192,12 @@ pub mod domain {
                     serde_json::to_value(&code).unwrap(),
                     serde_json::Value::String("ABC".to_owned())
                 );
+            }
+
+            #[test]
+            fn converts_to_uppercase() {
+                let code: CurrencyCode = "abc".parse().unwrap();
+                assert_eq!(&code, "ABC");
             }
         }
     }
