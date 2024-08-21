@@ -12,7 +12,7 @@ pub mod domain {
         use super::{actor::Actor, actor_alias::ActorAlias};
 
         #[async_trait::async_trait]
-        pub trait Repository {
+        pub trait Repository: 'static + Send + Sync  {
             async fn save(
                 &self,
                 id: ActorId,

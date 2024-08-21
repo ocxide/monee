@@ -137,7 +137,7 @@ pub mod domain {
         use super::{item_name::ItemName, item_tag::ItemTag};
 
         #[async_trait::async_trait]
-        pub trait Repository {
+        pub trait Repository: 'static + Send + Sync {
             async fn save(
                 &self,
                 id: ItemTagId,
