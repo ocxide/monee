@@ -6,7 +6,7 @@ pub mod domain {
             domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
         };
 
-        use super::actor::Actor;
+        use super::{actor::Actor, actor_alias::ActorAlias};
 
         #[async_trait::async_trait]
         pub trait Repository {
@@ -17,20 +17,54 @@ pub mod domain {
             ) -> Result<UniqueSaveStatus, InfrastructureError>;
             async fn alias_resolve(
                 &self,
-                name: &str,
+                name: &ActorAlias,
             ) -> Result<Option<ActorId>, InfrastructureError>;
         }
     }
 
     pub mod actor {
-        use super::actor_type::ActorType;
+        use super::{actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType};
 
         #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
         pub struct Actor {
-            pub name: String,
+            pub name: ActorName,
             #[serde(rename = "type")]
             pub actor_type: ActorType,
-            pub alias: Option<String>,
+            pub alias: Option<ActorAlias>,
+        }
+    }
+
+    pub mod actor_name {
+        #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+        pub struct ActorName(String);
+
+        impl From<String> for ActorName {
+            fn from(value: String) -> Self {
+                Self(value)
+            }
+        }
+    }
+
+    pub mod actor_alias {
+        use std::{fmt::Display, str::FromStr};
+
+        use crate::shared::domain::alias::{from_str::Error, Alias};
+
+        #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+        pub struct ActorAlias(Alias);
+
+        impl Display for ActorAlias {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+
+        impl FromStr for ActorAlias {
+            type Err = Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(Alias::from_str(s)?))
+            }
         }
     }
 
@@ -107,7 +141,7 @@ pub mod application {
         use monee_core::ActorId;
 
         use crate::{
-            backoffice::actors::domain::repository::Repository,
+            backoffice::actors::domain::{actor_alias::ActorAlias, repository::Repository},
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
@@ -118,7 +152,7 @@ pub mod application {
         }
 
         impl AliasResolve {
-            pub async fn run(&self, name: &str) -> Result<Option<ActorId>, InfrastructureError> {
+            pub async fn run(&self, name: &ActorAlias) -> Result<Option<ActorId>, InfrastructureError> {
                 self.repository.alias_resolve(name).await
             }
         }
@@ -131,7 +165,7 @@ pub mod infrastructure {
         use monee_core::ActorId;
 
         use crate::{
-            backoffice::actors::domain::{actor::Actor, repository::Repository},
+            backoffice::actors::domain::{actor::Actor, actor_alias::ActorAlias, repository::Repository},
             shared::{
                 domain::{context::DbContext, errors::UniqueSaveStatus},
                 infrastructure::{
@@ -174,7 +208,7 @@ pub mod infrastructure {
 
             async fn alias_resolve(
                 &self,
-                alias: &str,
+                alias: &ActorAlias,
             ) -> Result<Option<ActorId>, InfrastructureError> {
                 let mut response = self
                     .0

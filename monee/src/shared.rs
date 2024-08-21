@@ -262,7 +262,7 @@ pub mod domain {
     }
 
     pub(crate) mod alias {
-        #[derive(Debug, Clone)]
+        #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
         pub struct Alias(Box<str>);
 
         impl Alias {
