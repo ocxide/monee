@@ -99,6 +99,31 @@ pub mod application {
             }
         }
     }
+
+    pub mod name_resolve {
+        use cream::context::ContextProvide;
+        use monee_core::ItemTagId;
+
+        use crate::{
+            backoffice::item_tags::domain::{item_name::ItemName, repository::Repository},
+            prelude::{AppContext, InfrastructureError},
+        };
+
+        #[derive(ContextProvide)]
+        #[provider_context(AppContext)]
+        pub struct NameResolve {
+            repository: Box<dyn Repository>,
+        }
+
+        impl NameResolve {
+            pub async fn run(
+                &self,
+                name: &ItemName,
+            ) -> Result<Option<ItemTagId>, InfrastructureError> {
+                self.repository.name_resolve(name).await
+            }
+        }
+    }
 }
 
 pub mod domain {
@@ -109,7 +134,7 @@ pub mod domain {
             domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
         };
 
-        use super::item_tag::ItemTag;
+        use super::{item_name::ItemName, item_tag::ItemTag};
 
         #[async_trait::async_trait]
         pub trait Repository {
@@ -136,6 +161,11 @@ pub mod domain {
                 parent_id: ItemTagId,
                 child_id: ItemTagId,
             ) -> Result<(), InfrastructureError>;
+
+            async fn name_resolve(
+                &self,
+                name: &ItemName,
+            ) -> Result<Option<ItemTagId>, InfrastructureError>;
         }
 
         pub enum TagsRelation {
@@ -146,9 +176,34 @@ pub mod domain {
     }
 
     pub mod item_tag {
+        use super::item_name::ItemName;
+
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct ItemTag {
-            pub name: String,
+            pub name: ItemName,
+        }
+    }
+
+    pub mod item_name {
+        use std::{fmt::Display, str::FromStr};
+
+        use crate::shared::domain::alias::{from_str::Error, Alias};
+
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        pub struct ItemName(Alias);
+
+        impl Display for ItemName {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+
+        impl FromStr for ItemName {
+            type Err = Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(Alias::from_str(s)?))
+            }
         }
     }
 }
@@ -160,6 +215,7 @@ pub mod infrastructure {
 
         use crate::{
             backoffice::item_tags::domain::{
+                item_name::ItemName,
                 item_tag::ItemTag,
                 repository::{Repository, TagsRelation},
             },
@@ -168,7 +224,10 @@ pub mod infrastructure {
                     context::DbContext,
                     errors::{IntoDomainResult, UniqueSaveStatus},
                 },
-                infrastructure::{database::{Connection, EntityKey}, errors::InfrastructureError},
+                infrastructure::{
+                    database::{Connection, EntityKey},
+                    errors::InfrastructureError,
+                },
             },
         };
 
@@ -252,8 +311,22 @@ pub mod infrastructure {
 
                 Ok(())
             }
-        }
 
+            async fn name_resolve(
+                &self,
+                name: &ItemName,
+            ) -> Result<Option<ItemTagId>, InfrastructureError> {
+                let mut response = self
+                    .0
+                    .query("SELECT id FROM item_tag WHERE name = $name")
+                    .bind(("name", name))
+                    .await?
+                    .check()?;
+
+                let id: Option<EntityKey<monee_core::ItemTagId>> = response.take("id")?;
+                Ok(id.map(|k| k.0))
+            }
+        }
 
         async fn check_multi_relation(
             connection: &crate::shared::infrastructure::database::Connection,
