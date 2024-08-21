@@ -16,7 +16,7 @@ pub mod wallet {
             #[arg(short, long)]
             name: WalletName,
 
-            #[arg(short, long)]
+            #[arg(short, long, default_value="")]
             description: String,
         },
     }

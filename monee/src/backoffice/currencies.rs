@@ -23,7 +23,7 @@ pub mod domain {
             },
         };
 
-        use super::currency::Currency;
+        use super::{currency::Currency, currency_code::CurrencyCode};
 
         #[async_trait::async_trait]
         pub trait Repository {
@@ -35,7 +35,7 @@ pub mod domain {
 
             async fn code_resolve(
                 &self,
-                code: &str,
+                code: &CurrencyCode,
             ) -> Result<Option<CurrencyId>, InfrastructureError>;
         }
     }
@@ -213,7 +213,7 @@ pub mod application {
         use monee_core::CurrencyId;
 
         use crate::{
-            backoffice::currencies::domain::repository::Repository,
+            backoffice::currencies::domain::{currency_code::CurrencyCode, repository::Repository},
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
@@ -224,7 +224,10 @@ pub mod application {
         }
 
         impl CodeResolve {
-            pub async fn run(&self, code: &str) -> Result<Option<CurrencyId>, InfrastructureError> {
+            pub async fn run(
+                &self,
+                code: &CurrencyCode,
+            ) -> Result<Option<CurrencyId>, InfrastructureError> {
                 self.repository.code_resolve(code).await
             }
         }
@@ -237,7 +240,9 @@ pub mod infrastructure {
         use monee_core::CurrencyId;
 
         use crate::{
-            backoffice::currencies::domain::{currency::Currency, repository::Repository},
+            backoffice::currencies::domain::{
+                currency::Currency, currency_code::CurrencyCode, repository::Repository,
+            },
             prelude::AppError,
             shared::{
                 domain::{context::DbContext, errors::UniqueSaveError},
@@ -273,7 +278,7 @@ pub mod infrastructure {
 
             async fn code_resolve(
                 &self,
-                code: &str,
+                code: &CurrencyCode,
             ) -> Result<Option<CurrencyId>, InfrastructureError> {
                 let mut response = self
                     .0

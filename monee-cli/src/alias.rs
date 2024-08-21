@@ -75,8 +75,9 @@ where
 mod impl_trait {
     use monee::{
         backoffice::{
-            actors::domain::actor_alias::ActorAlias, item_tags::domain::item_name::ItemName,
-            wallets::domain::wallet_name::WalletName,
+            actors::domain::actor_alias::ActorAlias,
+            currencies::domain::currency_code::CurrencyCode,
+            item_tags::domain::item_name::ItemName, wallets::domain::wallet_name::WalletName,
         },
         prelude::AppContext,
     };
@@ -85,7 +86,7 @@ mod impl_trait {
     use super::AliasedId;
 
     impl AliasedId for CurrencyId {
-        type Alias = String;
+        type Alias = CurrencyCode;
 
         async fn resolve(
             ctx: &AppContext,
