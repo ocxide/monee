@@ -1,3 +1,54 @@
+pub mod wallet {
+    use monee::{
+        backoffice::wallets::domain::wallet_name::WalletName, prelude::AppContext,
+        shared::domain::errors::UniqueSaveError,
+    };
+    use monee_core::CurrencyId;
+
+    use crate::{alias::MaybeAlias, prelude::MapAppErr};
+
+    #[derive(clap::Subcommand)]
+    pub enum WalletCommand {
+        Create {
+            #[arg(short, long)]
+            currency: MaybeAlias<CurrencyId>,
+
+            #[arg(short, long)]
+            name: WalletName,
+
+            #[arg(short, long)]
+            description: String,
+        },
+    }
+
+    pub async fn run(ctx: &AppContext, command: WalletCommand) -> miette::Result<()> {
+        match command {
+            WalletCommand::Create {
+                currency,
+                name,
+                description,
+            } => {
+                let service =
+                    ctx.provide::<monee::backoffice::wallets::application::create_one::CreateOne>();
+
+                let currency_id = currency.resolve(ctx).await?;
+                let wallet = monee::backoffice::wallets::domain::wallet::Wallet {
+                    description,
+                    name,
+                    currency_id,
+                };
+
+                service.run(wallet).await.map_app_err(ctx, |e| match e {
+                    UniqueSaveError::AlreadyExists => miette::diagnostic! {
+                        "Wallet with this name already exists"
+                    }
+                    .into(),
+                })
+            }
+        }
+    }
+}
+
 pub mod events {
     use crate::prelude::MapAppErr;
     use monee::{

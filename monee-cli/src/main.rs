@@ -65,14 +65,8 @@ mod error {
     }
 }
 
-use alias::MaybeAlias;
 use clap::Parser;
-use error::MapAppErr;
-use monee::{
-    backoffice::wallets::domain::wallet_name::WalletName,
-    shared::domain::{context::AppContext, errors::UniqueSaveError},
-};
-use monee_core::CurrencyId;
+use monee::shared::domain::context::AppContext;
 
 mod commands;
 
@@ -86,7 +80,7 @@ struct CliParser {
 enum Command {
     Wallet {
         #[command(subcommand)]
-        command: WalletCommand,
+        command: commands::wallet::WalletCommand,
     },
 
     Events {
@@ -102,20 +96,6 @@ enum Command {
     Actor {
         #[command(subcommand)]
         command: commands::actor::ActorCommand,
-    },
-}
-
-#[derive(clap::Subcommand)]
-enum WalletCommand {
-    Create {
-        #[arg(short, long)]
-        currency: MaybeAlias<CurrencyId>,
-
-        #[arg(short, long)]
-        name: WalletName,
-
-        #[arg(short, long)]
-        description: String,
     },
 }
 
@@ -136,30 +116,7 @@ async fn main() -> miette::Result<()> {
 
 async fn run(ctx: &AppContext, cli: CliParser) -> miette::Result<()> {
     match cli.command {
-        Command::Wallet { command } => match command {
-            WalletCommand::Create {
-                currency,
-                name,
-                description,
-            } => {
-                let service =
-                    ctx.provide::<monee::backoffice::wallets::application::create_one::CreateOne>();
-
-                let currency_id = currency.resolve(ctx).await?;
-                let wallet = monee::backoffice::wallets::domain::wallet::Wallet {
-                    description,
-                    name,
-                    currency_id,
-                };
-
-                service.run(wallet).await.map_app_err(ctx, |e| match e {
-                    UniqueSaveError::AlreadyExists => miette::diagnostic! {
-                        "Wallet with this name already exists"
-                    }
-                    .into(),
-                })
-            }
-        },
+        Command::Wallet { command } => commands::wallet::run(ctx, command).await,
 
         Command::Events {
             command: commands::events::EventCommand::Add { command },
