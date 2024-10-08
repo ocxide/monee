@@ -103,16 +103,16 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> miette::Result<()> {
-    let (ctx, main_task) = monee::shared::domain::context::setup()
+    let (ctx, tasks) = monee::shared::domain::context::setup()
         .await
         .expect("To setup context");
-
-    let handle = tokio::spawn(main_task);
 
     let cli = CliParser::parse();
     run(&ctx, cli).await?;
 
-    handle.abort();
+    tasks.close();
+    tasks.wait().await;
+
     Ok(())
 }
 

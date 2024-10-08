@@ -634,17 +634,18 @@ dependencies = [
 [[package]]
 name = "cream"
 version = "0.2.0"
-source = "git+https://github.com/ocxide/cream.git#ae52ed8929e282bd9fc0c9f8b39952f8d2109243"
+source = "git+https://github.com/ocxide/cream.git#5a19bae15392cb3f40c239aded36dbc79b38f1e5"
 dependencies = [
  "async-trait",
  "cream_derive",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
 name = "cream_derive"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#ae52ed8929e282bd9fc0c9f8b39952f8d2109243"
+source = "git+https://github.com/ocxide/cream.git#5a19bae15392cb3f40c239aded36dbc79b38f1e5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3626,8 +3627,12 @@ checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
+ "futures-util",
+ "hashbrown 0.14.5",
  "pin-project-lite",
+ "slab",
  "tokio",
 ]
 

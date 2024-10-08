@@ -109,7 +109,7 @@ pub mod domain {
     }
 
     pub mod context {
-        use cream::context::{ContextProvide, CreamContext};
+        use cream::{context::{ContextProvide, CreamContext}, tasks::Tasks};
 
         use crate::shared::infrastructure::errors::InfrastructureError;
 
@@ -166,7 +166,7 @@ pub mod domain {
         }
 
         pub async fn setup(
-        ) -> Result<(AppContext, impl std::future::Future<Output = ()>), InfrastructureError>
+        ) -> Result<(AppContext, Tasks), InfrastructureError>
         {
             let db = crate::shared::infrastructure::database::connect().await?;
 
@@ -180,16 +180,21 @@ pub mod domain {
                 db: DbContext(db),
             };
 
+            let tasks = Tasks::new();
+
             let listen = {
                 let ctx = ctx.clone();
+                let tasks = tasks.clone();
                 async move {
                     cream::router_bus::RouterBus::new(socket, ctx, router)
-                        .listen()
+                        .listen(tasks)
                         .await;
                 }
             };
 
-            Ok((ctx, listen))
+            tokio::spawn(listen);
+
+            Ok((ctx, tasks))
         }
 
         mod provide_maps {
