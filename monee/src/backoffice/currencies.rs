@@ -105,11 +105,7 @@ pub mod domain {
 
         impl Display for CurrencyCode {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                for c in self.0.iter() {
-                    write!(f, "{}", c)?;
-                }
-
-                Ok(())
+                self.as_ref().fmt(f)
             }
         }
 
@@ -198,6 +194,12 @@ pub mod domain {
             fn converts_to_uppercase() {
                 let code: CurrencyCode = "abc".parse().unwrap();
                 assert_eq!(&code, "ABC");
+            }
+
+            #[test]
+            fn prints_as_str() {
+                let code: CurrencyCode = "ABC".parse().unwrap();
+                assert_eq!(&code.to_string(), "ABC");
             }
         }
     }

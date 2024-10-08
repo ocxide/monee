@@ -22,6 +22,7 @@ async fn init(connection: &Connection) -> Result<()> {
     connection
         .query("DEFINE TABLE wallet")
         .query("DEFINE FIELD name ON wallet TYPE option<string>")
+        .query("DEFINE FIELD description ON wallet TYPE string")
         .query("DEFINE FIELD currency_id ON wallet TYPE record<currency>")
         .query("DEFINE INDEX wallet_name ON wallet_metadata FIELDS name UNIQUE")
         .await?
