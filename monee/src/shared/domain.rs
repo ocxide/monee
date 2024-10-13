@@ -99,6 +99,7 @@ pub mod context {
 
     #[derive(Clone)]
     pub struct DbContext(crate::shared::infrastructure::database::Connection);
+    impl Context for DbContext {}
 
     #[cfg(all(test, feature = "db_test"))]
     impl DbContext {
@@ -113,7 +114,8 @@ pub mod context {
         let cream = CreamContext::default();
         let mut router = cream::events::router::Router::default();
         // Add event handlers
-        router.add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
+        router
+            .add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
 
         let (events_ctx, setup) = EventsContextBuilder::default().build(&cream);
 
@@ -135,28 +137,24 @@ pub mod context {
     }
 
     mod extends {
-        use cream::context::{events_context::EventsContext, CreamContext};
+        use cream::context::{events_context::EventsContext, ContextExtend, CreamContext};
 
         use super::{AppContext, DbContext};
 
-        pub trait ContextExtend<C> {
-            fn provide_context(&self) -> &C;
-        }
-
         impl ContextExtend<DbContext> for AppContext {
-            fn provide_context(&self) -> &DbContext {
+            fn provide_ctx(&self) -> &DbContext {
                 &self.db
             }
         }
 
         impl ContextExtend<CreamContext> for AppContext {
-            fn provide_context(&self) -> &CreamContext {
+            fn provide_ctx(&self) -> &CreamContext {
                 &self.cream
             }
         }
 
         impl ContextExtend<EventsContext> for AppContext {
-            fn provide_context(&self) -> &EventsContext {
+            fn provide_ctx(&self) -> &EventsContext {
                 &self.events_ctx
             }
         }
@@ -164,27 +162,15 @@ pub mod context {
 
     mod provides_export {
         use cream::{
-            context::{events_context::EventsContext, ContextProvide, CreamContext},
+            context::{events_context::EventsContext, pub_provide, CreamContext},
             event_bus::EventBusPort,
-            tasks::{Tasks, Shutdown},
+            tasks::{Shutdown, Tasks},
         };
 
-        use super::{extends::ContextExtend, AppContext};
-        macro_rules! pub_provide (($provider: path { $($service: path),* }) => {
-                $(
-                impl ContextProvide<$service> for AppContext {
-                    fn ctx_provide(&self) -> $service {
-                        let ctx =
-                            <super::AppContext as ContextExtend<$provider>>::provide_context(self);
-                        ctx.ctx_provide()
-                    }
-                }
-                )*
-            };
-        );
+        use super::AppContext;
 
-        pub_provide!(CreamContext { Tasks, Shutdown });
-        pub_provide!(EventsContext { EventBusPort });
+        pub_provide!(AppContext : CreamContext { Tasks, Shutdown });
+        pub_provide!(AppContext : EventsContext { EventBusPort });
     }
 
     mod provides_config {
@@ -215,13 +201,13 @@ pub mod context {
             },
         };
 
-        use super::{extends::ContextExtend, AppContext, DbContext};
+        use super::{AppContext, DbContext};
 
         macro_rules! provide_map (($ctx: path { $($service: path: $real_service: path),* $(,)* }) => {
             $(
             impl cream::context::ContextProvide<Box<dyn $service>> for AppContext {
                 fn ctx_provide(&self) -> Box<dyn $service> {
-                    let ctx = <Self as ContextExtend<$ctx>>::provide_context(self);
+                    let ctx = <Self as cream::context::ContextExtend<$ctx>>::provide_ctx(self);
                     let real_service: $real_service = ctx.ctx_provide();
                     Box::new(real_service)
                 }

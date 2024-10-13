@@ -738,7 +738,7 @@ dependencies = [
 [[package]]
 name = "cream"
 version = "0.2.0"
-source = "git+https://github.com/ocxide/cream.git#57f99623b0f076a70d93fe00826ba4085b3ce7cd"
+source = "git+https://github.com/ocxide/cream.git#5f1b3a3a6b0ddfa77da73a153cca44c122275242"
 dependencies = [
  "async-trait",
  "cream_derive",
@@ -749,7 +749,7 @@ dependencies = [
 [[package]]
 name = "cream_derive"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#57f99623b0f076a70d93fe00826ba4085b3ce7cd"
+source = "git+https://github.com/ocxide/cream.git#5f1b3a3a6b0ddfa77da73a153cca44c122275242"
 dependencies = [
  "proc-macro2",
  "quote",
