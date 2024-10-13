@@ -67,7 +67,7 @@ mod error {
 }
 
 use clap::Parser;
-use cream::context::Context;
+use cream::{context::Context, tasks::Shutdown};
 use monee::shared::domain::context::AppContext;
 
 mod commands;
@@ -112,9 +112,8 @@ async fn main() -> miette::Result<()> {
     let cli = CliParser::parse();
     run(&ctx, cli).await?;
 
-    let tasks: cream::tasks::Tasks = ctx.provide();
-    tasks.close();
-    tasks.wait().await;
+    let shutdown: Shutdown = ctx.provide();
+    shutdown.run().await;
 
     Ok(())
 }

@@ -166,7 +166,7 @@ pub mod context {
         use cream::{
             context::{events_context::EventsContext, ContextProvide, CreamContext},
             event_bus::EventBusPort,
-            tasks::Tasks,
+            tasks::{Tasks, Shutdown},
         };
 
         use super::{extends::ContextExtend, AppContext};
@@ -183,7 +183,7 @@ pub mod context {
             };
         );
 
-        pub_provide!(CreamContext { Tasks });
+        pub_provide!(CreamContext { Tasks, Shutdown });
         pub_provide!(EventsContext { EventBusPort });
     }
 
