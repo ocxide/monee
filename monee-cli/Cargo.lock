@@ -738,7 +738,7 @@ dependencies = [
 [[package]]
 name = "cream"
 version = "0.2.0"
-source = "git+https://github.com/ocxide/cream.git#50d00181597194093700add2f9ffb0a3610a8246"
+source = "git+https://github.com/ocxide/cream.git#a197dd28ccb8690029f393543331d69b8cb17638"
 dependencies = [
  "async-trait",
  "cream_derive",
@@ -749,7 +749,7 @@ dependencies = [
 [[package]]
 name = "cream_derive"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#50d00181597194093700add2f9ffb0a3610a8246"
+source = "git+https://github.com/ocxide/cream.git#a197dd28ccb8690029f393543331d69b8cb17638"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1940,6 +1940,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
+ "cream",
  "miette 7.2.0",
  "monee",
  "monee_core",

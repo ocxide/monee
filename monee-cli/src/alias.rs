@@ -73,6 +73,7 @@ where
 }
 
 mod impl_trait {
+    use cream::context::Context;
     use monee::{
         backoffice::{
             actors::domain::actor_alias::ActorAlias,

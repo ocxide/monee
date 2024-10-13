@@ -7,6 +7,7 @@ mod prelude {
 }
 
 mod error {
+    use cream::context::Context;
     use monee::shared::{
         domain::context::AppContext,
         infrastructure::errors::{AppError, InfrastructureError},
@@ -66,6 +67,7 @@ mod error {
 }
 
 use clap::Parser;
+use cream::context::Context;
 use monee::shared::domain::context::AppContext;
 
 mod commands;
@@ -103,13 +105,14 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> miette::Result<()> {
-    let (ctx, tasks) = monee::shared::domain::context::setup()
+    let ctx = monee::shared::domain::context::setup()
         .await
         .expect("To setup context");
 
     let cli = CliParser::parse();
     run(&ctx, cli).await?;
 
+    let tasks: cream::tasks::Tasks = ctx.provide();
     tasks.close();
     tasks.wait().await;
 

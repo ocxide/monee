@@ -1,4 +1,5 @@
 pub mod wallet {
+    use cream::context::Context;
     use monee::{
         backoffice::wallets::domain::wallet_name::WalletName, prelude::AppContext,
         shared::domain::errors::UniqueSaveError,
@@ -16,7 +17,7 @@ pub mod wallet {
             #[arg(short, long)]
             name: WalletName,
 
-            #[arg(short, long, default_value="")]
+            #[arg(short, long, default_value = "")]
             description: String,
         },
     }
@@ -50,6 +51,7 @@ pub mod wallet {
 }
 
 pub mod events {
+    use cream::context::Context;
     use std::future::Future;
 
     use crate::prelude::MapAppErr;
@@ -160,6 +162,7 @@ pub mod events {
 }
 
 pub mod currency {
+    use cream::context::Context;
     use monee::{
         backoffice::currencies::domain::{
             currency::Currency, currency_code::CurrencyCode, currency_name::CurrencyName,
@@ -203,6 +206,7 @@ pub mod currency {
 }
 
 pub mod actor {
+    use cream::context::Context;
     use monee::{
         backoffice::actors::domain::{
             actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType,
@@ -253,6 +257,7 @@ pub mod actor {
 }
 
 pub mod show {
+    use cream::context::Context;
     use std::fmt::Display;
 
     use monee::{reports::snapshot::domain::snapshot::Money, shared::domain::context::AppContext};

@@ -111,8 +111,10 @@ pub mod context {
         let db = crate::shared::infrastructure::database::connect().await?;
 
         let cream = CreamContext::default();
-        let router = cream::events::router::Router::default();
+        let mut router = cream::events::router::Router::default();
         // Add event handlers
+        router.add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
+
         let (events_ctx, setup) = EventsContextBuilder::default().build(&cream);
 
         let ctx = AppContext {

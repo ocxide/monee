@@ -14,6 +14,7 @@ thiserror = "1.0.61"
 tokio = { version = "^1.39.1", features = ["full"] }
 monee = { path = "../monee", default-features = false }
 monee_core = { path = "../monee/monee_core" }
+cream = { git = "https://github.com/ocxide/cream.git" }
 
 [features]
 default = ["monee/remote"]
