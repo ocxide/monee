@@ -244,10 +244,11 @@ pub mod infrastructure {
                 wallet: Wallet,
             ) -> Result<(), AppError<UniqueSaveError>> {
                 let result = self.0
-                    .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name")
+                    .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name, description = $description")
                     .bind(("id", id))
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
+                    .bind(("description", wallet.description))
                     .await.map_err(InfrastructureError::from)?
                     .check();
 
