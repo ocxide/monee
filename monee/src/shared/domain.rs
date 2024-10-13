@@ -168,8 +168,8 @@ pub mod context {
         };
 
         use super::{extends::ContextExtend, AppContext};
-        macro_rules! pub_provide {
-            ($service: path, $provider: path) => {
+        macro_rules! pub_provide (($provider: path { $($service: path),* }) => {
+                $(
                 impl ContextProvide<$service> for AppContext {
                     fn ctx_provide(&self) -> $service {
                         let ctx =
@@ -177,11 +177,12 @@ pub mod context {
                         ctx.ctx_provide()
                     }
                 }
+                )*
             };
-        }
+        );
 
-        pub_provide!(Tasks, CreamContext);
-        pub_provide!(EventBusPort, EventsContext);
+        pub_provide!(CreamContext { Tasks });
+        pub_provide!(EventsContext { EventBusPort });
     }
 
     mod provides_config {
@@ -214,7 +215,8 @@ pub mod context {
 
         use super::{extends::ContextExtend, AppContext, DbContext};
 
-        macro_rules! provide_map(($service: path; $real_service: path, $ctx: ident) => {
+        macro_rules! provide_map (($ctx: path { $($service: path: $real_service: path),* $(,)* }) => {
+            $(
             impl cream::context::ContextProvide<Box<dyn $service>> for AppContext {
                 fn ctx_provide(&self) -> Box<dyn $service> {
                     let ctx = <Self as ContextExtend<$ctx>>::provide_context(self);
@@ -222,24 +224,19 @@ pub mod context {
                     Box::new(real_service)
                 }
             }
+            )*
         });
 
-        provide_map!(SnapshotRepository; SnapshotSurrealRepository, DbContext);
-        provide_map!(WalletsRepository; WalletsSurrealRepository, DbContext);
-        provide_map!(ActorsRepository; ActorsSurrealRepository, DbContext);
-        provide_map!(CurrenciesRepository; CurrenciesSurrealRepository, DbContext);
-        provide_map!(ItemTagsRepository; ItemTagsSurrealRepository, DbContext);
-        provide_map!(EventsRepository; EventsSurrealRepository, DbContext);
-        provide_map!(
-            crate::reports::snapshot::domain::repository::Repository;
-            crate::reports::snapshot::infrastructure::repository::SurrealRepository,
-            DbContext
-        );
-        provide_map!(
-            crate::reports::events::domain::repository::Repository;
-            crate::reports::events::infrastructure::repository::SurrealRepository,
-            DbContext
-        );
+        provide_map! {DbContext {
+            SnapshotRepository: SnapshotSurrealRepository,
+            WalletsRepository: WalletsSurrealRepository,
+            ActorsRepository: ActorsSurrealRepository,
+            CurrenciesRepository: CurrenciesSurrealRepository,
+            ItemTagsRepository: ItemTagsSurrealRepository,
+            EventsRepository: EventsSurrealRepository,
+            crate::reports::snapshot::domain::repository::Repository: crate::reports::snapshot::infrastructure::repository::SurrealRepository,
+            crate::reports::events::domain::repository::Repository: crate::reports::events::infrastructure::repository::SurrealRepository,
+        }}
 
         impl cream::context::ContextProvide<Box<dyn crate::shared::domain::logging::LogRepository>>
             for super::AppContext
