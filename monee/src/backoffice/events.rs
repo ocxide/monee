@@ -6,7 +6,7 @@ pub mod application {
         use crate::{
             backoffice::{
                 events::domain::{
-                    event::{Buy, DebtRegister, Event, MoveValue, RegisterBalance},
+                    event::{Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance},
                     repository::Repository,
                 },
                 snapshot::application::snapshot_io::SnapshotIO,
@@ -88,6 +88,16 @@ pub mod application {
                     snapshot.apply(monee_core::Operation::Wallet(
                         monee_core::WalletOperation::Deposit {
                             wallet_id: *to,
+                            amount: *amount,
+                        },
+                    ))?;
+                }
+                Event::PaymentReceived(PaymentReceived {
+                    wallet_id, amount, ..
+                }) => {
+                    snapshot.apply(monee_core::Operation::Wallet(
+                        monee_core::WalletOperation::Deposit {
+                            wallet_id: *wallet_id,
                             amount: *amount,
                         },
                     ))?;
@@ -185,6 +195,13 @@ pub mod domain {
         }
 
         #[derive(serde::Serialize, serde::Deserialize)]
+        pub struct PaymentReceived {
+            pub actor_id: ActorId,
+            pub wallet_id: WalletId,
+            pub amount: Amount,
+        }
+
+        #[derive(serde::Serialize, serde::Deserialize)]
         #[serde(rename_all = "snake_case", tag = "type")]
         pub enum Event {
             Buy(Buy),
@@ -192,6 +209,7 @@ pub mod domain {
             RegisterBalance(RegisterBalance),
             RegisterDebt(DebtRegister),
             RegisterLoan(DebtRegister),
+            PaymentReceived(PaymentReceived),
         }
     }
 }
@@ -254,6 +272,11 @@ SET type='buy', item=type::thing('item_tag', $item), amount=$amount, wallet_id=t
                         self.0
                             .query("CREATE event SET type='move_value', from=type::thing('wallet', $from), to=type::thing('wallet', $to), amount=$amount")
                             .bind(move_value)
+                    }
+                    Event::PaymentReceived(payment) => {
+                        self.0
+                            .query("CREATE event SET type='payment_received', actor_id=type::thing('actor', $actor_id), wallet_id=type::thing('wallet', $wallet_id), amount=$amount")
+                            .bind(payment)
                     }
                 }.await?.check()?;
 
