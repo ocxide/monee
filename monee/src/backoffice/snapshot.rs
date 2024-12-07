@@ -15,14 +15,14 @@ pub mod domain {
 
 pub mod application {
     pub mod on_wallet_created {
-        use cream::{context::ContextProvide, events::Handler};
+        use cream::{context::FromContext, events::Handler};
 
         use crate::shared::domain::context::AppContext;
 
         use super::snapshot_io::SnapshotIO;
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct OnWalletCreated {
             snapshot_io: SnapshotIO,
         }
@@ -58,15 +58,15 @@ pub mod application {
     }
 
     pub mod snapshot_io {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
 
         use crate::{
             backoffice::snapshot::domain::repository::SnapshotRepository,
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct SnapshotIO {
             repository: Box<dyn SnapshotRepository>,
         }
@@ -94,7 +94,7 @@ pub mod application {
 
 pub mod infrastructure {
     pub mod snapshot_repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::{
             ActorId, Amount, CurrencyId, Debt, DebtId, Money, MoneyMap, Snapshot, Wallet, WalletId,
         };
@@ -110,8 +110,8 @@ pub mod infrastructure {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SnapshotSurrealRepository(Connection);
 
         #[derive(serde::Serialize, serde::Deserialize)]

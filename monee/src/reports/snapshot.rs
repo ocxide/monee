@@ -46,15 +46,15 @@ pub mod domain {
 
 pub mod application {
     pub mod snapshot_report {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
 
         use crate::{
             reports::snapshot::domain::{repository::Repository, snapshot::Snapshot},
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct SnapshotReport {
             repository: Box<dyn Repository>,
         }
@@ -70,7 +70,7 @@ pub mod application {
 
 pub mod infrastructure {
     pub mod repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::{Amount, DebtId, WalletId};
 
         use crate::{
@@ -88,8 +88,8 @@ pub mod infrastructure {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SurrealRepository(Connection);
 
         #[derive(serde::Deserialize, Default)]

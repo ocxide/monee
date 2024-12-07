@@ -1,14 +1,14 @@
 pub mod application {
     pub mod logging {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
 
         use crate::shared::{
             domain::{context::AppContext, logging::LogRepository},
             infrastructure::errors::InfrastructureError,
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct LogService {
             repository: Box<dyn LogRepository>,
         }

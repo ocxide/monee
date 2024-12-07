@@ -207,7 +207,7 @@ pub mod domain {
 
 pub mod application {
     pub mod save_one {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::CurrencyId;
 
         use crate::{
@@ -216,8 +216,8 @@ pub mod application {
             shared::domain::{context::AppContext, errors::UniqueSaveError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct SaveOne {
             repository: Box<dyn Repository>,
         }
@@ -230,7 +230,7 @@ pub mod application {
     }
 
     pub mod code_resolve {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::CurrencyId;
 
         use crate::{
@@ -238,8 +238,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct CodeResolve {
             repository: Box<dyn Repository>,
         }
@@ -257,7 +257,7 @@ pub mod application {
 
 pub mod infrastructure {
     pub mod repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::CurrencyId;
 
         use crate::{
@@ -274,8 +274,8 @@ pub mod infrastructure {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SurrealRepository(Connection);
 
         #[async_trait::async_trait]

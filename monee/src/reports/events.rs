@@ -1,14 +1,14 @@
 pub mod application {
     pub mod get_events {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
 
         use crate::{
             reports::events::domain::{event::Event, repository::Repository},
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct GetEvents {
             repository: Box<dyn Repository>,
         }
@@ -76,7 +76,7 @@ pub mod domain {
 
 pub mod infrastructure {
     pub mod repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
 
         use crate::{
             reports::events::domain::{event::Event, repository::Repository},
@@ -86,8 +86,8 @@ pub mod infrastructure {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SurrealRepository(Connection);
 
         #[async_trait::async_trait]

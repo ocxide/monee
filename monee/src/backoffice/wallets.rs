@@ -1,14 +1,14 @@
 pub mod application {
     pub mod name_resolve {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
 
         use crate::{
             backoffice::wallets::domain::{repository::Repository, wallet_name::WalletName},
             prelude::{AppContext, InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct NameResolve {
             repository: Box<dyn Repository>,
         }
@@ -24,7 +24,7 @@ pub mod application {
     }
 
     pub mod create_one {
-        use cream::{context::ContextProvide, event_bus::EventBusPort};
+        use cream::{context::FromContext, event_bus::EventBusPort};
         use monee_core::WalletId;
 
         use crate::{
@@ -37,8 +37,8 @@ pub mod application {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
             bus: EventBusPort,
@@ -66,7 +66,7 @@ pub mod application {
     }
 
     pub mod update_one {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::WalletId;
 
         use crate::{
@@ -77,8 +77,8 @@ pub mod application {
             shared::domain::context::AppContext,
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct UpdateOne {
             repository: Box<dyn Repository>,
         }
@@ -214,7 +214,7 @@ pub mod domain {
 
 pub mod infrastructure {
     pub mod repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::WalletId;
 
         use crate::{
@@ -232,8 +232,8 @@ pub mod infrastructure {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SurrealRepository(Connection);
 
         #[async_trait::async_trait]

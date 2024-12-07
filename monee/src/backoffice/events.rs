@@ -1,6 +1,6 @@
 pub mod application {
     pub mod add {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::{DebtId, WalletId};
 
         use crate::{
@@ -14,8 +14,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::AppError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct Add {
             repository: Box<dyn Repository>,
             snapshot_io: SnapshotIO,
@@ -216,7 +216,7 @@ pub mod domain {
 
 pub mod infrastructure {
     pub mod repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use surrealdb::sql::Id;
 
         use crate::{
@@ -224,8 +224,8 @@ pub mod infrastructure {
             shared::{domain::context::DbContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SurrealRepository(crate::shared::infrastructure::database::Connection);
 
         impl SurrealRepository {

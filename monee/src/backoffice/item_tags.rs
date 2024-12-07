@@ -1,6 +1,6 @@
 pub mod application {
     pub mod create_one {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -11,8 +11,8 @@ pub mod application {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct CreateOne {
             repository: Box<dyn Repository>,
         }
@@ -26,7 +26,7 @@ pub mod application {
     }
 
     pub mod relate {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -34,8 +34,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct Relate {
             repository: Box<dyn Repository>,
         }
@@ -75,7 +75,7 @@ pub mod application {
     }
 
     pub mod unlink {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -83,8 +83,8 @@ pub mod application {
             shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct Unlink {
             repository: Box<dyn Repository>,
         }
@@ -101,7 +101,7 @@ pub mod application {
     }
 
     pub mod name_resolve {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -109,8 +109,8 @@ pub mod application {
             prelude::{AppContext, InfrastructureError},
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(AppContext)]
+        #[derive(FromContext)]
+        #[context(AppContext)]
         pub struct NameResolve {
             repository: Box<dyn Repository>,
         }
@@ -210,7 +210,7 @@ pub mod domain {
 
 pub mod infrastructure {
     pub mod repository {
-        use cream::context::ContextProvide;
+        use cream::context::FromContext;
         use monee_core::ItemTagId;
 
         use crate::{
@@ -231,8 +231,8 @@ pub mod infrastructure {
             },
         };
 
-        #[derive(ContextProvide)]
-        #[provider_context(DbContext)]
+        #[derive(FromContext)]
+        #[context(DbContext)]
         pub struct SurrealRepository(Connection);
 
         #[async_trait::async_trait]

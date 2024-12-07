@@ -83,7 +83,7 @@ pub mod errors {
 pub mod context {
     use cream::context::{
         events_context::{EventsContext, EventsContextBuilder},
-        Context, ContextProvide, CreamContext,
+        Context, CreamContext, FromContext,
     };
 
     use crate::shared::infrastructure::errors::InfrastructureError;
@@ -130,9 +130,9 @@ pub mod context {
         Ok(ctx)
     }
 
-    impl ContextProvide<crate::shared::infrastructure::database::Connection> for DbContext {
-        fn ctx_provide(&self) -> crate::shared::infrastructure::database::Connection {
-            self.0.clone()
+    impl FromContext<DbContext> for crate::shared::infrastructure::database::Connection {
+        fn from_context(ctx: &DbContext) -> Self {
+            ctx.0.clone()
         }
     }
 
@@ -205,10 +205,11 @@ pub mod context {
 
         macro_rules! provide_map (($ctx: path { $($service: path: $real_service: path),* $(,)* }) => {
             $(
-            impl cream::context::ContextProvide<Box<dyn $service>> for AppContext {
-                fn ctx_provide(&self) -> Box<dyn $service> {
-                    let ctx = <Self as cream::context::ContextExtend<$ctx>>::provide_ctx(self);
-                    let real_service: $real_service = ctx.ctx_provide();
+            impl cream::context::FromContext<AppContext> for Box<dyn $service> {
+                fn from_context(app_ctx: &AppContext) -> Self {
+                    use cream::context::{ContextExtend, Context};
+                    let ctx: &$ctx = app_ctx.provide_ctx();
+                    let real_service: $real_service = ctx.provide();
                     Box::new(real_service)
                 }
             }
@@ -226,10 +227,10 @@ pub mod context {
             crate::reports::events::domain::repository::Repository: crate::reports::events::infrastructure::repository::SurrealRepository,
         }}
 
-        impl cream::context::ContextProvide<Box<dyn crate::shared::domain::logging::LogRepository>>
-            for super::AppContext
+        impl cream::context::FromContext<super::AppContext>
+            for Box<dyn crate::shared::domain::logging::LogRepository>
         {
-            fn ctx_provide(&self) -> Box<dyn crate::shared::domain::logging::LogRepository> {
+            fn from_context(_ctx: &super::AppContext) -> Self {
                 Box::new(crate::shared::infrastructure::logging::FileLogRepository)
             }
         }
