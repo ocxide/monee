@@ -211,7 +211,10 @@ pub mod currency {
                 let currencies = service.run().await.log_err(ctx)?;
 
                 for (_, currency) in currencies {
-                    println!("{} \"{}\" {}", currency.code, currency.name, currency.symbol);
+                    println!(
+                        "{} \"{}\" {}",
+                        currency.code, currency.name, currency.symbol
+                    );
                 }
 
                 Ok(())
@@ -229,7 +232,7 @@ pub mod actor {
         prelude::AppContext,
     };
 
-    use crate::prelude::MapAppErr;
+    use crate::{error::LogAndErr, prelude::MapAppErr};
 
     #[derive(clap::Subcommand)]
     pub enum ActorCommand {
@@ -243,6 +246,9 @@ pub mod actor {
             #[arg(short, long)]
             alias: Option<ActorAlias>,
         },
+
+        #[command(alias = "ls")]
+        List,
     }
 
     pub async fn run(ctx: &AppContext, command: ActorCommand) -> miette::Result<()> {
@@ -266,6 +272,33 @@ pub mod actor {
                     }
                     .into()
                 })
+            }
+
+            ActorCommand::List => {
+                let service =
+                    ctx.provide::<monee::backoffice::actors::application::get_all::GetAll>();
+                let actors = service.run().await.log_err(ctx)?;
+
+                if actors.is_empty() {
+                    println!("No actors found");
+                    return Ok(());
+                }
+
+                for (_, actor) in actors {
+                    let actor_alias = match actor.alias {
+                        Some(alias) => format!("\"{}\"", alias),
+                        None => "<None>".to_string(),
+                    };
+                    let actor_type = match actor.actor_type {
+                        ActorType::Natural => "Person",
+                        ActorType::Business => "Business",
+                        ActorType::FinancialEntity => "Financial entity",
+                    };
+
+                    println!("{} {} - {}", actor.name, actor_alias, actor_type);
+                }
+
+                Ok(())
             }
         }
     }

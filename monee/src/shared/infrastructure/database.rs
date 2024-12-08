@@ -109,6 +109,18 @@ mod entity {
         }
     }
 
+    impl<K, T> From<Entity<K, T>> for (K, T) {
+        fn from(Entity(key, value): Entity<K, T>) -> Self {
+            (key, value)
+        }
+    }
+
+    impl<K, T> Entity<K, T> {
+        pub fn into_key(self) -> K {
+            self.0
+        }
+    }
+
     pub(crate) mod de {
         use serde::{Deserialize, Deserializer};
 
@@ -131,7 +143,7 @@ mod entity {
                     field: K,
                 }
 
-                let val = SqlTable::<StringSqlIdDeserialize::<K>>::deserialize(deserializer)?;
+                let val = SqlTable::<StringSqlIdDeserialize<K>>::deserialize(deserializer)?;
                 Ok(val.id.field)
             }
         }
