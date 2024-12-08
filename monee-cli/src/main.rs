@@ -1,5 +1,6 @@
 mod alias;
 mod date;
+mod output;
 
 mod prelude {
     pub use crate::error::LogAndErr;

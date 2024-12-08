@@ -171,7 +171,7 @@ pub mod currency {
         prelude::AppContext,
     };
 
-    use crate::{error::LogAndErr, prelude::MapAppErr};
+    use crate::{error::LogAndErr, formatted, prelude::MapAppErr};
 
     #[derive(clap::Subcommand)]
     pub enum CurrencyCommand {
@@ -210,12 +210,14 @@ pub mod currency {
                     ctx.provide::<monee::backoffice::currencies::application::get_all::GetAll>();
                 let currencies = service.run().await.log_err(ctx)?;
 
-                for (_, currency) in currencies {
-                    println!(
+                crate::output::print_data(currencies.iter().map(|(_, currency)| {
+                    formatted!(
                         "{} \"{}\" {}",
-                        currency.code, currency.name, currency.symbol
-                    );
-                }
+                        currency.code,
+                        currency.name,
+                        currency.symbol
+                    )
+                }));
 
                 Ok(())
             }
@@ -232,7 +234,7 @@ pub mod actor {
         prelude::AppContext,
     };
 
-    use crate::{error::LogAndErr, prelude::MapAppErr};
+    use crate::{error::LogAndErr, output::formatted, prelude::MapAppErr};
 
     #[derive(clap::Subcommand)]
     pub enum ActorCommand {
@@ -279,15 +281,10 @@ pub mod actor {
                     ctx.provide::<monee::backoffice::actors::application::get_all::GetAll>();
                 let actors = service.run().await.log_err(ctx)?;
 
-                if actors.is_empty() {
-                    println!("No actors found");
-                    return Ok(());
-                }
-
-                for (_, actor) in actors {
-                    let actor_alias = match actor.alias {
+                crate::output::print_data(actors.iter().map(|(_, actor)| {
+                    let actor_alias = match actor.alias.as_ref() {
                         Some(alias) => format!("\"{}\"", alias),
-                        None => "<None>".to_string(),
+                        None => "<None>".to_owned(),
                     };
                     let actor_type = match actor.actor_type {
                         ActorType::Natural => "Person",
@@ -295,8 +292,8 @@ pub mod actor {
                         ActorType::FinancialEntity => "Financial entity",
                     };
 
-                    println!("{} {} - {}", actor.name, actor_alias, actor_type);
-                }
+                    formatted!("{} {} - {}", &actor.name, actor_alias, &actor_type)
+                }));
 
                 Ok(())
             }
@@ -310,7 +307,7 @@ pub mod show {
 
     use monee::{reports::snapshot::domain::snapshot::Money, shared::domain::context::AppContext};
 
-    use crate::prelude::LogAndErr;
+    use crate::{formatted, output::Listter, prelude::LogAndErr};
 
     #[derive(clap::Args)]
     pub struct Args;
@@ -328,18 +325,16 @@ pub mod show {
         }
     }
 
-    fn print_entity<T>(
+    fn print_entity<T, D: Display>(
         entities: impl ExactSizeIterator<Item = (T, Money)>,
-        entity_display: impl Fn(T),
+        entity_display: impl Fn(T) -> D,
     ) {
-        if entities.len() == 0 {
-            println!("\t<Empty>");
-        }
-        for (entity, money) in entities {
-            print!("\t");
-            (entity_display)(entity);
-            println!(" => {}", MoneyCli(money));
-        }
+        let iter = entities.map(|(entity, money)| {
+            let entity = (entity_display)(entity);
+            let money_cli = MoneyCli(money);
+            formatted!("{} => {}", entity, money_cli)
+        });
+        crate::output::print_iter(Listter::new(iter).map(|item| formatted!("\t{}", item)))
     }
 
     pub async fn run(ctx: &AppContext, _: Args) -> miette::Result<()> {
@@ -348,18 +343,16 @@ pub mod show {
         let snapshot = service.run().await.log_err(ctx)?;
 
         println!("Wallets:");
-        print_entity(snapshot.wallets.into_values(), |wallet| {
-            print!("{}", wallet.name);
-        });
+        print_entity(snapshot.wallets.into_values(), |wallet| wallet.name);
 
         println!("Debts:");
         print_entity(snapshot.debts.into_values(), |debt| {
-            print!("Debt with '{}'", debt.actor.name);
+            formatted!("Debt with '{}'", debt.actor.name)
         });
 
         println!("Loans:");
         print_entity(snapshot.loans.into_values(), |debt| {
-            print!("Loan to '{}'", debt.actor.name);
+            formatted!("Loan to '{}'", debt.actor.name)
         });
 
         Ok(())
