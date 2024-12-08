@@ -171,7 +171,7 @@ pub mod currency {
         prelude::AppContext,
     };
 
-    use crate::prelude::MapAppErr;
+    use crate::{error::LogAndErr, prelude::MapAppErr};
 
     #[derive(clap::Subcommand)]
     pub enum CurrencyCommand {
@@ -185,6 +185,9 @@ pub mod currency {
             #[arg(short, long)]
             symbol: CurrencySymbol,
         },
+
+        #[command(alias = "ls")]
+        List,
     }
 
     pub async fn run(ctx: &AppContext, command: CurrencyCommand) -> miette::Result<()> {
@@ -200,6 +203,18 @@ pub mod currency {
                     }
                     .into()
                 })
+            }
+
+            CurrencyCommand::List => {
+                let service =
+                    ctx.provide::<monee::backoffice::currencies::application::get_all::GetAll>();
+                let currencies = service.run().await.log_err(ctx)?;
+
+                for (_, currency) in currencies {
+                    println!("{} \"{}\" {}", currency.code, currency.name, currency.symbol);
+                }
+
+                Ok(())
             }
         }
     }
