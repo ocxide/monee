@@ -9,7 +9,8 @@ pub mod repository {
             item_tag_node::ItemTagNode,
             repository::{Repository, TagsRelation},
         },
-        prelude::AppError,
+        iprelude::*,
+        prelude::*,
         shared::{
             domain::{context::DbContext, errors::UniqueSaveError},
             infrastructure::{
@@ -36,7 +37,7 @@ pub mod repository {
                 .bind(("id", id))
                 .bind(("data", item_tag))
                 .await
-                .map_err(InfrastructureError::from)?
+                .catch_infra()?
                 .check();
 
             response.into_app_result()
@@ -83,7 +84,7 @@ pub mod repository {
                 .bind(("child_id", child_id))
                 .query("RELATE $eparent_id->contains->$echild_id")
                 .await
-                .map_err(InfrastructureError::from)?
+                .catch_infra()?
                 .check();
 
             response.into_app_result()

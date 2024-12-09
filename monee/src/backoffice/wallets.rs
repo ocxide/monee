@@ -223,6 +223,7 @@ pub mod infrastructure {
                 wallet::Wallet,
                 wallet_name::WalletName,
             },
+            iprelude::CatchInfra,
             shared::{
                 domain::{context::DbContext, errors::UniqueSaveError},
                 infrastructure::{
@@ -249,7 +250,7 @@ pub mod infrastructure {
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
                     .bind(("description", wallet.description))
-                    .await.map_err(InfrastructureError::from)?
+                    .await.catch_infra()?
                     .check();
 
                 result.into_app_result()
@@ -295,9 +296,9 @@ pub mod infrastructure {
                     .query("SELECT VALUE id FROM wallet WHERE name = $name")
                     .bind(("name", name))
                     .await
-                    .map_err(InfrastructureError::from)?;
+                    .catch_infra()?;
 
-                let wallet_id: Option<EntityKey<WalletId>> = response.take(0).map_err(InfrastructureError::from)?;
+                let wallet_id: Option<EntityKey<WalletId>> = response.take(0).catch_infra()?;
                 Ok(wallet_id.map(|w| w.0))
             }
         }

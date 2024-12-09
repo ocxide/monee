@@ -34,3 +34,20 @@ pub mod prelude {
 
     pub use cream::context::Context;
 }
+
+/// Private prelude
+pub(crate) mod iprelude {
+    use crate::prelude::InfrastructureError;
+
+    pub trait CatchInfra {
+        type Output;
+        fn catch_infra(self) -> Result<Self::Output, InfrastructureError>;
+    }
+
+    impl<T> CatchInfra for Result<T, surrealdb::Error> {
+        type Output = T;
+        fn catch_infra(self) -> Result<Self::Output, InfrastructureError> {
+            self.map_err(Into::into)
+        }
+    }
+}

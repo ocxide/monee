@@ -6,6 +6,7 @@ pub mod repository {
         backoffice::currencies::domain::{
             currency::Currency, currency_code::CurrencyCode, repository::Repository,
         },
+        iprelude::*,
         prelude::AppError,
         shared::{
             domain::{context::DbContext, errors::UniqueSaveError},
@@ -33,7 +34,7 @@ pub mod repository {
                 .bind(("id", id))
                 .bind(currency)
                 .await
-                .map_err(InfrastructureError::from)?
+                .catch_infra()?
                 .check();
 
             response.into_app_result()

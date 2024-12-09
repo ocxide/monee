@@ -6,6 +6,7 @@ pub mod repository {
         backoffice::actors::domain::{
             actor::Actor, actor_alias::ActorAlias, repository::Repository,
         },
+        iprelude::CatchInfra,
         prelude::AppError,
         shared::{
             domain::{context::DbContext, errors::UniqueSaveError},
@@ -22,18 +23,14 @@ pub mod repository {
 
     #[async_trait::async_trait]
     impl Repository for SurrealRepository {
-        async fn save(
-            &self,
-            id: ActorId,
-            actor: Actor,
-        ) -> Result<(), AppError<UniqueSaveError>> {
+        async fn save(&self, id: ActorId, actor: Actor) -> Result<(), AppError<UniqueSaveError>> {
             let result = self
                 .0
                 .query("CREATE type::thing('actor', ) CONTENT ")
                 .bind(("id", id))
                 .bind(("data", actor))
                 .await
-                .map_err(InfrastructureError::from)?
+                .catch_infra()?
                 .check();
 
             result.into_app_result()
@@ -53,17 +50,12 @@ pub mod repository {
             let actor: Option<Entity<ActorId, ()>> = response.take(0)?;
             Ok(actor.map(Entity::into_key))
         }
-        
+
         async fn get_all(&self) -> Result<Vec<(ActorId, Actor)>, InfrastructureError> {
-            let mut response = self
-                .0
-                .query("SELECT * FROM actor")
-                .await?
-                .check()?;
+            let mut response = self.0.query("SELECT * FROM actor").await?.check()?;
 
             let actors: Vec<Entity<ActorId, Actor>> = response.take(0)?;
             Ok(actors.into_iter().map(From::from).collect())
         }
     }
 }
-
