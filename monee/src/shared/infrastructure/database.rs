@@ -93,7 +93,7 @@ pub async fn connect() -> surrealdb::Result<Connection> {
     Ok(db)
 }
 
-pub use entity::{Entity, EntityKey};
+pub(crate) use entity::{Entity, EntityKey};
 
 mod entity {
     use de::SqlIdDeserializator;
