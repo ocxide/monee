@@ -1,16 +1,15 @@
 use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
 use cream::context::Context;
-use monee::{
-    backoffice::currencies::domain::currency::Currency, prelude::AppContext,
-    shared::application::logging::LogService,
-};
+use monee::backoffice::currencies::domain::currency::Currency;
+use monee::prelude::*;
 use monee_core::CurrencyId;
-use prelude::Entity;
-use tokio::runtime::Runtime;
 
 mod prelude;
 
+use prelude::*;
+
 fn main() {
+    use tokio::runtime::Runtime;
     Runtime::new().unwrap().block_on(serve());
 }
 
@@ -39,9 +38,5 @@ async fn list_currencies(
 
     currencies
         .map(|currencies| Json(currencies.into_iter().map(Into::into).collect()))
-        .map_err(|e| {
-            let logger: LogService = ctx.provide();
-            logger.error(e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
+        .catch_infra(&ctx)
 }
