@@ -403,7 +403,9 @@ pub mod item_tags {
             ItemTagCommand::Create { name } => {
                 let service = ctx
                     .provide::<monee::backoffice::item_tags::application::create_one::CreateOne>();
-                service.run(ItemTag { name }).await.log_err(ctx)?;
+                service.run(ItemTag { name }).await.map_app_err(ctx, |_| {
+                    miette::diagnostic! { "Duplicated item tag name" }.into()
+                })?;
 
                 Ok(())
             }
