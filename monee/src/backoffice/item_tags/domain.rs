@@ -1,19 +1,16 @@
 pub mod repository {
     use monee_core::ItemTagId;
 
-    use crate::shared::{
-        domain::errors::UniqueSaveStatus, infrastructure::errors::InfrastructureError,
+    use crate::{
+        prelude::AppError,
+        shared::{domain::errors::UniqueSaveError, infrastructure::errors::InfrastructureError},
     };
 
     use super::{item_name::ItemName, item_tag::ItemTag, item_tag_node::ItemTagNode};
 
     #[async_trait::async_trait]
     pub trait Repository: 'static + Send + Sync {
-        async fn save(
-            &self,
-            id: ItemTagId,
-            tag: ItemTag,
-        ) -> Result<UniqueSaveStatus, InfrastructureError>;
+        async fn save(&self, id: ItemTagId, tag: ItemTag) -> Result<(), AppError<UniqueSaveError>>;
 
         async fn check_relation(
             &self,
@@ -25,7 +22,7 @@ pub mod repository {
             &self,
             parent_id: ItemTagId,
             child_id: ItemTagId,
-        ) -> Result<UniqueSaveStatus, InfrastructureError>;
+        ) -> Result<(), AppError<UniqueSaveError>>;
 
         async fn unlink(
             &self,

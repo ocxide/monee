@@ -4,10 +4,8 @@ pub mod create_one {
 
     use crate::{
         backoffice::item_tags::domain::{item_tag::ItemTag, repository::Repository},
-        shared::{
-            domain::{context::AppContext, errors::UniqueSaveStatus},
-            infrastructure::errors::InfrastructureError,
-        },
+        prelude::AppError,
+        shared::domain::{context::AppContext, errors::UniqueSaveError},
     };
 
     #[derive(FromContext)]
@@ -17,7 +15,7 @@ pub mod create_one {
     }
 
     impl CreateOne {
-        pub async fn run(&self, tag: ItemTag) -> Result<UniqueSaveStatus, InfrastructureError> {
+        pub async fn run(&self, tag: ItemTag) -> Result<(), AppError<UniqueSaveError>> {
             let id = ItemTagId::new();
             self.repository.save(id, tag).await
         }
@@ -30,7 +28,11 @@ pub mod link_one {
 
     use crate::{
         backoffice::item_tags::domain::repository::{Repository, TagsRelation},
-        shared::{domain::context::AppContext, infrastructure::errors::InfrastructureError},
+        prelude::AppError,
+        shared::{
+            domain::{context::AppContext, errors::UniqueSaveError},
+            infrastructure::errors::InfrastructureError,
+        },
     };
 
     #[derive(FromContext)]
@@ -56,11 +58,10 @@ pub mod link_one {
                 TagsRelation::NotRelated => {}
             };
 
-            match self.repository.link(parent_id, child_id).await? {
-                crate::shared::domain::errors::UniqueSaveStatus::Created => Ok(Status::Linked),
-                crate::shared::domain::errors::UniqueSaveStatus::AlreadyExists => {
-                    Ok(Status::AlreadyContains)
-                }
+            match self.repository.link(parent_id, child_id).await {
+                Ok(_) => Ok(Status::Linked),
+                Err(AppError::Infrastructure(e)) => Err(e),
+                Err(AppError::App(UniqueSaveError::AlreadyExists)) => Ok(Status::AlreadyContains),
             }
         }
     }

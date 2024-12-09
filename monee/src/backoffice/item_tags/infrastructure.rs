@@ -9,14 +9,12 @@ pub mod repository {
             item_tag_node::ItemTagNode,
             repository::{Repository, TagsRelation},
         },
+        prelude::AppError,
         shared::{
-            domain::{
-                context::DbContext,
-                errors::{IntoDomainResult, UniqueSaveStatus},
-            },
+            domain::{context::DbContext, errors::UniqueSaveError},
             infrastructure::{
                 database::{Connection, EntityKey},
-                errors::InfrastructureError,
+                errors::{InfrastructureError, IntoAppResult},
             },
         },
     };
@@ -31,16 +29,17 @@ pub mod repository {
             &self,
             id: ItemTagId,
             item_tag: ItemTag,
-        ) -> Result<UniqueSaveStatus, InfrastructureError> {
+        ) -> Result<(), AppError<UniqueSaveError>> {
             let response = self
                 .0
                 .query("CREATE type::thing('item_tag', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", item_tag))
-                .await?
+                .await
+                .map_err(InfrastructureError::from)?
                 .check();
 
-            response.into_domain_result()
+            response.into_app_result()
         }
 
         async fn check_relation(
@@ -75,7 +74,7 @@ pub mod repository {
             &self,
             parent_id: ItemTagId,
             child_id: ItemTagId,
-        ) -> Result<UniqueSaveStatus, InfrastructureError> {
+        ) -> Result<(), AppError<UniqueSaveError>> {
             let response = self
                 .0
                 .query("LET $eparent_id = type::thing('item_tag', $parent_id)")
@@ -83,10 +82,11 @@ pub mod repository {
                 .query("LET $echild_id = type::thing('item_tag', $child_id)")
                 .bind(("child_id", child_id))
                 .query("RELATE $eparent_id->contains->$echild_id")
-                .await?
+                .await
+                .map_err(InfrastructureError::from)?
                 .check();
 
-            response.into_domain_result()
+            response.into_app_result()
         }
 
         async fn unlink(
