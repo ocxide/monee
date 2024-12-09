@@ -36,9 +36,12 @@ pub mod domain {
     pub mod event {
         use monee_core::Amount;
 
-        use crate::backoffice::{
-            actors::domain::actor::Actor, currencies::domain::currency::Currency,
-            wallets::domain::wallet_name::WalletName,
+        use crate::{
+            backoffice::{
+                actors::domain::actor::Actor, currencies::domain::currency::Currency,
+                wallets::domain::wallet_name::WalletName,
+            },
+            shared::domain::date::Datetime,
         };
 
         #[derive(serde::Deserialize, Debug)]
@@ -69,7 +72,7 @@ pub mod domain {
             pub amount: Amount,
             pub currency: Currency,
             pub actor: Actor,
-            pub payment_promise: Option<crate::date::Datetime>,
+            pub payment_promise: Option<Datetime>,
         }
     }
 }
@@ -110,13 +113,22 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
 
         #[cfg(all(test, feature = "db_test"))]
         mod tests {
-            use std::str::FromStr;
             use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
+            use std::str::FromStr;
 
             use super::*;
             use crate::backoffice::{
-                actors::domain::{actor::Actor, actor_type::ActorType, repository::Repository as _}, currencies::domain::currency::Currency, events::domain::{event::{Buy, DebtRegister, Event as AddEvent}, repository::Repository as _}, item_tags::domain::{item_tag::ItemTag, repository::Repository as _}, wallets::domain::{repository::Repository as _, wallet::Wallet},
-                currencies::domain::repository::Repository as _
+                actors::domain::{
+                    actor::Actor, actor_type::ActorType, repository::Repository as _,
+                },
+                currencies::domain::currency::Currency,
+                currencies::domain::repository::Repository as _,
+                events::domain::{
+                    event::{Buy, DebtRegister, Event as AddEvent},
+                    repository::Repository as _,
+                },
+                item_tags::domain::{item_tag::ItemTag, repository::Repository as _},
+                wallets::domain::{repository::Repository as _, wallet::Wallet},
             };
 
             #[test]

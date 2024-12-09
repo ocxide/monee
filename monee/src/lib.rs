@@ -1,8 +1,3 @@
-pub mod date {
-    pub type Datetime = chrono::DateTime<chrono::Utc>;
-    pub use chrono::Utc as Timezone;
-}
-
 pub mod backoffice;
 pub mod reports;
 pub mod shared;

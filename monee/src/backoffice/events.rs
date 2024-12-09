@@ -6,7 +6,9 @@ pub mod application {
         use crate::{
             backoffice::{
                 events::domain::{
-                    event::{Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance},
+                    event::{
+                        Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance,
+                    },
                     repository::Repository,
                 },
                 snapshot::application::snapshot_io::SnapshotIO,
@@ -163,7 +165,7 @@ pub mod domain {
     pub mod event {
         use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
 
-        use crate::date::Datetime;
+        use crate::shared::domain::date::Datetime;
 
         #[derive(serde::Serialize, serde::Deserialize)]
         pub struct DebtRegister {
