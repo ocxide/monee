@@ -1,14 +1,12 @@
 pub mod application {
     pub mod add {
         use cream::context::FromContext;
-        use monee_core::{DebtId, WalletId};
 
         use crate::{
             backoffice::{
                 events::domain::{
-                    event::{
-                        Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance,
-                    },
+                    apply_event::{apply_event, Error},
+                    event::Event,
                     repository::Repository,
                 },
                 snapshot::application::snapshot_io::SnapshotIO,
@@ -36,8 +34,92 @@ pub mod application {
                 Ok(())
             }
         }
+    }
+}
 
-        fn apply_event(snapshot: &mut monee_core::Snapshot, event: &Event) -> Result<(), Error> {
+pub mod domain {
+    pub mod repository {
+        use monee_core::EventId;
+
+        use crate::{
+            host::sync::domain::sync_data::EventEntry,
+            shared::infrastructure::errors::InfrastructureError,
+        };
+
+        use super::event::Event;
+
+        #[async_trait::async_trait]
+        pub trait Repository: 'static + Send + Sync {
+            async fn add(&self, event: Event) -> Result<(), InfrastructureError>;
+            async fn save_many(
+                &self,
+                events: Vec<(EventId, EventEntry)>,
+            ) -> Result<(), InfrastructureError>;
+        }
+    }
+
+    pub mod event {
+        use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
+
+        use crate::shared::domain::date::Datetime;
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        pub struct DebtRegister {
+            pub amount: Amount,
+            pub currency_id: CurrencyId,
+            pub actor_id: ActorId,
+            pub payment_promise: Option<Datetime>,
+        }
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        pub struct Buy {
+            pub item: ItemTagId,
+            pub actors: Box<[ActorId]>,
+            pub wallet_id: WalletId,
+            pub amount: Amount,
+        }
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        pub struct MoveValue {
+            pub from: WalletId,
+            pub to: WalletId,
+            pub amount: Amount,
+        }
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        pub struct RegisterBalance {
+            pub wallet_id: WalletId,
+            pub amount: Amount,
+        }
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        pub struct PaymentReceived {
+            pub actor_id: ActorId,
+            pub wallet_id: WalletId,
+            pub amount: Amount,
+        }
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        #[serde(rename_all = "snake_case", tag = "type")]
+        pub enum Event {
+            Buy(Buy),
+            MoveValue(MoveValue),
+            RegisterBalance(RegisterBalance),
+            RegisterDebt(DebtRegister),
+            RegisterLoan(DebtRegister),
+            PaymentReceived(PaymentReceived),
+        }
+    }
+
+    pub mod apply_event {
+        use monee_core::{DebtId, WalletId};
+
+        use super::event::{Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance};
+
+        pub fn apply_event(
+            snapshot: &mut monee_core::Snapshot,
+            event: &Event,
+        ) -> Result<(), Error> {
             match event {
                 Event::Buy(Buy {
                     amount, wallet_id, ..
@@ -109,11 +191,15 @@ pub mod application {
             Ok(())
         }
 
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "snake_case", tag = "type", content = "error")]
         pub enum Error {
             MoveValue(MoveValueError),
             Apply(monee_core::Error),
         }
 
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "snake_case", tag = "move_error")]
         pub enum MoveValueError {
             CurrenciesNonEqual,
             WalletNotFound(WalletId),
@@ -150,80 +236,18 @@ pub mod application {
     }
 }
 
-pub mod domain {
-    pub mod repository {
-        use crate::shared::infrastructure::errors::InfrastructureError;
-
-        use super::event::Event;
-
-        #[async_trait::async_trait]
-        pub trait Repository: 'static + Send + Sync {
-            async fn add(&self, event: Event) -> Result<(), InfrastructureError>;
-        }
-    }
-
-    pub mod event {
-        use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
-
-        use crate::shared::domain::date::Datetime;
-
-        #[derive(serde::Serialize, serde::Deserialize)]
-        pub struct DebtRegister {
-            pub amount: Amount,
-            pub currency_id: CurrencyId,
-            pub actor_id: ActorId,
-            pub payment_promise: Option<Datetime>,
-        }
-
-        #[derive(serde::Serialize, serde::Deserialize)]
-        pub struct Buy {
-            pub item: ItemTagId,
-            pub actors: Box<[ActorId]>,
-            pub wallet_id: WalletId,
-            pub amount: Amount,
-        }
-
-        #[derive(serde::Serialize, serde::Deserialize)]
-        pub struct MoveValue {
-            pub from: WalletId,
-            pub to: WalletId,
-            pub amount: Amount,
-        }
-
-        #[derive(serde::Serialize, serde::Deserialize)]
-        pub struct RegisterBalance {
-            pub wallet_id: WalletId,
-            pub amount: Amount,
-        }
-
-        #[derive(serde::Serialize, serde::Deserialize)]
-        pub struct PaymentReceived {
-            pub actor_id: ActorId,
-            pub wallet_id: WalletId,
-            pub amount: Amount,
-        }
-
-        #[derive(serde::Serialize, serde::Deserialize)]
-        #[serde(rename_all = "snake_case", tag = "type")]
-        pub enum Event {
-            Buy(Buy),
-            MoveValue(MoveValue),
-            RegisterBalance(RegisterBalance),
-            RegisterDebt(DebtRegister),
-            RegisterLoan(DebtRegister),
-            PaymentReceived(PaymentReceived),
-        }
-    }
-}
-
 pub mod infrastructure {
     pub mod repository {
         use cream::context::FromContext;
-        use surrealdb::sql::Id;
+        use monee_core::{ActorId, Amount, CurrencyId, EventId, ItemTagId, WalletId};
 
         use crate::{
             backoffice::events::domain::{event::Event, repository::Repository},
-            shared::{domain::context::DbContext, infrastructure::errors::InfrastructureError},
+            host::sync::domain::sync_data::EventEntry,
+            shared::{
+                domain::{context::DbContext, date::Datetime},
+                infrastructure::{database::EntityKey, errors::InfrastructureError},
+            },
         };
 
         #[derive(FromContext)]
@@ -236,51 +260,117 @@ pub mod infrastructure {
             }
         }
 
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "snake_case", tag = "type")]
+        pub enum SurrealMoneeEvent {
+            Buy {
+                item: EntityKey<ItemTagId>,
+                amount: Amount,
+                wallet_id: EntityKey<WalletId>,
+                actors: Vec<EntityKey<ActorId>>,
+            },
+
+            RegisterBalance {
+                wallet_id: EntityKey<WalletId>,
+                amount: Amount,
+            },
+
+            RegisterDebt {
+                amount: Amount,
+                currency_id: EntityKey<CurrencyId>,
+                actor_id: EntityKey<ActorId>,
+            },
+
+            RegisterLoan {
+                amount: Amount,
+                currency_id: EntityKey<CurrencyId>,
+                actor_id: EntityKey<ActorId>,
+            },
+
+            MoveValue {
+                from: EntityKey<WalletId>,
+                to: EntityKey<WalletId>,
+                amount: Amount,
+            },
+
+            PaymentReceived {
+                actor_id: EntityKey<ActorId>,
+                wallet_id: EntityKey<WalletId>,
+                amount: Amount,
+            },
+        }
+
+        impl From<Event> for SurrealMoneeEvent {
+            fn from(value: Event) -> Self {
+                match value {
+                    Event::Buy(buy) => SurrealMoneeEvent::Buy {
+                        item: EntityKey(buy.item),
+                        amount: buy.amount,
+                        wallet_id: EntityKey(buy.wallet_id),
+                        actors: IntoIterator::into_iter(buy.actors).map(EntityKey).collect(),
+                    },
+                    Event::RegisterBalance(register) => SurrealMoneeEvent::RegisterBalance {
+                        wallet_id: EntityKey(register.wallet_id),
+                        amount: register.amount,
+                    },
+                    Event::RegisterDebt(debt) => SurrealMoneeEvent::RegisterDebt {
+                        amount: debt.amount,
+                        currency_id: EntityKey(debt.currency_id),
+                        actor_id: EntityKey(debt.actor_id),
+                    },
+                    Event::RegisterLoan(loan) => SurrealMoneeEvent::RegisterLoan {
+                        amount: loan.amount,
+                        currency_id: EntityKey(loan.currency_id),
+                        actor_id: EntityKey(loan.actor_id),
+                    },
+                    Event::MoveValue(move_value) => SurrealMoneeEvent::MoveValue {
+                        from: EntityKey(move_value.from),
+                        to: EntityKey(move_value.to),
+                        amount: move_value.amount,
+                    },
+                    Event::PaymentReceived(payment) => SurrealMoneeEvent::PaymentReceived {
+                        actor_id: EntityKey(payment.actor_id),
+                        wallet_id: EntityKey(payment.wallet_id),
+                        amount: payment.amount,
+                    },
+                }
+            }
+        }
+
         #[async_trait::async_trait]
         impl Repository for SurrealRepository {
             async fn add(&self, event: Event) -> Result<(), InfrastructureError> {
-                match &event {
-                    Event::Buy(buy) => {
-                        let actors = buy
-                            .actors
-                            .iter()
-                            .map(|actor_id| surrealdb::sql::Thing {
-                                tb: "actor".into(),
-                                id: Id::String(actor_id.to_string()),
-                            })
-                            .collect::<Vec<_>>();
+                let _: Option<()> = self
+                    .0
+                    .insert(("event", EventId::default().to_string()))
+                    .content(SurrealMoneeEvent::from(event))
+                    .await?;
 
-                        self.0
-                            .query("CREATE event 
-SET type='buy', item=type::thing('item_tag', $item), amount=$amount, wallet_id=type::thing('wallet', $wallet_id), actors=$actors")
-                                .bind(buy).bind(("actors", actors))
-                    }
-                    Event::RegisterBalance(register) => {
-                        self.0
-                            .query("CREATE event SET type='register_balance', wallet_id=type::thing('wallet', $wallet_id), amount=$amount")
-                            .bind(register)
-                    }
-                    Event::RegisterDebt(debt) => {
-                        self.0
-                            .query("CREATE event SET type='register_debt', amount=$amount, currency_id=type::thing('currency', $currency_id), actor_id=type::thing('actor', $actor_id)")
-                            .bind(debt)
-                    }
-                    Event::RegisterLoan(loan) => {
-                        self.0
-                            .query("CREATE event SET type='register_loan', amount=$amount, currency_id=type::thing('currency', $currency_id), actor_id=type::thing('actor', $actor_id)")
-                            .bind(loan)
-                    }
-                    Event::MoveValue(move_value) => {
-                        self.0
-                            .query("CREATE event SET type='move_value', from=type::thing('wallet', $from), to=type::thing('wallet', $to), amount=$amount")
-                            .bind(move_value)
-                    }
-                    Event::PaymentReceived(payment) => {
-                        self.0
-                            .query("CREATE event SET type='payment_received', actor_id=type::thing('actor', $actor_id), wallet_id=type::thing('wallet', $wallet_id), amount=$amount")
-                            .bind(payment)
-                    }
-                }.await?.check()?;
+                Ok(())
+            }
+
+            async fn save_many(
+                &self,
+                events: Vec<(EventId, EventEntry)>,
+            ) -> Result<(), InfrastructureError> {
+                #[derive(serde::Serialize)]
+                struct EventRow {
+                    id: EntityKey<EventId>,
+                    #[serde(flatten)]
+                    event: SurrealMoneeEvent,
+                    created_at: Datetime,
+                }
+
+                let rows: Vec<_> = events
+                    .into_iter()
+                    .map(|(id, entry)| EventRow {
+                        id: EntityKey(id),
+                        event: SurrealMoneeEvent::from(entry.event),
+                        created_at: entry.created_at,
+                    })
+                    .collect();
+
+                let _: Vec<()> = self.0.insert("event").content(rows).await?;
 
                 Ok(())
             }

@@ -1,4 +1,5 @@
 use money::{MoneyError, MoneyHost};
+use serde::Serialize;
 
 use crate::{ActorId, Amount, CurrencyId, DebtId, WalletId};
 
@@ -112,7 +113,8 @@ pub enum Operation {
     Debt(DebtOperation),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(tag = "monee_error", rename_all = "snake_case")]
 pub enum Error {
     Wallet(MoneyError),
     Debt(MoneyError),

@@ -272,11 +272,16 @@ mod entity {
 
     impl SqlId for monee_core::DebtId {
         type Flavor = StringId;
-        const TABLE: &'static str = "event";
+        const TABLE: &'static str = "debt";
     }
 
     impl SqlId for ClientId {
         type Flavor = StringId;
         const TABLE: &'static str = "client";
+    }
+
+    impl SqlId for monee_core::EventId {
+        type Flavor = StringId;
+        const TABLE: &'static str = "event";
     }
 }

@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::{Amount, CurrencyId};
 use std::{collections::HashMap, hash::Hash};
 
@@ -111,7 +113,8 @@ impl<M: MoneyHost> IntoIterator for MoneyMap<M> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(tag = "money_error", rename_all = "snake_case")]
 pub enum MoneyError {
     NotFound,
     CannotSub,

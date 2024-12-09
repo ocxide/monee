@@ -60,3 +60,8 @@ crate::ids::impl_id!(CurrencyId, Id);
 pub struct ActorId(Id);
 
 crate::ids::impl_id!(ActorId, Id);
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct EventId(Id);
+
+crate::ids::impl_id!(EventId, Id);
