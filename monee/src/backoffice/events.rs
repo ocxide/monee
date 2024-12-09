@@ -155,7 +155,7 @@ pub mod domain {
         use super::event::Event;
 
         #[async_trait::async_trait]
-        pub trait Repository {
+        pub trait Repository: 'static + Send + Sync {
             async fn add(&self, event: Event) -> Result<(), InfrastructureError>;
         }
     }

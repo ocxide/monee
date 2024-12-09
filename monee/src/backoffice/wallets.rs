@@ -109,7 +109,7 @@ pub mod domain {
         use super::{wallet::Wallet, wallet_name::WalletName};
 
         #[async_trait::async_trait]
-        pub trait Repository {
+        pub trait Repository: 'static + Send + Sync {
             async fn save(
                 &self,
                 id: WalletId,

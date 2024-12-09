@@ -5,7 +5,7 @@ pub mod domain {
         use super::snapshot::Snapshot;
 
         #[async_trait::async_trait]
-        pub trait Repository {
+        pub trait Repository: 'static + Send + Sync {
             async fn read(&self) -> Result<Snapshot, InfrastructureError>;
         }
     }

@@ -28,7 +28,7 @@ pub mod domain {
         use super::event::Event;
 
         #[async_trait::async_trait]
-        pub trait Repository {
+        pub trait Repository: 'static + Send + Sync {
             async fn get_all(&self) -> Result<Vec<Event>, InfrastructureError>;
         }
     }

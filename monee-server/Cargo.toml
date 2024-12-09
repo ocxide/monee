@@ -1,0 +1,17 @@
+[package]
+name = "monee-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7.9", features = ["macros"] }
+tokio = { version = "1.42.0", features = ["full"] }
+monee = { path = "../monee", default-features = false }
+monee_core = { path = "../monee/monee_core" }
+cream = { git = "https://github.com/ocxide/cream.git" }
+serde = "1.0.215"
+serde_json = "1.0.133"
+
+[features]
+default = ["monee/remote"]
+embedded = ["monee/embedded"]

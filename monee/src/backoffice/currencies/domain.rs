@@ -22,7 +22,7 @@ pub mod repository {
     use super::{currency::Currency, currency_code::CurrencyCode};
 
     #[async_trait::async_trait]
-    pub trait Repository {
+    pub trait Repository: 'static + Send + Sync {
         async fn save(
             &self,
             id: CurrencyId,
