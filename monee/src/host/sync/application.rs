@@ -47,7 +47,7 @@ pub mod do_sync {
             let events_apply_result = sync
                 .events
                 .iter()
-                .map(|(_, entry)| &entry.event)
+                .map(|entry| &entry.event)
                 .try_for_each(|event| apply_event(&mut snapshot, event));
 
             if let Err(e) = events_apply_result {

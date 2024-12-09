@@ -29,6 +29,14 @@ pub mod domain {
                 self.0.fmt(f)
             }
         }
+
+        impl std::str::FromStr for ClientId {
+            type Err = <IdN<4> as std::str::FromStr>::Err;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(s.parse()?))
+            }
+        }
     }
 
     pub mod repository {

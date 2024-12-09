@@ -5,21 +5,42 @@ mod catch {
     use axum::http::StatusCode;
     use cream::context::Context;
     use monee::{
-        prelude::{AppContext, InfrastructureError},
+        prelude::{AppContext, AppError, InfrastructureError},
         shared::application::logging::LogService,
     };
 
-    pub trait CatchInfra<T> {
-        fn catch_infra(self, ctx: &AppContext) -> Result<T, StatusCode>;
+    pub trait CatchInfra<T>: Sized {
+        type Output;
+        fn catch_infra(self, ctx: &AppContext) -> Result<Self::Output, StatusCode> {
+            match self.get_infra() {
+                Ok(t) => Ok(t),
+                Err(e) => {
+                    let logger: LogService = ctx.provide();
+                    logger.error(e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+        fn get_infra(self) -> Result<Self::Output, InfrastructureError>;
     }
 
     impl<T> CatchInfra<T> for Result<T, InfrastructureError> {
-        fn catch_infra(self, ctx: &AppContext) -> Result<T, StatusCode> {
-            self.map_err(|e| {
-                let logger: LogService = ctx.provide();
-                logger.error(e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })
+        type Output = T;
+
+        fn get_infra(self) -> Result<Self::Output, InfrastructureError> {
+            self
+        }
+    }
+
+    impl<T, E> CatchInfra<T> for Result<T, AppError<E>> {
+        type Output = Result<T, E>;
+
+        fn get_infra(self) -> Result<Self::Output, InfrastructureError> {
+            match self {
+                Ok(t) => Ok(Ok(t)),
+                Err(AppError::App(e)) => Ok(Err(e)),
+                Err(AppError::Infrastructure(e)) => Err(e),
+            }
         }
     }
 }

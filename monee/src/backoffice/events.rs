@@ -39,8 +39,6 @@ pub mod application {
 
 pub mod domain {
     pub mod repository {
-        use monee_core::EventId;
-
         use crate::{
             host::sync::domain::sync_data::EventEntry,
             shared::infrastructure::errors::InfrastructureError,
@@ -51,10 +49,7 @@ pub mod domain {
         #[async_trait::async_trait]
         pub trait Repository: 'static + Send + Sync {
             async fn add(&self, event: Event) -> Result<(), InfrastructureError>;
-            async fn save_many(
-                &self,
-                events: Vec<(EventId, EventEntry)>,
-            ) -> Result<(), InfrastructureError>;
+            async fn save_many(&self, events: Vec<EventEntry>) -> Result<(), InfrastructureError>;
         }
     }
 
@@ -349,10 +344,7 @@ pub mod infrastructure {
                 Ok(())
             }
 
-            async fn save_many(
-                &self,
-                events: Vec<(EventId, EventEntry)>,
-            ) -> Result<(), InfrastructureError> {
+            async fn save_many(&self, events: Vec<EventEntry>) -> Result<(), InfrastructureError> {
                 #[derive(serde::Serialize)]
                 struct EventRow {
                     id: EntityKey<EventId>,
@@ -363,8 +355,8 @@ pub mod infrastructure {
 
                 let rows: Vec<_> = events
                     .into_iter()
-                    .map(|(id, entry)| EventRow {
-                        id: EntityKey(id),
+                    .map(|entry| EventRow {
+                        id: EntityKey(entry.id),
                         event: SurrealMoneeEvent::from(entry.event),
                         created_at: entry.created_at,
                     })

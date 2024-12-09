@@ -18,19 +18,28 @@ pub mod sync_data {
         shared::domain::date::Datetime,
     };
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, serde::Deserialize)]
     pub struct SyncData {
-        pub events: Vec<(EventId, EventEntry)>,
-        pub actors: Vec<(ActorId, Actor)>,
-        pub currencies: Vec<(CurrencyId, Currency)>,
-        pub items: Vec<(ItemTagId, ItemTag)>,
-        pub wallets: Vec<(WalletId, Wallet)>,
+        pub events: Vec<EventEntry>,
+        pub actors: Vec<Entry<ActorId, Actor>>,
+        pub currencies: Vec<Entry<CurrencyId, Currency>>,
+        pub items: Vec<Entry<ItemTagId, ItemTag>>,
+        pub wallets: Vec<Entry<WalletId, Wallet>>,
     }
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, serde::Deserialize)]
     pub struct EventEntry {
+        pub id: EventId,
+        #[serde(flatten)]
         pub event: Event,
         pub created_at: Datetime,
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct Entry<K, T> {
+        pub id: K,
+        #[serde(flatten)]
+        pub data: T,
     }
 }
 
@@ -84,7 +93,11 @@ pub mod repository {
         shared::domain::errors::UniqueSaveError,
     };
 
-    use super::{sync_data::SyncData, sync_error::SyncError, sync_guide::SyncGuide};
+    use super::{
+        sync_data::{Entry, SyncData},
+        sync_error::SyncError,
+        sync_guide::SyncGuide,
+    };
 
     #[async_trait::async_trait]
     pub trait Repository: 'static + Send + Sync {
@@ -104,10 +117,10 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            currencies: &[(CurrencyId, Currency)],
-            items: &[(ItemTagId, ItemTag)],
-            actors: &[(ActorId, Actor)],
-            wallets: &[(WalletId, Wallet)],
+            currencies: &[Entry<CurrencyId, Currency>],
+            items: &[Entry<ItemTagId, ItemTag>],
+            actors: &[Entry<ActorId, Actor>],
+            wallets: &[Entry<WalletId, Wallet>],
         ) -> Result<(), AppError<UniqueSaveError>>;
     }
 }

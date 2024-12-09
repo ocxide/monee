@@ -10,7 +10,9 @@ pub mod repository {
         host::{
             client::domain::client_id::ClientId,
             sync::domain::{
-                repository::Repository, sync_data::SyncData, sync_error::SyncError,
+                repository::Repository,
+                sync_data::{Entry, SyncData},
+                sync_error::SyncError,
                 sync_guide::SyncGuide,
             },
         },
@@ -67,35 +69,35 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            currencies: &[(CurrencyId, Currency)],
-            items: &[(ItemTagId, ItemTag)],
-            actors: &[(ActorId, Actor)],
-            wallets: &[(WalletId, Wallet)],
+            currencies: &[Entry<CurrencyId, Currency>],
+            items: &[Entry<ItemTagId, ItemTag>],
+            actors: &[Entry<ActorId, Actor>],
+            wallets: &[Entry<WalletId, Wallet>],
         ) -> Result<(), AppError<UniqueSaveError>> {
             let mut query = self.0.query(BeginStatement);
 
-            for (id, currency) in currencies {
+            for Entry { id, data: currency } in currencies {
                 query = query
                     .query("UPSERT type::thing('currency', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", currency));
             }
 
-            for (id, item) in items {
+            for Entry { id, data: item } in items {
                 query = query
                     .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", item));
             }
 
-            for (id, actor) in actors {
+            for Entry { id, data: actor } in actors {
                 query = query
                     .query("UPSERT type::thing('actor', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", actor));
             }
 
-            for (id, wallet) in wallets {
+            for Entry { id, data: wallet } in wallets {
                 query = query
                     .query("UPSERT type::thing('wallet', $id) CONTENT $data")
                     .bind(("id", id))
