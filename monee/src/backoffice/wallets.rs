@@ -223,12 +223,12 @@ pub mod infrastructure {
                 wallet::Wallet,
                 wallet_name::WalletName,
             },
-            iprelude::CatchInfra,
+            iprelude::{CatchApp, CatchInfra, MapResponse},
             shared::{
                 domain::{context::DbContext, errors::UniqueSaveError},
                 infrastructure::{
                     database::{Connection, EntityKey},
-                    errors::{AppError, InfrastructureError, IntoAppResult},
+                    errors::{AppError, InfrastructureError},
                 },
             },
         };
@@ -250,10 +250,11 @@ pub mod infrastructure {
                     .bind(("currency_id", wallet.currency_id))
                     .bind(("name", wallet.name))
                     .bind(("description", wallet.description))
-                    .await.catch_infra()?
+                    .await
+                    .catch_infra()?
                     .check();
 
-                result.into_app_result()
+                result.catch_app().map_response()
             }
 
             async fn update(

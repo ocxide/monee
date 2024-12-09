@@ -29,10 +29,6 @@ pub mod errors {
             Self::Infrastructure(value)
         }
     }
-
-    pub trait IntoAppResult<E> {
-        fn into_app_result(self) -> Result<(), AppError<E>>;
-    }
 }
 
 pub mod logging {

@@ -12,7 +12,7 @@ pub mod repository {
             domain::{context::DbContext, errors::UniqueSaveError},
             infrastructure::{
                 database::{Connection, Entity},
-                errors::{InfrastructureError, IntoAppResult},
+                errors::InfrastructureError,
             },
         },
     };
@@ -37,7 +37,7 @@ pub mod repository {
                 .catch_infra()?
                 .check();
 
-            response.into_app_result()
+            response.catch_app().map_response()
         }
 
         async fn code_resolve(

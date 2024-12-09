@@ -6,14 +6,11 @@ pub mod repository {
         backoffice::actors::domain::{
             actor::Actor, actor_alias::ActorAlias, repository::Repository,
         },
-        iprelude::CatchInfra,
-        prelude::AppError,
+        iprelude::*,
+        prelude::*,
         shared::{
             domain::{context::DbContext, errors::UniqueSaveError},
-            infrastructure::{
-                database::{Connection, Entity},
-                errors::{InfrastructureError, IntoAppResult},
-            },
+            infrastructure::database::{Connection, Entity},
         },
     };
 
@@ -33,7 +30,7 @@ pub mod repository {
                 .catch_infra()?
                 .check();
 
-            result.into_app_result()
+            result.catch_app().map_response()
         }
 
         async fn alias_resolve(

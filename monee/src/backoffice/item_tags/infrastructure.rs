@@ -13,10 +13,7 @@ pub mod repository {
         prelude::*,
         shared::{
             domain::{context::DbContext, errors::UniqueSaveError},
-            infrastructure::{
-                database::{Connection, EntityKey},
-                errors::{InfrastructureError, IntoAppResult},
-            },
+            infrastructure::database::{Connection, EntityKey},
         },
     };
 
@@ -40,7 +37,7 @@ pub mod repository {
                 .catch_infra()?
                 .check();
 
-            response.into_app_result()
+            response.catch_app().map_response()
         }
 
         async fn check_relation(
@@ -87,7 +84,7 @@ pub mod repository {
                 .catch_infra()?
                 .check();
 
-            response.into_app_result()
+            response.catch_app().map_response()
         }
 
         async fn unlink(
