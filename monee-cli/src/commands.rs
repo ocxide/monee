@@ -414,12 +414,16 @@ pub mod item_tags {
 
                 let item_tags = service.run().await.log_err(ctx)?;
                 print_data(item_tags.iter().map(|node| {
-                    formatted!(
-                        "{}({}) <- {}",
-                        node.tag.name,
-                        node.id,
-                        node.parents_name.iter().display_join(", ")
-                    )
+                    let parents = if node.parents_name.is_empty() {
+                        Either::Left(formatted!(""))
+                    } else {
+                        Either::Right(formatted!(
+                            " <- {}",
+                            node.parents_name.iter().display_join(", ")
+                        ))
+                    };
+
+                    formatted!("{}({}){}", node.tag.name, node.id, parents)
                 }));
 
                 Ok(())

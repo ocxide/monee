@@ -5,6 +5,11 @@ mod output;
 mod prelude {
     pub use crate::error::LogAndErr;
     pub use crate::error::MapAppErr;
+
+    pub enum Either<L, R> {
+        Left(L),
+        Right(R),
+    }
 }
 
 mod error {

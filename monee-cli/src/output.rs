@@ -91,6 +91,8 @@ macro_rules! formatted {(
 
 pub use formatted;
 
+use crate::prelude::Either;
+
 pub struct DisplayJoin<'s, I, S: ?Sized> {
     iter: RefCell<I>,
     sep: &'s S,
@@ -130,3 +132,16 @@ pub trait IterDisplayExt: Iterator + Sized {
 }
 
 impl<I: Iterator> IterDisplayExt for I {}
+
+impl<L, R> Display for Either<L, R>
+where
+    L: Display,
+    R: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Either::Left(l) => write!(f, "{}", l),
+            Either::Right(r) => write!(f, "{}", r),
+        }
+    }
+}
