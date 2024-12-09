@@ -1,5 +1,12 @@
 pub mod repository {
+    use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
+    use surrealdb::sql::statements::{BeginStatement, CommitStatement};
+
     use crate::{
+        backoffice::{
+            actors::domain::actor::Actor, currencies::domain::currency::Currency,
+            item_tags::domain::item_tag::ItemTag,
+        },
         host::{
             client::domain::client_id::ClientId,
             sync::domain::{
@@ -9,7 +16,7 @@ pub mod repository {
         },
         iprelude::*,
         prelude::*,
-        shared::domain::{context::DbContext, date::Datetime},
+        shared::domain::{context::DbContext, date::Datetime, errors::UniqueSaveError},
     };
 
     #[derive(FromContext)]
@@ -54,6 +61,53 @@ pub mod repository {
                 .bind(("error", error))
                 .await?
                 .check()?;
+
+            Ok(())
+        }
+
+        async fn save_changes(
+            &self,
+            currencies: &[(CurrencyId, Currency)],
+            items: &[(ItemTagId, ItemTag)],
+            actors: &[(ActorId, Actor)],
+            wallets: &[(WalletId, Wallet)],
+        ) -> Result<(), AppError<UniqueSaveError>> {
+            let mut query = self.0.query(BeginStatement);
+
+            for (id, currency) in currencies {
+                query = query
+                    .query("UPSERT type::thing('currency', $id) CONTENT $data")
+                    .bind(("id", id))
+                    .bind(("data", currency));
+            }
+
+            for (id, item) in items {
+                query = query
+                    .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
+                    .bind(("id", id))
+                    .bind(("data", item));
+            }
+
+            for (id, actor) in actors {
+                query = query
+                    .query("UPSERT type::thing('actor', $id) CONTENT $data")
+                    .bind(("id", id))
+                    .bind(("data", actor));
+            }
+
+            for (id, wallet) in wallets {
+                query = query
+                    .query("UPSERT type::thing('wallet', $id) CONTENT $data")
+                    .bind(("id", id))
+                    .bind(("data", wallet));
+            }
+
+            query
+                .query(CommitStatement)
+                .await
+                .catch_infra()?
+                .check()
+                .catch_app()?;
 
             Ok(())
         }

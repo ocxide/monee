@@ -1,6 +1,6 @@
 pub mod backoffice;
-pub mod reports;
 pub mod host;
+pub mod reports;
 pub mod shared;
 
 pub mod prelude {
@@ -29,6 +29,17 @@ pub(crate) mod iprelude {
         type Output = T;
         fn catch_infra(self) -> Result<Self::Output, InfrastructureError> {
             self.map_err(Into::into)
+        }
+    }
+
+    impl<T, E> CatchInfra for Result<T, AppError<E>> {
+        type Output = Result<T, E>;
+        fn catch_infra(self) -> Result<Self::Output, InfrastructureError> {
+            match self {
+                Ok(t) => Ok(Ok(t)),
+                Err(AppError::App(e)) => Ok(Err(e)),
+                Err(AppError::Infrastructure(e)) => Err(e),
+            }
         }
     }
 

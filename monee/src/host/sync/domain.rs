@@ -8,7 +8,7 @@ pub mod sync_guide {
 }
 
 pub mod sync_data {
-    use monee_core::{ActorId, CurrencyId, EventId, ItemTagId};
+    use monee_core::{ActorId, CurrencyId, EventId, ItemTagId, Wallet, WalletId};
 
     use crate::{
         backoffice::{
@@ -24,6 +24,7 @@ pub mod sync_data {
         pub actors: Vec<(ActorId, Actor)>,
         pub currencies: Vec<(CurrencyId, Currency)>,
         pub items: Vec<(ItemTagId, ItemTag)>,
+        pub wallets: Vec<(WalletId, Wallet)>,
     }
 
     #[derive(serde::Serialize)]
@@ -34,17 +35,54 @@ pub mod sync_data {
 }
 
 pub mod sync_error {
-    use crate::backoffice::events::domain::apply_event::Error as ApplyError;
+    use crate::{
+        backoffice::events::domain::apply_event::Error as ApplyError,
+        shared::domain::errors::UniqueSaveError,
+    };
 
     #[derive(serde::Serialize)]
     #[serde(tag = "type", rename_all = "snake_case")]
     pub enum SyncError {
         Event(ApplyError),
+        Save(UniqueSaveError),
+    }
+
+    impl From<UniqueSaveError> for SyncError {
+        fn from(error: UniqueSaveError) -> Self {
+            SyncError::Save(error)
+        }
+    }
+}
+
+pub mod client_synced {
+    use cream::events::DomainEvent;
+
+    use crate::host::client::domain::client_id::ClientId;
+
+    pub struct ClientSynced(pub ClientId);
+    impl DomainEvent for ClientSynced {
+        fn name(&self) -> &'static str {
+            "ClientSynced"
+        }
+
+        fn version(&self) -> &'static str {
+            "1.0.0"
+        }
     }
 }
 
 pub mod repository {
-    use crate::{host::client::domain::client_id::ClientId, prelude::InfrastructureError};
+    use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
+
+    use crate::{
+        backoffice::{
+            actors::domain::actor::Actor, currencies::domain::currency::Currency,
+            item_tags::domain::item_tag::ItemTag,
+        },
+        host::client::domain::client_id::ClientId,
+        prelude::{AppError, InfrastructureError},
+        shared::domain::errors::UniqueSaveError,
+    };
 
     use super::{sync_data::SyncData, sync_error::SyncError, sync_guide::SyncGuide};
 
@@ -63,5 +101,13 @@ pub mod repository {
             client_id: ClientId,
             error: &SyncError,
         ) -> Result<(), InfrastructureError>;
+
+        async fn save_changes(
+            &self,
+            currencies: &[(CurrencyId, Currency)],
+            items: &[(ItemTagId, ItemTag)],
+            actors: &[(ActorId, Actor)],
+            wallets: &[(WalletId, Wallet)],
+        ) -> Result<(), AppError<UniqueSaveError>>;
     }
 }

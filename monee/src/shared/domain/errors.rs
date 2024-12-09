@@ -1,5 +1,6 @@
 use crate::prelude::AppError;
 
+#[derive(serde::Serialize)]
 pub enum UniqueSaveError {
     AlreadyExists,
 }

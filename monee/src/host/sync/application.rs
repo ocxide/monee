@@ -14,11 +14,14 @@ pub mod get_sync_guide {
 }
 
 pub mod do_sync {
+    use cream::event_bus::EventBusPort;
+
     use crate::backoffice::events::domain::{
         apply_event::apply_event, repository::Repository as EventsRepository,
     };
     use crate::backoffice::snapshot::application::snapshot_io::SnapshotIO;
     use crate::host::client::domain::client_id::ClientId;
+    use crate::host::sync::domain::client_synced::ClientSynced;
     use crate::host::sync::domain::sync_error::SyncError;
     use crate::host::sync::domain::{repository::Repository, sync_data::SyncData};
     use crate::{iprelude::*, prelude::*};
@@ -29,6 +32,7 @@ pub mod do_sync {
         sync_repo: Box<dyn Repository>,
         snapshot_io: SnapshotIO,
         events_repo: Box<dyn EventsRepository>,
+        event_bus: EventBusPort,
     }
 
     impl DoSync {
@@ -51,6 +55,22 @@ pub mod do_sync {
                 self.sync_repo.save_sync_error(client_id, &error).await?;
                 return Err(AppError::App(error));
             }
+
+            let save_result = self
+                .sync_repo
+                .save_changes(&sync.currencies, &sync.items, &sync.actors, &sync.wallets)
+                .await
+                .catch_infra()?;
+
+            if let Err(e) = save_result {
+                let error = SyncError::Save(e);
+                self.sync_repo.save_sync_error(client_id, &error).await?;
+                return Err(AppError::App(error));
+            }
+
+            self.events_repo.save_many(sync.events).await?;
+
+            self.event_bus.publish(ClientSynced(client_id));
 
             Ok(())
         }
