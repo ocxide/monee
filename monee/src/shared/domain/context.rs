@@ -117,9 +117,15 @@ mod provides_config {
         },
     };
 
-    use crate::host::client::{
-        domain::repository::Repository as ClientRepository,
-        infrastructure::repository::SurrealRepository as ClientSurrealRepository,
+    use crate::host::{
+        client::{
+            domain::repository::Repository as ClientRepository,
+            infrastructure::repository::SurrealRepository as ClientSurrealRepository,
+        },
+        sync::{
+            domain::repository::Repository as SyncRepository,
+            infrastructure::repository::SurrealRepository as SyncSurrealRepository,
+        },
     };
 
     use super::{AppContext, DbContext};
@@ -147,7 +153,8 @@ mod provides_config {
         crate::reports::snapshot::domain::repository::Repository: crate::reports::snapshot::infrastructure::repository::SurrealRepository,
         crate::reports::events::domain::repository::Repository: crate::reports::events::infrastructure::repository::SurrealRepository,
 
-        ClientRepository: ClientSurrealRepository
+        ClientRepository: ClientSurrealRepository,
+        SyncRepository: SyncSurrealRepository
     }}
 
     impl cream::context::FromContext<super::AppContext>

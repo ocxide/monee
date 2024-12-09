@@ -47,6 +47,7 @@ pub mod domain {
 
 pub mod application {
     pub mod register_one {
+        use crate::host::client::domain::client_id::ClientId;
         use crate::host::client::domain::{client::Client, repository::Repository};
         pub use crate::iprelude::*;
         pub use crate::prelude::*;
@@ -58,8 +59,9 @@ pub mod application {
         }
 
         impl RegisterOne {
-            pub async fn run(&self, client: Client) -> Result<(), InfrastructureError> {
-                self.repository.save(Default::default(), client).await
+            pub async fn run(&self, client: Client) -> Result<ClientId, InfrastructureError> {
+                let id = Default::default();
+                self.repository.save(id, client).await.map(|_| id)
             }
         }
     }
