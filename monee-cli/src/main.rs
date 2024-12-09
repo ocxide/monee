@@ -102,6 +102,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::actor::ActorCommand,
     },
+
+    Item {
+        #[command(subcommand)]
+        command: commands::item_tags::ItemTagCommand,
+    },
 }
 
 #[tokio::main]
@@ -132,5 +137,7 @@ async fn run(ctx: &AppContext, cli: CliParser) -> miette::Result<()> {
         Command::Actor { command } => commands::actor::run(ctx, command).await,
 
         Command::Show(args) => commands::show::run(ctx, args).await,
+
+        Command::Item { command } => commands::item_tags::run(ctx, command).await,
     }
 }

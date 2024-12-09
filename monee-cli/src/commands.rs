@@ -85,7 +85,7 @@ pub mod events {
             #[arg(short, long)]
             item: MaybeAlias<ItemTagId>,
 
-            #[arg(short, long)]
+            #[arg(short = 's', long = "seller")]
             actors: Vec<MaybeAlias<ActorId>>,
 
             #[arg(short, long)]
@@ -356,5 +356,100 @@ pub mod show {
         });
 
         Ok(())
+    }
+}
+
+pub mod item_tags {
+    use crate::{
+        alias::MaybeAlias,
+        formatted,
+        output::{print_data, IterDisplayExt},
+        prelude::*,
+    };
+    use cream::context::Context;
+    use monee::{
+        backoffice::item_tags::{
+            application::link_one::Status,
+            domain::{item_name::ItemName, item_tag::ItemTag},
+        },
+        prelude::*,
+    };
+    use monee_core::ItemTagId;
+    use tokio::try_join;
+
+    #[derive(clap::Subcommand)]
+    pub enum ItemTagCommand {
+        #[command(alias = "c")]
+        Create {
+            #[arg(short, long)]
+            name: ItemName,
+        },
+
+        #[command(alias = "ls")]
+        List,
+
+        #[command(alias = "ln")]
+        Link {
+            #[arg(short, long)]
+            parent: MaybeAlias<ItemTagId>,
+
+            #[arg(short, long)]
+            child: MaybeAlias<ItemTagId>,
+        },
+    }
+
+    pub async fn run(ctx: &AppContext, command: ItemTagCommand) -> miette::Result<()> {
+        match command {
+            ItemTagCommand::Create { name } => {
+                let service = ctx
+                    .provide::<monee::backoffice::item_tags::application::create_one::CreateOne>();
+                service.run(ItemTag { name }).await.log_err(ctx)?;
+
+                Ok(())
+            }
+
+            ItemTagCommand::List => {
+                let service =
+                    ctx.provide::<monee::backoffice::item_tags::application::get_all::GetAll>();
+
+                let item_tags = service.run().await.log_err(ctx)?;
+                print_data(item_tags.iter().map(|node| {
+                    formatted!(
+                        "{}({}) <- {}",
+                        node.tag.name,
+                        node.id,
+                        node.parents_name.iter().display_join(", ")
+                    )
+                }));
+
+                Ok(())
+            }
+
+            ItemTagCommand::Link { parent, child } => {
+                let service =
+                    ctx.provide::<monee::backoffice::item_tags::application::link_one::LinkOne>();
+
+                let (parent, child) = try_join!(parent.resolve(ctx), child.resolve(ctx))?;
+                let status = service.run(parent, child).await.log_err(ctx)?;
+
+                match status {
+                    Status::Linked => {
+                        println!("Linked")
+                    }
+                    Status::AlreadyContains => {
+                        println!("Already linked")
+                    }
+                    Status::CyclicRelation => {
+                        println!("Cyclic relation")
+                    }
+
+                    Status::NotFound(tag) => {
+                        println!("{} not found", tag)
+                    }
+                }
+
+                Ok(())
+            }
+        }
     }
 }

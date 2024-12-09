@@ -1,4 +1,4 @@
-use std::io::stdout;
+use std::{cell::RefCell, fmt::Display, io::stdout, ops::DerefMut};
 
 pub struct Listter<I> {
     iter: I,
@@ -53,7 +53,7 @@ where
     }
 }
 
-pub fn print_data(data: impl ExactSizeIterator<Item = impl std::fmt::Display>) {
+pub fn print_data(data: impl Iterator<Item = impl std::fmt::Display>) {
     let listter = Listter::new(data);
     print_iter(listter);
 }
@@ -90,3 +90,43 @@ macro_rules! formatted {(
 ))}
 
 pub use formatted;
+
+pub struct DisplayJoin<'s, I, S: ?Sized> {
+    iter: RefCell<I>,
+    sep: &'s S,
+}
+
+impl<'s, I, S: ?Sized> std::fmt::Display for DisplayJoin<'s, I, S>
+where
+    I: Iterator,
+    I::Item: std::fmt::Display,
+    S: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut binding = self.iter.borrow_mut();
+        let iter = binding.deref_mut();
+
+        let Some(first) = iter.next() else {
+            return Ok(());
+        };
+
+        write!(f, "{}", first)?;
+
+        for item in iter {
+            write!(f, "{}{}", self.sep, item)?;
+        }
+
+        Ok(())
+    }
+}
+
+pub trait IterDisplayExt: Iterator + Sized {
+    fn display_join<S: Display + ?Sized>(self, sep: &'_ S) -> DisplayJoin<'_, Self, S> {
+        DisplayJoin {
+            iter: RefCell::new(self),
+            sep,
+        }
+    }
+}
+
+impl<I: Iterator> IterDisplayExt for I {}
