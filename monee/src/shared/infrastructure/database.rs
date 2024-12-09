@@ -13,6 +13,13 @@ pub type Error = surrealdb::Error;
 const DB_DIR: &str = "monee.db";
 
 async fn init(connection: &Connection) -> Result<()> {
+    init_backoffice(connection).await?;
+    init_host(connection).await?;
+
+    Ok(())
+}
+
+async fn init_backoffice(connection: &Connection) -> Result<()> {
     connection
         .query("DEFINE TABLE event")
         .query("DEFINE FIELD created_at ON event VALUE time::now()")
@@ -50,6 +57,16 @@ async fn init(connection: &Connection) -> Result<()> {
         .query("DEFINE TABLE item_tag")
         .query("DEFINE FIELD name ON item_tag TYPE string")
         .query("DEFINE INDEX item_tag_name ON item_tag FIELDS name UNIQUE")
+        .await?
+        .check()?;
+
+    Ok(())
+}
+
+async fn init_host(connection: &Connection) -> Result<()> {
+    connection
+        .query("DEFINE TABLE client")
+        .query("DEFINE FIELD name ON host TYPE option<string>")
         .await?
         .check()?;
 
@@ -99,6 +116,8 @@ mod entity {
     use de::SqlIdDeserializator;
     use se::SqlIdSerializator;
     use serde::{de::DeserializeOwned, Deserialize, Serialize, Serializer};
+
+    use crate::host::client::domain::client_id::ClientId;
 
     pub struct EntityKey<K>(pub K);
     pub struct Entity<K, T>(pub K, pub T);
@@ -254,5 +273,10 @@ mod entity {
     impl SqlId for monee_core::DebtId {
         type Flavor = StringId;
         const TABLE: &'static str = "event";
+    }
+
+    impl SqlId for ClientId {
+        type Flavor = StringId;
+        const TABLE: &'static str = "client";
     }
 }

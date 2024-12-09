@@ -1,5 +1,6 @@
 pub mod backoffice;
 pub mod reports;
+pub mod host;
 pub mod shared;
 
 pub mod prelude {
@@ -16,6 +17,8 @@ pub(crate) mod iprelude {
         prelude::{AppError, InfrastructureError},
         shared::domain::errors::UniqueSaveError,
     };
+
+    pub use cream::context::FromContext;
 
     pub trait CatchInfra {
         type Output;

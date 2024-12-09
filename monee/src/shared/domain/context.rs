@@ -31,8 +31,7 @@ pub async fn setup() -> Result<AppContext, InfrastructureError> {
     let cream = CreamContext::default();
     let mut router = cream::events::router::Router::default();
     // Add event handlers
-    router
-        .add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
+    router.add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
 
     let (events_ctx, setup) = EventsContextBuilder::default().build(&cream);
 
@@ -118,6 +117,11 @@ mod provides_config {
         },
     };
 
+    use crate::host::client::{
+        domain::repository::Repository as ClientRepository,
+        infrastructure::repository::SurrealRepository as ClientSurrealRepository,
+    };
+
     use super::{AppContext, DbContext};
 
     macro_rules! provide_map (($ctx: path { $($service: path: $real_service: path),* $(,)* }) => {
@@ -142,6 +146,8 @@ mod provides_config {
         EventsRepository: EventsSurrealRepository,
         crate::reports::snapshot::domain::repository::Repository: crate::reports::snapshot::infrastructure::repository::SurrealRepository,
         crate::reports::events::domain::repository::Repository: crate::reports::events::infrastructure::repository::SurrealRepository,
+
+        ClientRepository: ClientSurrealRepository
     }}
 
     impl cream::context::FromContext<super::AppContext>
@@ -152,4 +158,3 @@ mod provides_config {
         }
     }
 }
-
