@@ -31,4 +31,6 @@ pub mod prelude {
     pub use crate::shared::domain::context::AppContext;
     pub use crate::shared::infrastructure::errors::AppError;
     pub use crate::shared::infrastructure::errors::InfrastructureError;
+
+    pub use cream::context::Context;
 }
