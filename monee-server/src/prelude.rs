@@ -25,3 +25,27 @@ mod catch {
 }
 
 pub use catch::*;
+
+mod into_json {
+    use axum::Json;
+
+    use super::Entity;
+
+    pub trait IntoJson<K, T> {
+        type Output;
+
+        fn into_json(self) -> Self::Output;
+    }
+
+    impl<K, T, E> IntoJson<K, T> for Result<Vec<(K, T)>, E> {
+        type Output = Result<Json<Vec<Entity<K, T>>>, E>;
+
+        fn into_json(self) -> Self::Output {
+            self.map(|currencies| {
+                Json(currencies.into_iter().map(Entity::from).collect::<Vec<_>>())
+            })
+        }
+    }
+}
+
+pub use into_json::*;

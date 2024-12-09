@@ -1,12 +1,6 @@
-use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
-use cream::context::Context;
-use monee::backoffice::currencies::domain::currency::Currency;
-use monee::prelude::*;
-use monee_core::CurrencyId;
+use axum::{routing::get, Router};
 
 mod prelude;
-
-use prelude::*;
 
 fn main() {
     use tokio::runtime::Runtime;
@@ -19,7 +13,7 @@ async fn serve() {
         .expect("To setup context");
 
     let app = Router::new()
-        .route("/currencies", get(list_currencies))
+        .route("/currencies", get(currencies::list))
         .with_state(ctx);
 
     // run our app with hyper, listening globally on port 3000
@@ -27,16 +21,22 @@ async fn serve() {
     axum::serve(listener, app).await.unwrap();
 }
 
-#[axum::debug_handler]
-async fn list_currencies(
-    State(ctx): State<AppContext>,
-) -> Result<Json<Vec<Entity<CurrencyId, Currency>>>, StatusCode> {
-    use monee::backoffice::currencies;
+mod currencies {
+    use axum::{
+        extract::State,
+        response::{IntoResponse, Response},
+    };
+    use monee::prelude::*;
 
-    let service: currencies::application::get_all::GetAll = ctx.provide();
-    let currencies = service.run().await;
+    use crate::prelude::*;
 
-    currencies
-        .map(|currencies| Json(currencies.into_iter().map(Into::into).collect()))
-        .catch_infra(&ctx)
+    #[axum::debug_handler]
+    pub async fn list(State(ctx): State<AppContext>) -> Response {
+        use monee::backoffice::currencies;
+
+        let service: currencies::application::get_all::GetAll = ctx.provide();
+        let currencies = service.run().await;
+
+        currencies.into_json().catch_infra(&ctx).into_response()
+    }
 }
