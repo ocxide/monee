@@ -49,3 +49,27 @@ mod into_json {
 }
 
 pub use into_json::*;
+
+mod catch_app {
+    use axum::http::StatusCode;
+    use monee::{
+        prelude::{AppError, InfrastructureError},
+        shared::domain::errors::UniqueSaveError,
+    };
+
+    pub trait CatchApp {
+        fn catch_app(self) -> Result<StatusCode, InfrastructureError>;
+    }
+
+    impl CatchApp for Result<(), AppError<UniqueSaveError>> {
+        fn catch_app(self) -> Result<StatusCode, InfrastructureError> {
+            match self {
+                Ok(_) => Ok(StatusCode::OK),
+                Err(AppError::Infrastructure(e)) => Err(e),
+                Err(AppError::App(UniqueSaveError::AlreadyExists)) => Ok(StatusCode::CONFLICT),
+            }
+        }
+    }
+}
+
+pub use catch_app::*;
