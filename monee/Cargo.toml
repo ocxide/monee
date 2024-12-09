@@ -5,10 +5,11 @@ edition = "2021"
 
 [workspace]
 resolver = "2"
-members = ["monee_core", "tiny_id"]
+members = ["monee_core"]
 
 [dependencies]
 monee_core = { path = "./monee_core" }
+idn = { git = "https://github.com/ocxide/idn" }
 serde = { version = "1.0.203", features = ["derive"] }
 surrealdb = { version = "1.5.2" } 
 serde_json = "1.0.117"

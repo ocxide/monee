@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.203", features = ["derive"] }
-tiny_id = { path = "../tiny_id" }
+idn = { git = "https://github.com/ocxide/idn" }

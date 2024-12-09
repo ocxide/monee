@@ -1725,6 +1725,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "idn"
+version = "1.0.0"
+source = "git+https://github.com/ocxide/idn#3debd3f31629d9dbbf966d6f4003127544b2e26d"
+dependencies = [
+ "rand",
+ "serde",
+]
+
+[[package]]
 name = "idna"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2124,6 +2133,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "cream",
+ "idn",
  "monee_core",
  "serde",
  "serde_json",
@@ -2149,8 +2159,8 @@ dependencies = [
 name = "monee_core"
 version = "0.1.0"
 dependencies = [
+ "idn",
  "serde",
- "tiny_id",
 ]
 
 [[package]]
@@ -3970,14 +3980,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
 dependencies = [
  "crunchy",
-]
-
-[[package]]
-name = "tiny_id"
-version = "0.1.0"
-dependencies = [
- "rand",
- "serde",
 ]
 
 [[package]]

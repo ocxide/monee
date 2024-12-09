@@ -1,4 +1,4 @@
-type Id = tiny_id::TinyId<4>;
+type Id = idn::IdN<4>;
 
 mod id_utils {
     macro_rules! impl_id {
