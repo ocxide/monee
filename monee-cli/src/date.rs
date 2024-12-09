@@ -1,11 +1,10 @@
-use std::{
-    ops::{Add, AddAssign},
-    str::FromStr,
-};
+use std::{ops::Add, ops::AddAssign, str::FromStr};
+
+use monee::shared::domain::date::Datetime;
 
 #[derive(Debug, Clone)]
 pub enum PaymentPromise {
-    Datetime(monee::date::Datetime),
+    Datetime(Datetime),
     Delta(DurationDelta),
 }
 
@@ -26,11 +25,11 @@ pub enum Error {
     DataPostMode,
 
     #[error(transparent)]
-    Datetime(<monee::date::Datetime as FromStr>::Err),
+    Datetime(<Datetime as FromStr>::Err),
 }
 
 impl From<chrono::ParseError> for Error {
-    fn from(v: <monee::date::Datetime as FromStr>::Err) -> Self {
+    fn from(v: <Datetime as FromStr>::Err) -> Self {
         Self::Datetime(v)
     }
 }
@@ -120,7 +119,7 @@ impl DurationParts {
 pub struct DurationDelta(Sign, DurationParts, DurationDeltaMode);
 
 impl DurationDelta {
-    pub fn add(self, target: &mut monee::date::Datetime) {
+    pub fn add(self, target: &mut Datetime) {
         use chrono::{Datelike, DurationRound};
 
         let mode = self.2;
@@ -129,7 +128,7 @@ impl DurationDelta {
         struct NaiveDuration(chrono::Months, chrono::Duration);
 
         const N_PARTS: usize = 7;
-        let set_max: [fn(&mut monee::date::Datetime); N_PARTS] = [
+        let set_max: [fn(&mut Datetime); N_PARTS] = [
             |naive| {
                 *naive = naive
                     .checked_add_months(chrono::Months::new(12))
@@ -372,7 +371,7 @@ impl FromStr for PaymentPromise {
             return Ok(PaymentPromise::Delta(delta));
         };
 
-        let datetime = monee::date::Datetime::from_str(s)?;
+        let datetime = Datetime::from_str(s)?;
         Ok(PaymentPromise::Datetime(datetime))
     }
 }
@@ -422,7 +421,7 @@ mod tests {
 
     #[test]
     fn adds_until_eod() {
-        let mut date = monee::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "1d eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -431,15 +430,12 @@ mod tests {
             PaymentPromise::Delta(delta) => delta.add(&mut date),
         }
 
-        assert_eq!(
-            date,
-            monee::date::Datetime::from_str("2020-04-11T23:59:59Z").unwrap()
-        );
+        assert_eq!(date, Datetime::from_str("2020-04-11T23:59:59Z").unwrap());
     }
 
     #[test]
     fn adds_untils_this() {
-        let mut date = monee::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "0y eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -448,15 +444,12 @@ mod tests {
             PaymentPromise::Delta(delta) => delta.add(&mut date),
         }
 
-        assert_eq!(
-            date,
-            monee::date::Datetime::from_str("2020-12-31T23:59:59Z").unwrap()
-        );
+        assert_eq!(date, Datetime::from_str("2020-12-31T23:59:59Z").unwrap());
     }
 
     #[test]
     fn subs_until_eod() {
-        let mut date = monee::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "-1y eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -465,15 +458,12 @@ mod tests {
             PaymentPromise::Delta(delta) => delta.add(&mut date),
         }
 
-        assert_eq!(
-            date,
-            monee::date::Datetime::from_str("2019-12-31T23:59:59Z").unwrap()
-        );
+        assert_eq!(date, Datetime::from_str("2019-12-31T23:59:59Z").unwrap());
     }
 
     #[test]
     fn can_add_weeks() {
-        let mut date = monee::date::Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
+        let mut date = Datetime::from_str("2020-04-10T13:50:00Z").unwrap();
         let s = "1w";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -482,16 +472,13 @@ mod tests {
             PaymentPromise::Delta(delta) => delta.add(&mut date),
         }
 
-        assert_eq!(
-            date,
-            monee::date::Datetime::from_str("2020-04-17T13:50:00Z").unwrap()
-        );
+        assert_eq!(date, Datetime::from_str("2020-04-17T13:50:00Z").unwrap());
     }
 
     #[test]
     fn adds_weeks_eod() {
         // tuesday 02 july 2024
-        let mut date = monee::date::Datetime::from_str("2024-07-02T13:50:00Z").unwrap();
+        let mut date = Datetime::from_str("2024-07-02T13:50:00Z").unwrap();
         let s = "0w eod";
 
         let payment: PaymentPromise = s.parse().unwrap();
@@ -500,9 +487,6 @@ mod tests {
             PaymentPromise::Delta(delta) => delta.add(&mut date),
         }
 
-        assert_eq!(
-            date,
-            monee::date::Datetime::from_str("2024-07-07T23:59:59Z").unwrap()
-        );
+        assert_eq!(date, Datetime::from_str("2024-07-07T23:59:59Z").unwrap());
     }
 }
