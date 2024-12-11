@@ -13,5 +13,8 @@ serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1.7"
 
+# monee = { path = "../monee", default-features = false, features= ["remote"] }
+monee_core = { path = "../monee/monee_core" }
+
 [workspace]
 members = ["src-tauri"]

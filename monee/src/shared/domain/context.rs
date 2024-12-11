@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use cream::context::{
     events_context::{EventsContext, EventsContextBuilder},
     Context, CreamContext, FromContext,
@@ -25,25 +27,41 @@ impl DbContext {
     }
 }
 
+pub struct AppContextBuilder {
+    pub base_dir: PathBuf,
+}
+
+impl AppContextBuilder {
+    pub async fn setup(self) -> Result<AppContext, InfrastructureError> {
+        let db = crate::shared::infrastructure::database::connect(self.base_dir).await?;
+
+        let cream = CreamContext::default();
+        let mut router = cream::events::router::Router::default();
+        // Add event handlers
+        router
+            .add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
+
+        let (events_ctx, setup) = EventsContextBuilder::default().build(&cream);
+
+        let ctx = AppContext {
+            events_ctx,
+            cream,
+            db: DbContext(db),
+        };
+
+        setup.setup(router, ctx.clone());
+
+        Ok(ctx)
+    }
+}
+
 pub async fn setup() -> Result<AppContext, InfrastructureError> {
-    let db = crate::shared::infrastructure::database::connect().await?;
+    #[cfg(feature = "embedded")]
+    let base_dir = crate::shared::infrastructure::filesystem::create_local_path();
+    #[cfg(not(feature = "embedded"))]
+    let base_dir = PathBuf::default();
 
-    let cream = CreamContext::default();
-    let mut router = cream::events::router::Router::default();
-    // Add event handlers
-    router.add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
-
-    let (events_ctx, setup) = EventsContextBuilder::default().build(&cream);
-
-    let ctx = AppContext {
-        events_ctx,
-        cream,
-        db: DbContext(db),
-    };
-
-    setup.setup(router, ctx.clone());
-
-    Ok(ctx)
+    AppContextBuilder { base_dir }.setup().await
 }
 
 impl FromContext<DbContext> for crate::shared::infrastructure::database::Connection {

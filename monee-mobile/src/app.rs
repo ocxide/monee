@@ -1,67 +1,124 @@
-use leptos::leptos_dom::ev::SubmitEvent;
+use std::collections::HashMap;
+
 use leptos::*;
-use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
+    async fn invoke_no_args(cmd: &str) -> JsValue;
+
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch, js_name = invoke)]
+    async fn invoke_catch(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 }
 
-#[derive(Serialize, Deserialize)]
-struct GreetArgs<'a> {
-    name: &'a str,
+macro_rules! bind_command {
+    ($name:ident() -> $ret_ok:ty, $ret_err:ty) => {
+        pub async fn $name() -> Result<$ret_ok, $ret_err> {
+            tauri_invoke::<$ret_ok, $ret_err, ()>(stringify!($name), &()).await
+        }
+    };
 }
+
+async fn tauri_invoke<
+    T: serde::de::DeserializeOwned,
+    E: serde::de::DeserializeOwned,
+    Args: serde::Serialize,
+>(
+    cmd: &str,
+    args: &Args,
+) -> Result<T, E> {
+    let response = invoke_catch(cmd, serde_wasm_bindgen::to_value(args).unwrap()).await;
+    match response {
+        Ok(val) => Ok(serde_wasm_bindgen::from_value(val).unwrap()),
+        Err(e) => Err(serde_wasm_bindgen::from_value(e).unwrap()),
+    }
+}
+
+bind_command!(get_stats() -> Snapshot, InternalError);
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum InternalError {
+    Auth,
+    Unknown,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Snapshot {
+    wallets: HashMap<String, f64>,
+    debts: HashMap<String, f64>,
+    loans: HashMap<String, f64>,
+}
+
+struct EventButton {
+    name: &'static str,
+    color: &'static str,
+}
+
+const EVENT_BUTTONS: &[EventButton] = &[
+    EventButton {
+        name: "Buy",
+        color: "border-green-500",
+    },
+    EventButton {
+        name: "Buy",
+        color: "border-green-500",
+    },
+    EventButton {
+        name: "Buy",
+        color: "border-green-500",
+    },
+    EventButton {
+        name: "Buy",
+        color: "border-green-500",
+    },
+    EventButton {
+        name: "Buy",
+        color: "border-green-500",
+    },
+];
 
 #[component]
 pub fn App() -> impl IntoView {
-    let (name, set_name) = create_signal(String::new());
-    let (greet_msg, set_greet_msg) = create_signal(String::new());
+    view! {
+        <main class="bg-slate-900 h-full w-screen grid text-white place-content-center gap-4">
+            <h1 class="text-4xl text-center">"Monee"</h1>
 
-    let update_name = move |ev| {
-        let v = event_target_value(&ev);
-        set_name.set(v);
-    };
+            <Stats />
 
-    let greet = move |ev: SubmitEvent| {
-        ev.prevent_default();
-        spawn_local(async move {
-            let name = name.get_untracked();
-            if name.is_empty() {
-                return;
-            }
+            <ul class="flex flex-wrap gap-4 justify-center">
+                {EVENT_BUTTONS.iter().map(|event| view! { <li><EventButton name=event.name color=event.color /></li> } ).collect::<Vec<_>>()}
+            </ul>
+        </main>
+    }
+}
 
-            let args = serde_wasm_bindgen::to_value(&GreetArgs { name: &name }).unwrap();
-            // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-            let new_msg = invoke("greet", args).await.as_string().unwrap();
-            set_greet_msg.set(new_msg);
-        });
-    };
+#[component]
+fn Stats() -> impl IntoView {
+    let snapshot_rx = create_local_resource(|| {}, |_| get_stats());
 
     view! {
-        <main class="container">
-            <h1>"NotWelcome to MoneeMobile"</h1>
+        <div>
+        {move || snapshot_rx.with(|snapshot| match snapshot {
+                Some(Ok(snapshot)) => view! { <pre>"!!!!"</pre> }.into_view(),
+                Some(Err(e)) => view! { <pre>"errir"</pre> }.into_view(),
+                None => view! { <p>"Loading3..."</p> }.into_view(),
+            })
+        }
+        </div>
+    }
+}
 
-            <div class="row">
-                <a href="https://tauri.app" target="_blank">
-                    <img src="public/tauri.svg" class="logo tauri" alt="Tauri logo"/>
-                </a>
-                <a href="https://docs.rs/leptos/" target="_blank">
-                    <img src="public/leptos.svg" class="logo leptos" alt="Leptos logo"/>
-                </a>
-            </div>
-            <p>"Click on the Tauri and Leptos logos to learn more."</p>
-
-            <form class="row" on:submit=greet>
-                <input
-                    id="greet-input"
-                    placeholder="Enter a name..."
-                    on:input=update_name
-                />
-                <button type="submit">"Greet"</button>
-            </form>
-            <p>{ move || greet_msg.get() }</p>
-        </main>
+#[component]
+fn EventButton(name: &'static str, color: &'static str) -> impl IntoView {
+    view! {
+        <button
+            class=format!("p-8 text-xl rounded-full bg-slate-800 active:bg-slate-950 shadow-md shadow-slate-700 border-2 {color}")
+        >
+            {name}
+        </button>
     }
 }

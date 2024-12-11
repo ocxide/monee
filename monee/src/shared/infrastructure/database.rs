@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 pub use surrealdb::Result;
 
 #[cfg(feature = "embedded")]
@@ -74,8 +76,10 @@ async fn init_host(connection: &Connection) -> Result<()> {
 }
 
 #[cfg(feature = "embedded")]
-async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
-    let path = super::filesystem::create_local_path().join(DB_DIR);
+async fn create_connection(base_dir: PathBuf) -> surrealdb::Result<(Connection, bool)> {
+    use std::path::PathBuf;
+
+    let path = base_dir.join(DB_DIR);
     // For now, just run definition queries
     /* let exists = tokio::fs::try_exists(&path).await.unwrap_or_else(|_| {
         println!("WARNING: Failed to check if db exists");
@@ -93,14 +97,16 @@ async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
 }
 
 #[cfg(feature = "remote")]
-async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
+async fn create_connection(_base_dir: PathBuf) -> surrealdb::Result<(Connection, bool)> {
+    use std::path::PathBuf;
+
     let db: Connection =
         surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>("0.0.0.0:6767").await?;
     Ok((db, false))
 }
 
-pub async fn connect() -> surrealdb::Result<Connection> {
-    let (db, exists) = create_connection().await?;
+pub async fn connect(base_dir: PathBuf) -> surrealdb::Result<Connection> {
+    let (db, exists) = create_connection(base_dir).await?;
     db.use_ns("monee").use_db("monee").await?;
 
     if !exists {

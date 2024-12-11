@@ -20,23 +20,25 @@ pub mod domain {
             wallets::domain::wallet_name::WalletName,
         };
 
+        #[derive(serde::Deserialize, serde::Serialize)]
         pub struct Snapshot {
             pub wallets: HashMap<WalletId, (Wallet, Money)>,
             pub debts: HashMap<DebtId, (Debt, Money)>,
             pub loans: HashMap<DebtId, (Debt, Money)>,
         }
 
-        #[derive(serde::Deserialize)]
+        #[derive(serde::Deserialize, serde::Serialize)]
         pub struct Money {
             pub amount: Amount,
             pub currency: Currency,
         }
 
+        #[derive(serde::Deserialize, serde::Serialize)]
         pub struct Debt {
             pub actor: Actor,
         }
 
-        #[derive(serde::Deserialize)]
+        #[derive(serde::Deserialize, serde::Serialize)]
         pub struct Wallet {
             pub name: WalletName,
             pub description: String,
