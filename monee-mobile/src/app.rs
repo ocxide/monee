@@ -1,42 +1,8 @@
 use std::collections::HashMap;
 
 use leptos::*;
-use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
-    async fn invoke_no_args(cmd: &str) -> JsValue;
-
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch, js_name = invoke)]
-    async fn invoke_catch(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
-}
-
-macro_rules! bind_command {
-    ($name:ident() -> $ret_ok:ty, $ret_err:ty) => {
-        pub async fn $name() -> Result<$ret_ok, $ret_err> {
-            tauri_invoke::<$ret_ok, $ret_err, ()>(stringify!($name), &()).await
-        }
-    };
-}
-
-async fn tauri_invoke<
-    T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned,
-    Args: serde::Serialize,
->(
-    cmd: &str,
-    args: &Args,
-) -> Result<T, E> {
-    let response = invoke_catch(cmd, serde_wasm_bindgen::to_value(args).unwrap()).await;
-    match response {
-        Ok(val) => Ok(serde_wasm_bindgen::from_value(val).unwrap()),
-        Err(e) => Err(serde_wasm_bindgen::from_value(e).unwrap()),
-    }
-}
+use crate::tauri_interop::bind_command;
 
 bind_command!(get_stats() -> Snapshot, InternalError);
 
@@ -104,7 +70,7 @@ fn Stats() -> impl IntoView {
         <div>
         {move || snapshot_rx.with(|snapshot| match snapshot {
                 Some(Ok(snapshot)) => view! { <pre>"!!!!"</pre> }.into_view(),
-                Some(Err(e)) => view! { <pre>"errir"</pre> }.into_view(),
+                Some(Err(e)) => view! { <pre>"err2r"</pre> }.into_view(),
                 None => view! { <p>"Loading3..."</p> }.into_view(),
             })
         }
