@@ -1,9 +1,6 @@
 use crate::prelude::AppError;
 
-#[derive(serde::Serialize)]
-pub enum UniqueSaveError {
-    AlreadyExists,
-}
+pub use monee_types::shared::errors::*;
 
 impl From<surrealdb::Error> for AppError<UniqueSaveError> {
     fn from(value: surrealdb::Error) -> Self {
