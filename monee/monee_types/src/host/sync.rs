@@ -64,7 +64,7 @@ pub mod sync_error {
 }
 
 pub mod client_synced {
-    use cream::events::DomainEvent;
+    use cream_events_core::DomainEvent;
 
     use crate::host::client::client_id::ClientId;
 

@@ -20,8 +20,7 @@ async fn get_stats(
     let service: monee::reports::snapshot::application::snapshot_report::SnapshotReport =
         ctx.provide();
 
-    Err(InternalError::Unknown)
-    // service.run().await.catch_infra(&ctx)
+    service.run().await.catch_infra(&ctx)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

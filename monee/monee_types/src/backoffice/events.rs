@@ -1,5 +1,3 @@
-
-
 pub mod event {
     use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
 
@@ -58,10 +56,7 @@ pub mod apply_event {
 
     use super::event::{Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance};
 
-    pub fn apply_event(
-        snapshot: &mut monee_core::Snapshot,
-        event: &Event,
-    ) -> Result<(), Error> {
+    pub fn apply_event(snapshot: &mut monee_core::Snapshot, event: &Event) -> Result<(), Error> {
         match event {
             Event::Buy(Buy {
                 amount, wallet_id, ..
@@ -176,4 +171,3 @@ pub mod apply_event {
         }
     }
 }
-

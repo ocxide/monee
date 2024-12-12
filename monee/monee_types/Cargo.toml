@@ -8,7 +8,7 @@ monee_core = { path = "../monee_core" }
 idn = { git = "https://github.com/ocxide/idn" }
 serde = { version = "1.0.203", features = ["derive"] }
 thiserror = "1.0.61"
-cream = { git = "https://github.com/ocxide/cream.git" }
+cream_events_core = { git = "https://github.com/ocxide/cream.git" }
 chrono = { version = "0.4.38", features = ["serde"] }
 
 # TODO: remove, only used in testing

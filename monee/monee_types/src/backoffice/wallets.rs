@@ -1,5 +1,3 @@
-
-
 pub mod wallet {
     use super::wallet_name::WalletName;
 
@@ -52,7 +50,7 @@ pub mod wallet_name {
 }
 
 pub mod wallet_created {
-    use cream::events::DomainEvent;
+    use cream_events_core::DomainEvent;
 
     #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
     pub struct WalletCreated {
@@ -70,4 +68,3 @@ pub mod wallet_created {
         }
     }
 }
-

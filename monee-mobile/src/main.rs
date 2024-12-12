@@ -1,7 +1,7 @@
 mod app;
 
 use app::*;
-use leptos::*;
+use leptos::{mount::mount_to_body, view};
 
 mod tauri_interop;
 
