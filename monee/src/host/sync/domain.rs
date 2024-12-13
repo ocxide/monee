@@ -1,21 +1,15 @@
 pub use monee_types::host::sync::*;
 pub mod repository {
-    use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
 
     use crate::{
-        backoffice::{
-            actors::domain::actor::Actor, currencies::domain::currency::Currency,
-            item_tags::domain::item_tag::ItemTag,
-        },
         host::client::domain::client_id::ClientId,
         prelude::{AppError, InfrastructureError},
         shared::domain::errors::UniqueSaveError,
     };
 
     use super::{
-        sync_data::{Entry, SyncData},
-        sync_error::SyncError,
-        sync_guide::SyncGuide,
+        sync_context_data::SyncContextData, sync_error::SyncError, sync_guide::SyncGuide,
+        sync_save::SyncSave,
     };
 
     #[async_trait::async_trait]
@@ -25,7 +19,7 @@ pub mod repository {
         async fn save_sync(
             &self,
             client_id: ClientId,
-            sync: &SyncData,
+            sync: &SyncSave,
         ) -> Result<(), InfrastructureError>;
 
         async fn save_sync_error(
@@ -36,10 +30,9 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            currencies: &[Entry<CurrencyId, Currency>],
-            items: &[Entry<ItemTagId, ItemTag>],
-            actors: &[Entry<ActorId, Actor>],
-            wallets: &[Entry<WalletId, Wallet>],
+            data: &SyncContextData,
         ) -> Result<(), AppError<UniqueSaveError>>;
+
+        async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError>;
     }
 }

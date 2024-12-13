@@ -1,6 +1,8 @@
 pub mod repository {
+    use monee_types::apps::{app_id::AppId, app_manifest::AppManifest};
+
     use crate::{
-        host::client::domain::{client::Client, client_id::ClientId, repository::Repository},
+        host::client::domain::repository::Repository,
         shared::{domain::context::DbContext, infrastructure::database::Entity},
     };
     pub use crate::{iprelude::*, prelude::*};
@@ -11,27 +13,26 @@ pub mod repository {
 
     #[async_trait::async_trait]
     impl Repository for SurrealRepository {
-        async fn save(&self, id: ClientId, client: Client) -> Result<(), InfrastructureError> {
+        async fn save(&self, id: AppId, app: AppManifest) -> Result<(), InfrastructureError> {
             self.0
-                .query("CREATE type::thing('client', ) CONTENT ")
+                .query("CREATE type::thing('client', $id) CONTENT $data")
                 .bind(("id", id))
-                .bind(("data", client))
+                .bind(("data", app))
                 .await?;
 
             Ok(())
         }
 
-        async fn exists(&self, id: ClientId) -> Result<bool, InfrastructureError> {
+        async fn exists(&self, id: AppId) -> Result<bool, InfrastructureError> {
             let mut response = self
                 .0
-                .query("SELECT id FROM ONLY client WHERE id =  LIMIT 1")
+                .query("SELECT id FROM ONLY client WHERE id = $id LIMIT 1")
                 .bind(("id", id))
                 .await?
                 .check()?;
 
-            let entity: Option<Entity<ClientId, ()>> = response.take(0)?;
+            let entity: Option<Entity<AppId, ()>> = response.take(0)?;
             Ok(entity.is_some())
         }
     }
 }
-

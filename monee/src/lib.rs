@@ -2,6 +2,7 @@ pub mod backoffice;
 pub mod host;
 pub mod reports;
 pub mod shared;
+pub mod self_config;
 
 pub mod prelude {
     pub use crate::shared::domain::context::AppContext;

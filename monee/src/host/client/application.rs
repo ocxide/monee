@@ -1,6 +1,8 @@
 pub mod register_one {
-    use crate::host::client::domain::client_id::ClientId;
-    use crate::host::client::domain::{client::Client, repository::Repository};
+    use monee_types::apps::app_id::AppId;
+    use monee_types::apps::app_manifest::AppManifest;
+
+    use crate::host::client::domain::repository::Repository;
     pub use crate::iprelude::*;
     pub use crate::prelude::*;
 
@@ -11,15 +13,18 @@ pub mod register_one {
     }
 
     impl RegisterOne {
-        pub async fn run(&self, client: Client) -> Result<ClientId, InfrastructureError> {
+        pub async fn run(&self, app: AppManifest) -> Result<AppId, InfrastructureError> {
             let id = Default::default();
-            self.repository.save(id, client).await.map(|_| id)
+            self.repository.save(id, app).await?;
+            Ok(id)
         }
     }
 }
 
 pub mod exists {
-    use crate::host::client::domain::{client_id::ClientId, repository::Repository};
+    use monee_types::apps::app_id::AppId;
+
+    use crate::host::client::domain::repository::Repository;
     pub use crate::iprelude::*;
     pub use crate::prelude::*;
 
@@ -30,9 +35,8 @@ pub mod exists {
     }
 
     impl Exists {
-        pub async fn run(&self, id: ClientId) -> Result<bool, InfrastructureError> {
+        pub async fn run(&self, id: AppId) -> Result<bool, InfrastructureError> {
             self.repository.exists(id).await
         }
     }
 }
-

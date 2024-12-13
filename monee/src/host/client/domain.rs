@@ -1,13 +1,14 @@
-pub use monee_types::host::client::*;
+pub use monee_types::apps::*;
 pub mod repository {
-    use crate::prelude::InfrastructureError;
+    use monee_types::apps::{app_id::AppId, app_manifest::AppManifest};
 
-    use super::{client::Client, client_id::ClientId};
+    use crate::prelude::InfrastructureError;
 
     #[async_trait::async_trait]
     pub trait Repository: 'static + Send + Sync {
-        async fn save(&self, id: ClientId, client: Client) -> Result<(), InfrastructureError>;
+        async fn save(&self, id: AppId, app: AppManifest) -> Result<(), InfrastructureError>;
 
-        async fn exists(&self, id: ClientId) -> Result<bool, InfrastructureError>;
+        async fn exists(&self, id: AppId) -> Result<bool, InfrastructureError>;
     }
 }
+

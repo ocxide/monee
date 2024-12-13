@@ -19,6 +19,7 @@ async fn serve() {
         .route("/clients", post(clients::register))
         .route("/sync/guide", get(sync::get_sync_guide))
         .route("/sync", patch(sync::do_sync))
+        .route("/sync/report", get(sync::get_sync_report))
         .with_state(ctx);
 
     // run our app with hyper, listening globally on port 3000
@@ -30,8 +31,8 @@ mod clients {
     use axum::extract::State;
     use axum::http::StatusCode;
     use axum::Json;
-    use monee::host::client::domain::client_id::ClientId;
-    use monee::host::client::domain::client_name::ClientName;
+    use monee::host::client::domain::app_id::AppId;
+    use monee::host::client::domain::app_name::AppName;
     use monee::prelude::*;
 
     use monee::host::client;
@@ -40,19 +41,19 @@ mod clients {
 
     #[derive(serde::Deserialize)]
     pub(crate) struct ClientReq {
-        name: Option<ClientName>,
+        name: Option<AppName>,
     }
 
     #[axum::debug_handler]
     pub async fn register(
         State(ctx): State<AppContext>,
         Json(payload): Json<Option<ClientReq>>,
-    ) -> Result<Json<ClientId>, StatusCode> {
+    ) -> Result<Json<AppId>, StatusCode> {
         let service: client::application::register_one::RegisterOne = ctx.provide();
         let name = payload.and_then(|p| p.name);
 
         service
-            .run(client::domain::client::Client { name })
+            .run(client::domain::app_manifest::AppManifest { name })
             .await
             .catch_infra(&ctx)
             .map(Json)
@@ -64,9 +65,10 @@ mod sync {
     use axum::http::{HeaderMap, StatusCode};
     use axum::Json;
     use monee::host::client::domain::client_id::ClientId;
-    use monee::host::sync::domain::sync_data::SyncData;
-    use monee::host::sync::domain::sync_error::SyncError;
-    use monee::host::sync::domain::sync_guide::SyncGuide;
+    use monee::host::sync::domain::sync_report::SyncReport;
+    use monee::host::sync::domain::{
+        sync_error::SyncError, sync_guide::SyncGuide, sync_save::SyncSave,
+    };
     use monee::prelude::*;
     use monee::shared::domain::errors::UniqueSaveError;
 
@@ -79,20 +81,23 @@ mod sync {
         service.run().await.catch_infra(&ctx).map(Json)
     }
 
-    #[axum::debug_handler]
-    pub async fn do_sync(
-        State(ctx): State<AppContext>,
-        headers: HeaderMap,
-        Json(payload): Json<SyncData>,
-    ) -> Result<(), StatusCode> {
-        let id: ClientId = headers
+    fn get_client_id(headers: &HeaderMap) -> Result<ClientId, StatusCode> {
+        headers
             .get("X-Client-Id")
             .ok_or(StatusCode::UNAUTHORIZED)?
             .to_str()
             .map_err(|_| StatusCode::UNAUTHORIZED)?
             .parse()
-            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+            .map_err(|_| StatusCode::UNAUTHORIZED)
+    }
 
+    #[axum::debug_handler]
+    pub async fn do_sync(
+        State(ctx): State<AppContext>,
+        headers: HeaderMap,
+        Json(payload): Json<SyncSave>,
+    ) -> Result<(), StatusCode> {
+        let id = get_client_id(&headers)?;
         let exists_service: monee::host::client::application::exists::Exists = ctx.provide();
         if !exists_service.run(id).await.catch_infra(&ctx)? {
             return Err(StatusCode::UNAUTHORIZED);
@@ -107,5 +112,15 @@ mod sync {
                 SyncError::Save(UniqueSaveError::AlreadyExists) => StatusCode::CONFLICT,
                 SyncError::Event(_) => StatusCode::BAD_REQUEST,
             })
+    }
+
+    #[axum::debug_handler]
+    pub async fn get_sync_report(
+        State(ctx): State<AppContext>,
+        headers: HeaderMap,
+    ) -> Result<Json<SyncReport>, StatusCode> {
+        let _ = get_client_id(&headers)?;
+        let service: monee::host::sync::application::get_sync_report::GetSyncReport = ctx.provide();
+        service.run().await.catch_infra(&ctx).map(Json)
     }
 }

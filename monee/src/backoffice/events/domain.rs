@@ -1,7 +1,7 @@
 pub use monee_types::backoffice::events::*;
 pub mod repository {
     use crate::{
-        host::sync::domain::sync_data::EventEntry,
+        host::sync::domain::sync_save::EventEntry,
         shared::infrastructure::errors::InfrastructureError,
     };
 

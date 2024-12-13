@@ -7,24 +7,18 @@ pub mod sync_guide {
     }
 }
 
-pub mod sync_data {
-    use monee_core::{ActorId, CurrencyId, EventId, ItemTagId, Wallet, WalletId};
+pub mod sync_save {
+    use monee_core::EventId;
 
-    use crate::{
-        backoffice::{
-            actors::actor::Actor, currencies::currency::Currency,
-            events::event::Event, item_tags::item_tag::ItemTag,
-        },
-        shared::date::Datetime,
-    };
+    use crate::{backoffice::events::event::Event, shared::date::Datetime};
+
+    use super::sync_context_data::SyncContextData;
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    pub struct SyncData {
+    pub struct SyncSave {
         pub events: Vec<EventEntry>,
-        pub actors: Vec<Entry<ActorId, Actor>>,
-        pub currencies: Vec<Entry<CurrencyId, Currency>>,
-        pub items: Vec<Entry<ItemTagId, ItemTag>>,
-        pub wallets: Vec<Entry<WalletId, Wallet>>,
+        #[serde(flatten)]
+        pub data: SyncContextData,
     }
 
     #[derive(serde::Serialize, serde::Deserialize)]
@@ -34,19 +28,40 @@ pub mod sync_data {
         pub event: Event,
         pub created_at: Datetime,
     }
+}
+
+pub mod sync_context_data {
+    use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
+
+    use crate::backoffice::{
+        actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+    };
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    pub struct Entry<K, T> {
-        pub id: K,
+    pub struct SyncContextData {
+        pub actors: Vec<(ActorId, Actor)>,
+        pub currencies: Vec<(CurrencyId, Currency)>,
+        pub items: Vec<(ItemTagId, ItemTag)>,
+        pub wallets: Vec<(WalletId, Wallet)>,
+    }
+}
+
+pub mod sync_report {
+    use monee_core::Snapshot;
+
+    use super::sync_context_data::SyncContextData;
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct SyncReport {
+        pub snapshot: Snapshot,
         #[serde(flatten)]
-        pub data: T,
+        pub data: SyncContextData,
     }
 }
 
 pub mod sync_error {
     use crate::{
-        backoffice::events::apply_event::Error as ApplyError,
-        shared::errors::UniqueSaveError,
+        backoffice::events::apply_event::Error as ApplyError, shared::errors::UniqueSaveError,
     };
 
     #[derive(serde::Serialize)]
@@ -79,5 +94,3 @@ pub mod client_synced {
         }
     }
 }
-
-

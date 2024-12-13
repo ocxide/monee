@@ -1,6 +1,7 @@
 pub mod backoffice;
 pub mod host;
 pub mod reports;
+pub mod apps;
 
 pub mod shared {
     pub mod alias;

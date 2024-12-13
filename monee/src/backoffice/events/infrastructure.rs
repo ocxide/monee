@@ -4,7 +4,7 @@ pub mod repository {
 
     use crate::{
         backoffice::events::domain::{event::Event, repository::Repository},
-        host::sync::domain::sync_data::EventEntry,
+        host::sync::domain::sync_save::EventEntry,
         shared::{
             domain::{context::DbContext, date::Datetime},
             infrastructure::{database::EntityKey, errors::InfrastructureError},

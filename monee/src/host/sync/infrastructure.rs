@@ -1,24 +1,24 @@
 pub mod repository {
     use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
+    use monee_types::backoffice::{
+        actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+    };
     use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 
     use crate::{
-        backoffice::{
-            actors::domain::actor::Actor, currencies::domain::currency::Currency,
-            item_tags::domain::item_tag::ItemTag,
-        },
         host::{
             client::domain::client_id::ClientId,
             sync::domain::{
-                repository::Repository,
-                sync_data::{Entry, SyncData},
-                sync_error::SyncError,
-                sync_guide::SyncGuide,
+                repository::Repository, sync_context_data::SyncContextData, sync_error::SyncError,
+                sync_guide::SyncGuide, sync_save::SyncSave,
             },
         },
         iprelude::*,
         prelude::*,
-        shared::domain::{context::DbContext, date::Datetime, errors::UniqueSaveError},
+        shared::{
+            domain::{context::DbContext, date::Datetime, errors::UniqueSaveError},
+            infrastructure::database::Entity,
+        },
     };
 
     #[derive(FromContext)]
@@ -40,7 +40,7 @@ pub mod repository {
         async fn save_sync(
             &self,
             client_id: ClientId,
-            sync: &SyncData,
+            sync: &SyncSave,
         ) -> Result<(), InfrastructureError> {
             self.0
                 .query("UPSERT type::thing('client_sync', $client_id) REPLACE { data: $data }")
@@ -69,35 +69,32 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            currencies: &[Entry<CurrencyId, Currency>],
-            items: &[Entry<ItemTagId, ItemTag>],
-            actors: &[Entry<ActorId, Actor>],
-            wallets: &[Entry<WalletId, Wallet>],
+            data: &SyncContextData,
         ) -> Result<(), AppError<UniqueSaveError>> {
             let mut query = self.0.query(BeginStatement);
 
-            for Entry { id, data: currency } in currencies {
+            for (id, currency) in data.currencies.iter() {
                 query = query
                     .query("UPSERT type::thing('currency', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", currency));
             }
 
-            for Entry { id, data: item } in items {
+            for (id, item) in data.items.iter() {
                 query = query
                     .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", item));
             }
 
-            for Entry { id, data: actor } in actors {
+            for (id, actor) in data.actors.iter() {
                 query = query
                     .query("UPSERT type::thing('actor', $id) CONTENT $data")
                     .bind(("id", id))
                     .bind(("data", actor));
             }
 
-            for Entry { id, data: wallet } in wallets {
+            for (id, wallet) in data.wallets.iter() {
                 query = query
                     .query("UPSERT type::thing('wallet', $id) CONTENT $data")
                     .bind(("id", id))
@@ -112,6 +109,29 @@ pub mod repository {
                 .catch_app()?;
 
             Ok(())
+        }
+
+        async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError> {
+            let mut response = self
+                .0
+                .query("SELECT * FROM currency")
+                .query("SELECT * FROM item_tag")
+                .query("SELECT * FROM actor")
+                .query("SELECT * FROM wallet")
+                .await
+                .catch_infra()?;
+
+            let currencies: Vec<Entity<CurrencyId, Currency>> = response.take(0)?;
+            let items: Vec<Entity<ItemTagId, ItemTag>> = response.take(0)?;
+            let actors: Vec<Entity<ActorId, Actor>> = response.take(0)?;
+            let wallets: Vec<Entity<WalletId, Wallet>> = response.take(0)?;
+
+            Ok(SyncContextData {
+                currencies: currencies.into_iter().map(Entity::into).collect(),
+                items: items.into_iter().map(Entity::into).collect(),
+                actors: actors.into_iter().map(Entity::into).collect(),
+                wallets: wallets.into_iter().map(Entity::into).collect(),
+            })
         }
     }
 }
