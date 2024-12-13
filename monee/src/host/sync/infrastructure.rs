@@ -1,7 +1,10 @@
 pub mod repository {
     use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
-    use monee_types::backoffice::{
-        actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+    use monee_types::{
+        apps::app_id::AppId,
+        backoffice::{
+            actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+        },
     };
     use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 
@@ -39,7 +42,7 @@ pub mod repository {
 
         async fn save_sync(
             &self,
-            client_id: ClientId,
+            client_id: AppId,
             sync: &SyncSave,
         ) -> Result<(), InfrastructureError> {
             self.0
@@ -54,7 +57,7 @@ pub mod repository {
 
         async fn save_sync_error(
             &self,
-            client_id: ClientId,
+            client_id: AppId,
             error: &SyncError,
         ) -> Result<(), InfrastructureError> {
             self.0

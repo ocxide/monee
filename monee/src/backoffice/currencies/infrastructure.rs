@@ -30,7 +30,7 @@ pub mod repository {
         ) -> Result<(), AppError<UniqueSaveError>> {
             let response = self
                 .0
-                .query("CREATE type::thing('currency', ) SET name = , symbol = , code = ")
+                .query("CREATE type::thing('currency', $id) SET name = $name, symbol = $symbol, code = $code")
                 .bind(("id", id))
                 .bind(currency)
                 .await
@@ -46,7 +46,7 @@ pub mod repository {
         ) -> Result<Option<CurrencyId>, InfrastructureError> {
             let mut response = self
                 .0
-                .query("SELECT id FROM currency WHERE code = ")
+                .query("SELECT id FROM currency WHERE code = $code")
                 .bind(("code", code))
                 .await?;
 

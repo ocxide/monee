@@ -23,7 +23,7 @@ pub mod repository {
         async fn save(&self, id: ActorId, actor: Actor) -> Result<(), AppError<UniqueSaveError>> {
             let result = self
                 .0
-                .query("CREATE type::thing('actor', ) CONTENT ")
+                .query("CREATE type::thing('actor', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", actor))
                 .await
@@ -39,7 +39,7 @@ pub mod repository {
         ) -> Result<Option<ActorId>, InfrastructureError> {
             let mut response = self
                 .0
-                .query("SELECT id FROM ONLY actor WHERE alias =  LIMIT 1")
+                .query("SELECT id FROM ONLY actor WHERE alias = $alias LIMIT 1")
                 .bind(("alias", alias))
                 .await?
                 .check()?;
