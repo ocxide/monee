@@ -18,7 +18,7 @@ pub mod application {
                 }
 
                 let id = Default::default();
-                self.repository.save_self(id).await?;
+                self.repository.save_app_id(id).await?;
                 Ok(id)
             }
         }

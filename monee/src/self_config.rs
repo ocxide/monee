@@ -16,26 +16,6 @@ pub mod application {
             }
         }
     }
-
-    pub mod save_self {
-        use monee_types::apps::app_id::AppId;
-
-        use crate::iprelude::*;
-        use crate::prelude::*;
-        use crate::self_config::domain::repository::Repository;
-
-        #[derive(FromContext)]
-        #[context(AppContext)]
-        pub struct SaveSelf {
-            repository: Box<dyn Repository>,
-        }
-
-        impl SaveSelf {
-            pub async fn run(&self, id: AppId) -> Result<(), InfrastructureError> {
-                self.repository.save_self(id).await
-            }
-        }
-    }
 }
 
 pub mod domain {
@@ -47,7 +27,7 @@ pub mod domain {
         #[async_trait::async_trait]
         pub trait Repository: Send + Sync + 'static {
             async fn get_self(&self) -> Result<Option<AppId>, InfrastructureError>;
-            async fn save_self(&self, id: AppId) -> Result<(), InfrastructureError>;
+            async fn save_app_id(&self, id: AppId) -> Result<(), InfrastructureError>;
         }
     }
 }
@@ -84,7 +64,7 @@ pub mod infrastructure {
                 Ok(id.map(Entity::into_key))
             }
 
-            async fn save_self(&self, id: AppId) -> Result<(), InfrastructureError> {
+            async fn save_app_id(&self, id: AppId) -> Result<(), InfrastructureError> {
                 self.0
                     .query("CREATE self_app SET id = $id")
                     .bind(("id", id))
