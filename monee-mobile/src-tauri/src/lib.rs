@@ -4,11 +4,13 @@ use monee::{
     host::nodes::domain::app_id::AppId, nodes::hosts::domain::host::host_dir::HostDir,
     shared::domain::context::AppContextBuilder,
 };
+use node_sync::HostConPort;
 use tauri::Manager;
 
 mod prelude;
 
 use prelude::*;
+use tauri_plugin_http::reqwest::Client;
 
 mod node_sync {
     use monee::{
@@ -42,7 +44,13 @@ mod node_sync {
     }
 
     #[derive(Clone)]
-    pub struct HostConPort(pub Sender<Option<(AppId, HostDir)>>);
+    pub struct HostConPort(Sender<Option<(AppId, HostDir)>>);
+
+    impl HostConPort {
+        pub async fn send(&self, value: Option<(AppId, HostDir)>) {
+            self.0.send(value).await.expect("Failed to send");
+        }
+    }
     type HostConRx = Receiver<Option<(AppId, HostDir)>>;
 
     pub fn setup(ctx: AppContext, client: Client) -> (DataChangedPort, HostConPort) {
@@ -87,12 +95,12 @@ mod node_sync {
             };
 
             if should_save_changes {
-                save_changes(&http_client, *app_id, &host_dir, &changes, &ctx)
+                save_changes(&http_client, *app_id, host_dir, &changes, &ctx)
                     .await
                     .unwrap();
             }
 
-            get_data(&http_client, *app_id, &host_dir, &ctx, &mut changes).await;
+            get_data(&http_client, *app_id, host_dir, &ctx, &mut changes).await;
         }
     }
 
@@ -114,7 +122,10 @@ mod node_sync {
             .unwrap();
 
         let service: monee::nodes::sync::application::rewrite_system::RewriteSystem = ctx.provide();
-        service.run(report).await.catch_infra(&ctx).unwrap();
+        let result = service.run(report).await.catch_infra(&ctx).unwrap();
+        if let Err(e) = result {
+            eprintln!("Failed to get data");
+        }
 
         *changes = ChangesRecord::default();
     }
@@ -162,10 +173,7 @@ mod node_sync {
 }
 
 struct HostState(pub Mutex<HostConnection>);
-struct HostConnection {
-    pub app_id: Option<AppId>,
-    pub host_dir: Option<HostDir>,
-}
+struct HostConnection(pub Option<(AppId, HostDir)>);
 
 async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let base_dir = app.path().app_data_dir().expect("AppData not found");
@@ -173,11 +181,13 @@ async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let http_client = tauri_plugin_http::reqwest::Client::default();
 
-    let port = node_sync::setup(context.clone(), http_client.clone());
+    let (data_port, host_port) = node_sync::setup(context.clone(), http_client.clone());
 
-    app.manage(port);
+    app.manage(data_port);
+    app.manage(host_port);
     app.manage(context);
     app.manage(http_client);
+    app.manage(HostState(Mutex::new(HostConnection(None))));
 
     Ok(())
 }
@@ -192,13 +202,37 @@ async fn get_stats(
     service.run().await.catch_infra(&ctx)
 }
 
+#[tauri::command]
+async fn set_host(
+    http: tauri::State<'_, Client>,
+    host_state: tauri::State<'_, HostState>,
+    host_port: tauri::State<'_, HostConPort>,
+    host_dir: HostDir,
+) -> Result<(), InternalError> {
+    let app_id = http
+        .post(format!("{host_dir}/nodes"))
+        .send()
+        .await
+        .unwrap()
+        .json::<AppId>()
+        .await
+        .unwrap();
+
+    host_state.0.lock().unwrap().0 = Some((app_id, host_dir.clone()));
+
+    host_port.send(Some((app_id, host_dir))).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .setup(|app| tauri::async_runtime::block_on(setup(app)))
-        .invoke_handler(tauri::generate_handler![get_stats])
+        .invoke_handler(tauri::generate_handler![get_stats, set_host])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

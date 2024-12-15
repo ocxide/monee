@@ -1,6 +1,6 @@
 pub mod host {
     pub mod host_dir {
-        #[derive(serde::Serialize, serde::Deserialize)]
+        #[derive(serde::Serialize, serde::Deserialize, Clone)]
         pub struct HostDir(String);
 
         impl std::fmt::Display for HostDir {
