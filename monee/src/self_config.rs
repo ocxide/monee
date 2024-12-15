@@ -2,9 +2,7 @@ pub mod application {
     pub mod get_self {
         use monee_types::apps::app_id::AppId;
 
-        use crate::iprelude::*;
-        use crate::prelude::InfrastructureError;
-        use crate::self_config::domain::repository::Repository;
+        use crate::{iprelude::*, prelude::*, self_config::domain::repository::Repository};
 
         #[derive(FromContext)]
         #[context(AppContext)]
@@ -23,7 +21,7 @@ pub mod application {
         use monee_types::apps::app_id::AppId;
 
         use crate::iprelude::*;
-        use crate::prelude::InfrastructureError;
+        use crate::prelude::*;
         use crate::self_config::domain::repository::Repository;
 
         #[derive(FromContext)]
@@ -50,7 +48,7 @@ pub mod application {
         use monee_types::apps::app_id::AppId;
 
         use crate::iprelude::*;
-        use crate::prelude::InfrastructureError;
+        use crate::prelude::*;
         use crate::self_config::domain::repository::Repository;
 
         #[derive(FromContext)]

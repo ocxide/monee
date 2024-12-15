@@ -146,6 +146,17 @@ mod provides_config {
         },
     };
 
+    use crate::nodes::{
+        hosts::{
+            domain::repository::Repository as HostsRepository,
+            infrastructure::repository::SurrealRepository as HostsSurrealRepository,
+        },
+        sync::{
+            domain::repository::Repository as NodeSyncRepository,
+            infrastructure::repository::SurrealRepository as NodeSyncSurrealRepository,
+        },
+    };
+
     use super::{AppContext, DbContext};
 
     macro_rules! provide_map (($ctx: path { $($service: path: $real_service: path),* $(,)* }) => {
@@ -172,7 +183,10 @@ mod provides_config {
         crate::reports::events::domain::repository::Repository: crate::reports::events::infrastructure::repository::SurrealRepository,
 
         ClientRepository: ClientSurrealRepository,
-        SyncRepository: SyncSurrealRepository
+        SyncRepository: SyncSurrealRepository,
+
+        HostsRepository: HostsSurrealRepository,
+        NodeSyncRepository: NodeSyncSurrealRepository
     }}
 
     impl cream::context::FromContext<super::AppContext>

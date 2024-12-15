@@ -9,18 +9,15 @@ pub mod repository {
     use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 
     use crate::{
-        host::{
-            client::domain::client_id::ClientId,
-            sync::domain::{
-                repository::Repository, sync_context_data::SyncContextData, sync_error::SyncError,
-                sync_guide::SyncGuide, sync_save::SyncSave,
-            },
+        host::sync::domain::{
+            repository::Repository, sync_context_data::SyncContextData, sync_error::SyncError,
+            sync_guide::SyncGuide, sync_save::SyncSave,
         },
         iprelude::*,
         prelude::*,
         shared::{
             domain::{context::DbContext, date::Datetime, errors::UniqueSaveError},
-            infrastructure::database::Entity,
+            infrastructure::database::{Connection, Entity},
         },
     };
 
@@ -74,44 +71,7 @@ pub mod repository {
             &self,
             data: &SyncContextData,
         ) -> Result<(), AppError<UniqueSaveError>> {
-            let mut query = self.0.query(BeginStatement);
-
-            for (id, currency) in data.currencies.iter() {
-                query = query
-                    .query("UPSERT type::thing('currency', $id) CONTENT $data")
-                    .bind(("id", id))
-                    .bind(("data", currency));
-            }
-
-            for (id, item) in data.items.iter() {
-                query = query
-                    .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
-                    .bind(("id", id))
-                    .bind(("data", item));
-            }
-
-            for (id, actor) in data.actors.iter() {
-                query = query
-                    .query("UPSERT type::thing('actor', $id) CONTENT $data")
-                    .bind(("id", id))
-                    .bind(("data", actor));
-            }
-
-            for (id, wallet) in data.wallets.iter() {
-                query = query
-                    .query("UPSERT type::thing('wallet', $id) CONTENT $data")
-                    .bind(("id", id))
-                    .bind(("data", wallet));
-            }
-
-            query
-                .query(CommitStatement)
-                .await
-                .catch_infra()?
-                .check()
-                .catch_app()?;
-
-            Ok(())
+            save_changes(&self.0, data).await
         }
 
         async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError> {
@@ -136,16 +96,49 @@ pub mod repository {
                 wallets: wallets.into_iter().map(Entity::into).collect(),
             })
         }
+    }
 
-        async fn truncate_events(&self) -> Result<(), InfrastructureError> {
-            self.0
-                .query("DELETE event")
-                .await
-                .catch_infra()?
-                .check()
-                .catch_infra()?;
+    pub async fn save_changes(
+        con: &Connection,
+        data: &SyncContextData,
+    ) -> Result<(), AppError<UniqueSaveError>> {
+        let mut query = con.query(BeginStatement);
 
-            Ok(())
+        for (id, currency) in data.currencies.iter() {
+            query = query
+                .query("UPSERT type::thing('currency', $id) CONTENT $data")
+                .bind(("id", id))
+                .bind(("data", currency));
         }
+
+        for (id, item) in data.items.iter() {
+            query = query
+                .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
+                .bind(("id", id))
+                .bind(("data", item));
+        }
+
+        for (id, actor) in data.actors.iter() {
+            query = query
+                .query("UPSERT type::thing('actor', $id) CONTENT $data")
+                .bind(("id", id))
+                .bind(("data", actor));
+        }
+
+        for (id, wallet) in data.wallets.iter() {
+            query = query
+                .query("UPSERT type::thing('wallet', $id) CONTENT $data")
+                .bind(("id", id))
+                .bind(("data", wallet));
+        }
+
+        query
+            .query(CommitStatement)
+            .await
+            .catch_infra()?
+            .check()
+            .catch_app()?;
+
+        Ok(())
     }
 }

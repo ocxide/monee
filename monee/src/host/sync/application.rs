@@ -98,31 +98,3 @@ pub mod get_sync_report {
         }
     }
 }
-
-pub mod rewrite_system {
-    use monee_types::host::sync::sync_report::SyncReport;
-    use monee_types::shared::errors::UniqueSaveError;
-
-    use crate::backoffice::snapshot::application::snapshot_io::SnapshotIO;
-    use crate::{iprelude::*, prelude::*};
-
-    use crate::host::sync::domain::repository::Repository;
-
-    #[derive(FromContext)]
-    #[context(AppContext)]
-    pub struct RewriteSystem {
-        repo: Box<dyn Repository>,
-        snapshot_io: SnapshotIO,
-    }
-
-    impl RewriteSystem {
-        pub async fn run(&self, data: SyncReport) -> Result<(), AppError<UniqueSaveError>> {
-            self.repo.save_changes(&data.data).await?;
-            self.snapshot_io.save(data.snapshot).await?;
-
-            self.repo.truncate_events().await?;
-
-            Ok(())
-        }
-    }
-}

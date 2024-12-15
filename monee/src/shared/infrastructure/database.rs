@@ -98,8 +98,6 @@ async fn create_connection(base_dir: PathBuf) -> surrealdb::Result<(Connection, 
 
 #[cfg(feature = "remote")]
 async fn create_connection(_base_dir: PathBuf) -> surrealdb::Result<(Connection, bool)> {
-    use std::path::PathBuf;
-
     let db: Connection =
         surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>("0.0.0.0:6767").await?;
     Ok((db, false))
@@ -120,10 +118,9 @@ pub(crate) use entity::{Entity, EntityKey};
 
 mod entity {
     use de::SqlIdDeserializator;
+    use monee_types::apps::app_id::AppId;
     use se::SqlIdSerializator;
     use serde::{de::DeserializeOwned, Deserialize, Serialize, Serializer};
-
-    use crate::host::client::domain::client_id::ClientId;
 
     pub struct EntityKey<K>(pub K);
     pub struct Entity<K, T>(pub K, pub T);
@@ -281,7 +278,7 @@ mod entity {
         const TABLE: &'static str = "debt";
     }
 
-    impl SqlId for ClientId {
+    impl SqlId for AppId {
         type Flavor = StringId;
         const TABLE: &'static str = "client";
     }

@@ -35,6 +35,5 @@ pub mod repository {
         ) -> Result<(), AppError<UniqueSaveError>>;
 
         async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError>;
-        async fn truncate_events(&self) -> Result<(), InfrastructureError>;
     }
 }
