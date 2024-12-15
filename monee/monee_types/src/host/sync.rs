@@ -1,7 +1,7 @@
 pub mod sync_guide {
     use crate::shared::date::Datetime;
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, serde::Deserialize)]
     pub struct SyncGuide {
         pub last_event_date: Option<Datetime>,
     }
