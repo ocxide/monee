@@ -2,7 +2,7 @@ pub mod register_one {
     use monee_types::apps::app_id::AppId;
     use monee_types::apps::app_manifest::AppManifest;
 
-    use crate::host::client::domain::repository::Repository;
+    use crate::host::nodes::domain::repository::Repository;
     pub use crate::iprelude::*;
     pub use crate::prelude::*;
 
@@ -24,7 +24,7 @@ pub mod register_one {
 pub mod exists {
     use monee_types::apps::app_id::AppId;
 
-    use crate::host::client::domain::repository::Repository;
+    use crate::host::nodes::domain::repository::Repository;
     pub use crate::iprelude::*;
     pub use crate::prelude::*;
 

@@ -136,7 +136,7 @@ mod provides_config {
     };
 
     use crate::host::{
-        client::{
+        nodes::{
             domain::repository::Repository as ClientRepository,
             infrastructure::repository::SurrealRepository as ClientSurrealRepository,
         },
@@ -155,6 +155,11 @@ mod provides_config {
             domain::repository::Repository as NodeSyncRepository,
             infrastructure::repository::SurrealRepository as NodeSyncSurrealRepository,
         },
+    };
+
+    use crate::self_config::{
+        domain::repository::Repository as SelfConfigRepository,
+        infrastructure::repository::SurrealRepository as SelfConfigSurrealRepository,
     };
 
     use super::{AppContext, DbContext};
@@ -181,6 +186,8 @@ mod provides_config {
         EventsRepository: EventsSurrealRepository,
         crate::reports::snapshot::domain::repository::Repository: crate::reports::snapshot::infrastructure::repository::SurrealRepository,
         crate::reports::events::domain::repository::Repository: crate::reports::events::infrastructure::repository::SurrealRepository,
+
+        SelfConfigRepository: SelfConfigSurrealRepository,
 
         ClientRepository: ClientSurrealRepository,
         SyncRepository: SyncSurrealRepository,

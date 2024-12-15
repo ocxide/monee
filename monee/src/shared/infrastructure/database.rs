@@ -280,7 +280,8 @@ mod entity {
 
     impl SqlId for AppId {
         type Flavor = StringId;
-        const TABLE: &'static str = "client";
+        // TODO
+        const TABLE: &'static str = "node";
     }
 
     impl SqlId for monee_core::EventId {
