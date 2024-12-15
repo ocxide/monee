@@ -15,12 +15,12 @@ pub mod get_sync_guide {
 
 pub mod do_sync {
     use cream::event_bus::EventBusPort;
+    use monee_types::apps::app_id::AppId;
 
     use crate::backoffice::events::domain::{
         apply_event::apply_event, repository::Repository as EventsRepository,
     };
     use crate::backoffice::snapshot::application::snapshot_io::SnapshotIO;
-    use crate::host::client::domain::client_id::ClientId;
     use crate::host::sync::domain::client_synced::ClientSynced;
     use crate::host::sync::domain::sync_error::SyncError;
     use crate::host::sync::domain::{repository::Repository, sync_save::SyncSave};
@@ -38,7 +38,7 @@ pub mod do_sync {
     impl DoSync {
         pub async fn run(
             &self,
-            client_id: ClientId,
+            client_id: AppId,
             sync: SyncSave,
         ) -> Result<(), AppError<SyncError>> {
             self.sync_repo.save_sync(client_id, &sync).await?;
@@ -80,9 +80,8 @@ pub mod do_sync {
 pub mod get_sync_report {
     use monee_types::host::sync::sync_report::SyncReport;
 
-    use crate::{
-        backoffice::snapshot::application::snapshot_io::SnapshotIO, prelude::InfrastructureError,
-    };
+    use crate::iprelude::*;
+    use crate::{backoffice::snapshot::application::snapshot_io::SnapshotIO, prelude::*};
 
     #[derive(FromContext)]
     #[context(AppContext)]
@@ -96,6 +95,34 @@ pub mod get_sync_report {
             let snapshot = self.snapshot_io.read_last().await?;
             let data = self.sync_repo.get_context_data().await?;
             Ok(SyncReport { snapshot, data })
+        }
+    }
+}
+
+pub mod rewrite_system {
+    use monee_types::host::sync::sync_report::SyncReport;
+    use monee_types::shared::errors::UniqueSaveError;
+
+    use crate::backoffice::snapshot::application::snapshot_io::SnapshotIO;
+    use crate::{iprelude::*, prelude::*};
+
+    use crate::host::sync::domain::repository::Repository;
+
+    #[derive(FromContext)]
+    #[context(AppContext)]
+    pub struct RewriteSystem {
+        repo: Box<dyn Repository>,
+        snapshot_io: SnapshotIO,
+    }
+
+    impl RewriteSystem {
+        pub async fn run(&self, data: SyncReport) -> Result<(), AppError<UniqueSaveError>> {
+            self.repo.save_changes(&data.data).await?;
+            self.snapshot_io.save(data.snapshot).await?;
+
+            self.repo.truncate_events().await?;
+
+            Ok(())
         }
     }
 }

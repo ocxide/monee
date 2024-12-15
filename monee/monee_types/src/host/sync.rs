@@ -81,9 +81,9 @@ pub mod sync_error {
 pub mod client_synced {
     use cream_events_core::DomainEvent;
 
-    use crate::host::client::client_id::ClientId;
+    use crate::apps::app_id::AppId;
 
-    pub struct ClientSynced(pub ClientId);
+    pub struct ClientSynced(pub AppId);
     impl DomainEvent for ClientSynced {
         fn name(&self) -> &'static str {
             "ClientSynced"

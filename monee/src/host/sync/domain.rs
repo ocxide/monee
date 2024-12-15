@@ -1,8 +1,9 @@
 pub use monee_types::host::sync::*;
 pub mod repository {
 
+    use monee_types::apps::app_id::AppId;
+
     use crate::{
-        host::client::domain::client_id::ClientId,
         prelude::{AppError, InfrastructureError},
         shared::domain::errors::UniqueSaveError,
     };
@@ -18,13 +19,13 @@ pub mod repository {
 
         async fn save_sync(
             &self,
-            client_id: ClientId,
+            app_id: AppId,
             sync: &SyncSave,
         ) -> Result<(), InfrastructureError>;
 
         async fn save_sync_error(
             &self,
-            client_id: ClientId,
+            app_id: AppId,
             error: &SyncError,
         ) -> Result<(), InfrastructureError>;
 
@@ -34,5 +35,6 @@ pub mod repository {
         ) -> Result<(), AppError<UniqueSaveError>>;
 
         async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError>;
+        async fn truncate_events(&self) -> Result<(), InfrastructureError>;
     }
 }

@@ -136,5 +136,16 @@ pub mod repository {
                 wallets: wallets.into_iter().map(Entity::into).collect(),
             })
         }
+
+        async fn truncate_events(&self) -> Result<(), InfrastructureError> {
+            self.0
+                .query("DELETE event")
+                .await
+                .catch_infra()?
+                .check()
+                .catch_infra()?;
+
+            Ok(())
+        }
     }
 }
