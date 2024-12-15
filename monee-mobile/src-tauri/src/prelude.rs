@@ -15,7 +15,7 @@ pub trait CatchInfra: Sized {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub enum InternalError {
     Auth,
     Unknown,
@@ -37,3 +37,13 @@ impl<T> CatchInfra for Result<T, InfrastructureError> {
     }
 }
 
+impl<T, E> CatchInfra for Result<T, AppError<E>> {
+    type Output = Result<T, E>;
+    fn get_error(self) -> Result<Self::Output, InfrastructureError> {
+        match self {
+            Ok(v) => Ok(Ok(v)),
+            Err(AppError::App(e)) => Ok(Err(e)),
+            Err(AppError::Infrastructure(e)) => Err(e),
+        }
+    }
+}
