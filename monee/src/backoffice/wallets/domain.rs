@@ -11,11 +11,8 @@ pub mod repository {
 
     #[async_trait::async_trait]
     pub trait Repository: 'static + Send + Sync {
-        async fn save(
-            &self,
-            id: WalletId,
-            wallet: Wallet,
-        ) -> Result<(), AppError<UniqueSaveError>>;
+        async fn save(&self, id: WalletId, wallet: Wallet)
+            -> Result<(), AppError<UniqueSaveError>>;
 
         async fn update(
             &self,
@@ -26,7 +23,7 @@ pub mod repository {
 
         async fn find_by_name(
             &self,
-            name: &WalletName,
+            name: WalletName,
         ) -> Result<Option<WalletId>, InfrastructureError>;
     }
 
@@ -40,3 +37,4 @@ pub mod repository {
         Unspecified(InfrastructureError),
     }
 }
+

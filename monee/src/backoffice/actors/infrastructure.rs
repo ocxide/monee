@@ -35,7 +35,7 @@ pub mod repository {
 
         async fn alias_resolve(
             &self,
-            alias: &ActorAlias,
+            alias: ActorAlias,
         ) -> Result<Option<ActorId>, InfrastructureError> {
             let mut response = self
                 .0

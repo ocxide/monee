@@ -12,7 +12,7 @@ pub mod shared {
     }
 
     pub mod errors {
-        #[derive(serde::Serialize)]
+        #[derive(serde::Serialize, Clone)]
         pub enum UniqueSaveError {
             AlreadyExists,
         }

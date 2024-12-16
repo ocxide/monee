@@ -128,14 +128,14 @@ pub mod apply_event {
         Ok(())
     }
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, Clone)]
     #[serde(rename_all = "snake_case", tag = "type", content = "error")]
     pub enum Error {
         MoveValue(MoveValueError),
         Apply(monee_core::Error),
     }
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, Clone)]
     #[serde(rename_all = "snake_case", tag = "move_error")]
     pub enum MoveValueError {
         CurrenciesNonEqual,

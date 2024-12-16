@@ -116,7 +116,7 @@ pub mod name_resolve {
     }
 
     impl NameResolve {
-        pub async fn run(&self, name: &ItemName) -> Result<Option<ItemTagId>, InfrastructureError> {
+        pub async fn run(&self, name: ItemName) -> Result<Option<ItemTagId>, InfrastructureError> {
             self.repository.name_resolve(name).await
         }
     }

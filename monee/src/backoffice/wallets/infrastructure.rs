@@ -48,12 +48,15 @@ pub mod repository {
             name: Option<WalletName>,
             description: String,
         ) -> Result<(), UpdateError> {
-            let result = self.0
+            let result = self
+                .0
                 .query("UPDATE type::thing('wallet', ) SET name = , description = ")
                 .bind(("id", id))
                 .bind(("name", name))
                 .bind(("description", description))
-                .await.map_err(|e| UpdateError::Unspecified(e.into()))?.check();
+                .await
+                .map_err(|e| UpdateError::Unspecified(e.into()))?
+                .check();
 
             match result {
                 Ok(mut response) => match response
@@ -75,11 +78,11 @@ pub mod repository {
 
         async fn find_by_name(
             &self,
-            name: &WalletName,
+            name: WalletName,
         ) -> Result<Option<WalletId>, InfrastructureError> {
             let mut response = self
                 .0
-                .query("SELECT VALUE id FROM wallet WHERE name = ")
+                .query("SELECT VALUE id FROM wallet WHERE name = $name")
                 .bind(("name", name))
                 .await
                 .catch_infra()?;
@@ -119,4 +122,3 @@ pub mod repository {
         }
     }
 }
-

@@ -33,7 +33,7 @@ pub mod repository {
 
         async fn name_resolve(
             &self,
-            name: &ItemName,
+            name: ItemName,
         ) -> Result<Option<ItemTagId>, InfrastructureError>;
 
         async fn get_all(&self) -> Result<Vec<ItemTagNode>, InfrastructureError>;
@@ -45,3 +45,4 @@ pub mod repository {
         TargetNotFound,
     }
 }
+

@@ -15,7 +15,7 @@ pub mod repository {
 
         async fn alias_resolve(
             &self,
-            name: &ActorAlias,
+            name: ActorAlias,
         ) -> Result<Option<ActorId>, InfrastructureError>;
 
         async fn get_all(&self) -> Result<Vec<(ActorId, Actor)>, InfrastructureError>;

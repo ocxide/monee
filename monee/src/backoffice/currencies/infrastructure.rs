@@ -42,7 +42,7 @@ pub mod repository {
 
         async fn code_resolve(
             &self,
-            code: &CurrencyCode,
+            code: CurrencyCode,
         ) -> Result<Option<CurrencyId>, InfrastructureError> {
             let mut response = self
                 .0

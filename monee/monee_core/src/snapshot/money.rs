@@ -113,7 +113,7 @@ impl<M: MoneyHost> IntoIterator for MoneyMap<M> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(tag = "money_error", rename_all = "snake_case")]
 pub enum MoneyError {
     NotFound,

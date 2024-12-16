@@ -55,7 +55,7 @@ pub mod repository {
         async fn save_sync_error(
             &self,
             client_id: AppId,
-            error: &SyncError,
+            error: SyncError,
         ) -> Result<(), InfrastructureError> {
             self.0
                 .query("UPDATE type::thing('client_sync', $client_id) SET error=$error")
@@ -69,7 +69,7 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            data: &SyncContextData,
+            data: SyncContextData,
         ) -> Result<(), AppError<UniqueSaveError>> {
             save_changes(&self.0, data).await
         }
@@ -100,32 +100,32 @@ pub mod repository {
 
     pub async fn save_changes(
         con: &Connection,
-        data: &SyncContextData,
+        data: SyncContextData,
     ) -> Result<(), AppError<UniqueSaveError>> {
-        let mut query = con.query(BeginStatement);
+        let mut query = con.query(BeginStatement::default());
 
-        for (id, currency) in data.currencies.iter() {
+        for (id, currency) in data.currencies {
             query = query
                 .query("UPSERT type::thing('currency', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", currency));
         }
 
-        for (id, item) in data.items.iter() {
+        for (id, item) in data.items {
             query = query
                 .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", item));
         }
 
-        for (id, actor) in data.actors.iter() {
+        for (id, actor) in data.actors {
             query = query
                 .query("UPSERT type::thing('actor', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", actor));
         }
 
-        for (id, wallet) in data.wallets.iter() {
+        for (id, wallet) in data.wallets {
             query = query
                 .query("UPSERT type::thing('wallet', $id) CONTENT $data")
                 .bind(("id", id))
@@ -133,7 +133,7 @@ pub mod repository {
         }
 
         query
-            .query(CommitStatement)
+            .query(CommitStatement::default())
             .await
             .catch_infra()?
             .check()

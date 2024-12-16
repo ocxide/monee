@@ -208,10 +208,8 @@ mod entity {
 
     impl<K: SqlId> Serialize for EntityKey<K> {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            let thing = surrealdb::sql::Thing {
-                tb: K::TABLE.to_owned(),
-                id: K::Flavor::create_id(self.0),
-            };
+            let thing: surrealdb::sql::Thing =
+                (K::TABLE.to_owned(), K::Flavor::create_id(self.0)).into();
 
             thing.serialize(serializer)
         }
