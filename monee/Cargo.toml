@@ -23,4 +23,4 @@ async-trait = "0.1.81"
 default = ["remote"]
 embedded=["surrealdb/kv-rocksdb"]
 remote=[]
-db_test=[]
+db_test=["surrealdb/kv-mem"]

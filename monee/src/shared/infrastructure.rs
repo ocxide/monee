@@ -19,6 +19,7 @@ pub mod errors {
         }
     }
 
+    #[derive(Debug)]
     pub enum AppError<E> {
         App(E),
         Infrastructure(InfrastructureError),

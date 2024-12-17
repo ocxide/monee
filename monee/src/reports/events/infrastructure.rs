@@ -34,6 +34,7 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
     #[cfg(all(test, feature = "db_test"))]
     mod tests {
         use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
+        use cream::context::Context;
         use std::str::FromStr;
 
         use super::*;
@@ -65,20 +66,20 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
 
                 let actor_id = ActorId::new();
                 let actor = Actor {
-                    name: "actor1".into(),
+                    name: "actor1".to_owned().into(),
                     actor_type: ActorType::Natural,
                     alias: None,
                 };
                 actor_repo.save(actor_id, actor).await.unwrap();
 
                 let item_id = ItemTagId::new();
-                item_repo.save(item_id, ItemTag { name: "item_1".into() }).await.unwrap();
+                item_repo.save(item_id, ItemTag { name: "item_1".parse().unwrap() }).await.unwrap();
 
                 let wallet_id = WalletId::new();
                 let wallet = Wallet {
                     currency_id: CurrencyId::new(),
                     name: "wallet_1".parse().unwrap(),
-                    description: "".into(),
+                    description: "".to_owned().into(),
                 };
                 wallet_repo.save(wallet_id, wallet).await.unwrap();
 
@@ -108,7 +109,7 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
 
                 let actor_id = ActorId::new();
                 let actor = Actor {
-                    name: "actor1".into(),
+                    name: "actor1".to_owned().into(),
                     actor_type: ActorType::Natural,
                     alias: None,
                 };
@@ -116,9 +117,9 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
 
                 let currency_id = CurrencyId::new();
                 currency_repo.save(currency_id, Currency {
-                    name: "currency_1".into(),
-                    symbol: "symbol_1".into(),
-                    code: "code_1".into(),
+                    name: "currency_1".to_owned().into(),
+                    symbol: "symbol_1".parse().unwrap(),
+                    code: "code_1".parse().unwrap(),
                 }).await.unwrap();
 
                 save_repo.add(AddEvent::RegisterDebt(DebtRegister {

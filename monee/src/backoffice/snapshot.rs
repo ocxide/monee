@@ -274,6 +274,7 @@ pub mod infrastructure {
         #[cfg(all(test, feature = "db_test"))]
         mod tests {
             use monee_core::{ActorId, CurrencyId};
+            use cream::context::Context;
 
             use crate::backoffice::wallets::domain::{repository::Repository as _, wallet::Wallet};
 

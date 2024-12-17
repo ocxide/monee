@@ -6,6 +6,8 @@ pub use surrealdb::Result;
 pub type Engine = surrealdb::engine::local::Db;
 #[cfg(feature = "remote")]
 pub type Engine = surrealdb::engine::remote::ws::Client;
+#[cfg(feature = "db_test")]
+pub type Engine = surrealdb::engine::local::Db;
 
 pub type Connection = surrealdb::Surreal<Engine>;
 
@@ -96,6 +98,16 @@ async fn create_connection(base_dir: PathBuf) -> surrealdb::Result<(Connection, 
     Ok((db, exists))
 }
 
+#[cfg(feature = "db_test")]
+pub async fn connect() -> surrealdb::Result<Connection>  {
+    let db = surrealdb::Surreal::new::<surrealdb::engine::local::Mem>(()).await?;
+    db.use_ns("monee").use_db("monee").await?;
+
+    init(&db).await?;
+
+    Ok(db)
+}
+
 #[cfg(feature = "remote")]
 async fn create_connection(_base_dir: PathBuf) -> surrealdb::Result<(Connection, bool)> {
     let db: Connection =
@@ -103,6 +115,7 @@ async fn create_connection(_base_dir: PathBuf) -> surrealdb::Result<(Connection,
     Ok((db, false))
 }
 
+#[cfg(any(feature = "embedded", feature = "remote"))]
 pub async fn connect(base_dir: PathBuf) -> surrealdb::Result<Connection> {
     let (db, exists) = create_connection(base_dir).await?;
     db.use_ns("monee").use_db("monee").await?;

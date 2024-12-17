@@ -92,6 +92,7 @@ pub mod repository {
     #[cfg(all(test, feature = "db_test"))]
     mod test {
         use monee_core::CurrencyId;
+        use cream::context::Context;
 
         use super::*;
 

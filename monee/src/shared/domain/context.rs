@@ -33,7 +33,10 @@ pub struct AppContextBuilder {
 
 impl AppContextBuilder {
     pub async fn setup(self) -> Result<AppContext, InfrastructureError> {
+        #[cfg(any(feature = "embedded", feature = "remote"))]
         let db = crate::shared::infrastructure::database::connect(self.base_dir).await?;
+        #[cfg(feature = "db_test")]
+        let db = crate::shared::infrastructure::database::connect().await?;
 
         let cream = CreamContext::default();
         let mut router = cream::events::router::Router::default();
