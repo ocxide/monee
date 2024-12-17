@@ -30,7 +30,7 @@ pub mod repository {
             wallet: Wallet,
         ) -> Result<(), AppError<UniqueSaveError>> {
             let result = self.0
-                .query("CREATE ONLY type::thing('wallet', ) SET currency_id = type::thing('currency', ), name = , description = ")
+                .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name, description = $description")
                 .bind(("id", id))
                 .bind(("currency_id", wallet.currency_id))
                 .bind(("name", wallet.name))
@@ -49,7 +49,7 @@ pub mod repository {
             description: String,
         ) -> Result<(), UpdateError> {
             let result = self.0
-                .query("UPDATE type::thing('wallet', ) SET name = , description = ")
+                .query("UPDATE type::thing('wallet', $id) SET name = $name, description = $description")
                 .bind(("id", id))
                 .bind(("name", name))
                 .bind(("description", description))
@@ -79,7 +79,7 @@ pub mod repository {
         ) -> Result<Option<WalletId>, InfrastructureError> {
             let mut response = self
                 .0
-                .query("SELECT VALUE id FROM wallet WHERE name = ")
+                .query("SELECT VALUE id FROM wallet WHERE name = $name")
                 .bind(("name", name))
                 .await
                 .catch_infra()?;
