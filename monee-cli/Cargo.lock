@@ -738,10 +738,11 @@ dependencies = [
 [[package]]
 name = "cream"
 version = "0.2.0"
-source = "git+https://github.com/ocxide/cream.git#6c63296bdd05cf654858197dcf0f446cc16b2fea"
+source = "git+https://github.com/ocxide/cream.git#d6629c677990d21fd446fa2649b87b84c0720b35"
 dependencies = [
  "async-trait",
  "cream_derive",
+ "cream_events_core",
  "tokio",
  "tokio-util",
 ]
@@ -749,12 +750,17 @@ dependencies = [
 [[package]]
 name = "cream_derive"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#6c63296bdd05cf654858197dcf0f446cc16b2fea"
+source = "git+https://github.com/ocxide/cream.git#d6629c677990d21fd446fa2649b87b84c0720b35"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.72",
 ]
+
+[[package]]
+name = "cream_events_core"
+version = "0.1.0"
+source = "git+https://github.com/ocxide/cream.git#d6629c677990d21fd446fa2649b87b84c0720b35"
 
 [[package]]
 name = "critical-section"
@@ -1935,8 +1941,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "cream",
- "idn",
  "monee_core",
+ "monee_types",
  "serde",
  "serde_json",
  "surrealdb",
@@ -1965,6 +1971,19 @@ version = "0.1.0"
 dependencies = [
  "idn",
  "serde",
+]
+
+[[package]]
+name = "monee_types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "cream_events_core",
+ "idn",
+ "monee_core",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

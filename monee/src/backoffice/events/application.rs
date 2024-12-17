@@ -3,15 +3,13 @@ pub mod add {
 
     use crate::{
         backoffice::{
-            events::domain::{
-                apply_event::{apply_event, Error},
-                event::Event,
-                repository::Repository,
-            },
+            events::domain::{apply_event, event::Event, repository::Repository},
             snapshot::application::snapshot_io::SnapshotIO,
         },
         shared::{domain::context::AppContext, infrastructure::errors::AppError},
     };
+
+    pub use apply_event::{Error, MoveValueError};
 
     #[derive(FromContext)]
     #[context(AppContext)]
@@ -23,7 +21,7 @@ pub mod add {
     impl Add {
         pub async fn run(&self, event: Event) -> Result<(), AppError<Error>> {
             let mut snapshot = self.snapshot_io.read_last().await?;
-            if let Err(e) = apply_event(&mut snapshot, &event) {
+            if let Err(e) = apply_event::apply_event(&mut snapshot, &event) {
                 return Err(AppError::App(e));
             }
 
@@ -34,4 +32,3 @@ pub mod add {
         }
     }
 }
-
