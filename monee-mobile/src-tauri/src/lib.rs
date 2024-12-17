@@ -111,7 +111,7 @@ mod node_sync {
         ctx: &AppContext,
         changes: &mut ChangesRecord,
     ) {
-        let report = http_client
+        let Ok(report) = http_client
             .get(format!("{host_dir}/sync/report"))
             .header("X-Node-Id", app_id.to_string())
             .send()
@@ -119,10 +119,12 @@ mod node_sync {
             .unwrap()
             .json::<SyncReport>()
             .await
-            .unwrap();
+        else {
+            return;
+        };
 
         let service: monee::nodes::sync::application::rewrite_system::RewriteSystem = ctx.provide();
-        let result = service.run(report).await.catch_infra(&ctx).unwrap();
+        let result = service.run(report).await.catch_infra(ctx).unwrap();
         if let Err(e) = result {
             eprintln!("Failed to get data");
         }
@@ -177,6 +179,7 @@ struct HostConnection(pub Option<(AppId, HostDir)>);
 
 async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let base_dir = app.path().app_data_dir().expect("AppData not found");
+    dbg!(&base_dir);
     let context = AppContextBuilder { base_dir }.setup().await?;
 
     let http_client = tauri_plugin_http::reqwest::Client::default();
@@ -204,19 +207,23 @@ async fn get_stats(
 
 #[tauri::command]
 async fn set_host(
+    host_dir: HostDir,
     http: tauri::State<'_, Client>,
     host_state: tauri::State<'_, HostState>,
     host_port: tauri::State<'_, HostConPort>,
-    host_dir: HostDir,
 ) -> Result<(), InternalError> {
+    dbg!(&host_dir);
     let app_id = http
         .post(format!("{host_dir}/nodes"))
+        .header("Content-Type", "application/json")
         .send()
         .await
-        .unwrap()
+        .map_err(|_| InternalError::Unknown)?
         .json::<AppId>()
         .await
-        .unwrap();
+        .map_err(|_| InternalError::Unknown)?;
+
+    println!("AppId: {app_id}");
 
     host_state.0.lock().unwrap().0 = Some((app_id, host_dir.clone()));
 

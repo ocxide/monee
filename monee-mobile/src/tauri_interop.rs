@@ -79,16 +79,32 @@ mod invoke {
     };
 
     ($name: ident ( $( $arg:ident : $arg_ty:ty ),+ ) -> $ret: ty) => {
+        #[allow(unused_lifetimes)]
         pub async fn $name( $( $arg : $arg_ty ),+ ) -> $ret {
-            $crate::tauri_interop::tauri_invoke(stringify!($name), &($($arg),*)).await
+            #[derive(serde::Serialize)]
+            #[allow(unused_lifetimes)]
+            struct Args<'a> {
+                $( $arg: $arg_ty ),+
+                _lifetime: std::marker::PhantomData<&'a ()>,
+            }
+            let args = Args { $($arg),+ _lifetime: std::marker::PhantomData };
+            $crate::tauri_interop::tauri_invoke(stringify!($name), &args).await
         }
     };
 
     ($name: ident ( $( $arg:ident : $arg_ty:ty ),+ ) -> $ret_ok:ty, $ret_err:ty) => {
         pub async fn $name( $( $arg : $arg_ty ),+ ) -> Result<$ret_ok, $ret_err> {
-            $crate::tauri_interop::tauri_invoke_catch(stringify!($name), &($($arg),*)).await
+            #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Args<'a> {
+                $( $arg: $arg_ty, )+
+                #[serde(skip)]
+                _lifetime: std::marker::PhantomData<&'a ()>,
+            }
+            let args = Args { $($arg, )+ _lifetime: std::marker::PhantomData };
+            $crate::tauri_interop::tauri_invoke_catch(stringify!($name), &args).await
         }
-    }
+    };
 }
 
     pub use bind_command;
