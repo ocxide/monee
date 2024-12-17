@@ -1,4 +1,5 @@
 pub use monee::prelude::*;
+use monee::shared::infrastructure::errors::UnspecifiedError;
 
 pub trait CatchInfra: Sized {
     type Output;
@@ -45,5 +46,24 @@ impl<T, E> CatchInfra for Result<T, AppError<E>> {
             Err(AppError::App(e)) => Ok(Err(e)),
             Err(AppError::Infrastructure(e)) => Err(e),
         }
+    }
+}
+
+pub trait CatchToInfra {
+    type Output;
+    fn catch_to_infra(self) -> Result<Self::Output, InfrastructureError>;
+}
+
+impl<T> CatchToInfra for tauri_plugin_http::reqwest::Result<T> {
+    type Output = T;
+    fn catch_to_infra(self) -> Result<Self::Output, InfrastructureError> {
+        use tauri::http::StatusCode;
+        self.map_err(|e| {
+            if let Some(StatusCode::UNAUTHORIZED) = e.status() {
+                InfrastructureError::Auth
+            } else {
+                InfrastructureError::Unspecified(UnspecifiedError::new(e))
+            }
+        })
     }
 }

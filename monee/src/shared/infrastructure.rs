@@ -5,6 +5,12 @@ pub mod errors {
     #[error("infrastructure error: {0}")]
     pub struct UnspecifiedError(Box<dyn std::error::Error>);
 
+    impl UnspecifiedError {
+        pub fn new<E: std::error::Error>(err: E) -> Self {
+            Self(Box::new(err))
+        }
+    }
+
     #[derive(thiserror::Error, Debug)]
     pub enum InfrastructureError {
         #[error("authentication failed")]
