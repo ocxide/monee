@@ -19,6 +19,7 @@ console_error_panic_hook = "0.1.7"
 monee_core = { path = "../monee/monee_core" }
 monee_types = { path = "../monee/monee_types" }
 send_wrapper = "0.6.0"
+leptos_router = "0.7.1"
 
 [workspace]
 members = ["src-tauri"]
