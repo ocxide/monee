@@ -85,9 +85,9 @@ pub mod repository {
                 .catch_infra()?;
 
             let currencies: Vec<Entity<CurrencyId, Currency>> = response.take(0)?;
-            let items: Vec<Entity<ItemTagId, ItemTag>> = response.take(0)?;
-            let actors: Vec<Entity<ActorId, Actor>> = response.take(0)?;
-            let wallets: Vec<Entity<WalletId, Wallet>> = response.take(0)?;
+            let items: Vec<Entity<ItemTagId, ItemTag>> = response.take(1)?;
+            let actors: Vec<Entity<ActorId, Actor>> = response.take(2)?;
+            let wallets: Vec<Entity<WalletId, Wallet>> = response.take(3)?;
 
             Ok(SyncContextData {
                 currencies: currencies.into_iter().map(Entity::into).collect(),
@@ -102,7 +102,7 @@ pub mod repository {
         con: &Connection,
         data: &SyncContextData,
     ) -> Result<(), AppError<UniqueSaveError>> {
-        let mut query = con.query(BeginStatement);
+        let mut query = con.query(BeginStatement::default());
 
         for (id, currency) in data.currencies.iter() {
             query = query
@@ -133,12 +133,47 @@ pub mod repository {
         }
 
         query
-            .query(CommitStatement)
+            .query(CommitStatement::default())
             .await
             .catch_infra()?
             .check()
             .catch_app()?;
 
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn it_saves() {
+            use super::*;
+            use cream::context::Context;
+            use monee_core::ItemTagId;
+            use monee_types::backoffice::item_tags::item_tag::ItemTag;
+
+            let con = crate::shared::infrastructure::database::connect()
+                .await
+                .unwrap();
+            let ctx = DbContext::new(con);
+            let data = SyncContextData {
+                currencies: vec![],
+                items: vec![(
+                    ItemTagId::default(),
+                    ItemTag {
+                        name: "test".parse().unwrap(),
+                    },
+                )],
+                actors: vec![],
+                wallets: vec![],
+            };
+
+            let repo: SurrealRepository = ctx.provide();
+            repo.save_changes(&data).await.unwrap();
+
+            let data = repo.get_context_data().await.unwrap();
+            assert_eq!(data.items.len(), 1);
+        }
     }
 }
