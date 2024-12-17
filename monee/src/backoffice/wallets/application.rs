@@ -15,7 +15,7 @@ pub mod name_resolve {
     impl NameResolve {
         pub async fn run(
             &self,
-            name: WalletName,
+            name: &WalletName,
         ) -> Result<Option<monee_core::WalletId>, InfrastructureError> {
             self.repository.find_by_name(name).await
         }
@@ -94,3 +94,4 @@ pub mod update_one {
         }
     }
 }
+

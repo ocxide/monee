@@ -37,7 +37,7 @@ pub mod alias_resolve {
     }
 
     impl AliasResolve {
-        pub async fn run(&self, name: ActorAlias) -> Result<Option<ActorId>, InfrastructureError> {
+        pub async fn run(&self, name: &ActorAlias) -> Result<Option<ActorId>, InfrastructureError> {
             self.repository.alias_resolve(name).await
         }
     }

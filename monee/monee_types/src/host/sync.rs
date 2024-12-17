@@ -64,7 +64,7 @@ pub mod sync_error {
         backoffice::events::apply_event::Error as ApplyError, shared::errors::UniqueSaveError,
     };
 
-    #[derive(serde::Serialize, Clone)]
+    #[derive(serde::Serialize)]
     #[serde(tag = "type", rename_all = "snake_case")]
     pub enum SyncError {
         Event(ApplyError),

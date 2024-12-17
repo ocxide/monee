@@ -101,7 +101,7 @@ pub mod repository {
 
         async fn name_resolve(
             &self,
-            name: ItemName,
+            name: &ItemName,
         ) -> Result<Option<ItemTagId>, InfrastructureError> {
             let mut response = self
                 .0

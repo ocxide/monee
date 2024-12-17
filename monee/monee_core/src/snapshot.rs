@@ -113,7 +113,7 @@ pub enum Operation {
     Debt(DebtOperation),
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "monee_error", rename_all = "snake_case")]
 pub enum Error {
     Wallet(MoneyError),

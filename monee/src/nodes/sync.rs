@@ -13,7 +13,7 @@ pub mod domain {
             async fn truncate_events(&self) -> Result<(), InfrastructureError>;
             async fn save_changes(
                 &self,
-                data: SyncContextData,
+                data: &SyncContextData,
             ) -> Result<(), AppError<UniqueSaveError>>;
             async fn get_context_data(
                 &self,
@@ -41,9 +41,7 @@ pub mod infrastructure {
         };
         use monee_core::{CurrencyId, Wallet};
         use monee_types::{
-            backoffice::{actors::actor::Actor, currencies::currency::Currency},
-            host::sync::sync_save::EventEntry,
-            shared::errors::UniqueSaveError,
+            backoffice::{actors::actor::Actor, currencies::currency::Currency}, host::sync::sync_save::EventEntry, shared::errors::UniqueSaveError
         };
 
         #[derive(FromContext)]
@@ -59,7 +57,7 @@ pub mod infrastructure {
 
             async fn save_changes(
                 &self,
-                data: monee_types::host::sync::sync_context_data::SyncContextData,
+                data: &monee_types::host::sync::sync_context_data::SyncContextData,
             ) -> Result<(), AppError<UniqueSaveError>> {
                 save_changes(&self.0, data).await
             }
@@ -123,7 +121,10 @@ pub mod infrastructure {
             async fn get_events(
                 &self,
                 guide: monee_types::host::sync::sync_guide::SyncGuide,
-            ) -> Result<Vec<EventEntry>, InfrastructureError> {
+            ) -> Result<
+                Vec<EventEntry>,
+                InfrastructureError,
+            > {
                 let mut response = self
                     .0
                     .query("SELECT * FROM event WHERE date > $date")
@@ -154,7 +155,7 @@ pub mod application {
 
         impl RewriteSystem {
             pub async fn run(&self, data: SyncReport) -> Result<(), AppError<UniqueSaveError>> {
-                self.repo.save_changes(data.data).await?;
+                self.repo.save_changes(&data.data).await?;
                 self.snapshot_io.save(data.snapshot).await?;
 
                 self.repo.truncate_events().await?;

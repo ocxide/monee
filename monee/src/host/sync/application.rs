@@ -52,19 +52,19 @@ pub mod do_sync {
 
             if let Err(e) = events_apply_result {
                 let error = SyncError::Event(e);
-                self.sync_repo.save_sync_error(client_id, error.clone()).await?;
+                self.sync_repo.save_sync_error(client_id, &error).await?;
                 return Err(AppError::App(error));
             }
 
             let save_result = self
                 .sync_repo
-                .save_changes(sync.data)
+                .save_changes(&sync.data)
                 .await
                 .catch_infra()?;
 
             if let Err(e) = save_result {
                 let error = SyncError::Save(e);
-                self.sync_repo.save_sync_error(client_id, error.clone()).await?;
+                self.sync_repo.save_sync_error(client_id, &error).await?;
                 return Err(AppError::App(error));
             }
 

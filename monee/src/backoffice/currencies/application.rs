@@ -39,7 +39,7 @@ pub mod code_resolve {
     impl CodeResolve {
         pub async fn run(
             &self,
-            code: CurrencyCode,
+            code: &CurrencyCode,
         ) -> Result<Option<CurrencyId>, InfrastructureError> {
             self.repository.code_resolve(code).await
         }

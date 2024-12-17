@@ -26,12 +26,12 @@ pub mod repository {
         async fn save_sync_error(
             &self,
             app_id: AppId,
-            error: SyncError,
+            error: &SyncError,
         ) -> Result<(), InfrastructureError>;
 
         async fn save_changes(
             &self,
-            data: SyncContextData,
+            data: &SyncContextData,
         ) -> Result<(), AppError<UniqueSaveError>>;
 
         async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError>;

@@ -19,10 +19,9 @@ pub mod repository {
 
         async fn code_resolve(
             &self,
-            code: CurrencyCode,
+            code: &CurrencyCode,
         ) -> Result<Option<CurrencyId>, InfrastructureError>;
 
         async fn get_all(&self) -> Result<Vec<(CurrencyId, Currency)>, InfrastructureError>;
     }
 }
-

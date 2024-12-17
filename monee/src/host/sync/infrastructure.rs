@@ -43,7 +43,7 @@ pub mod repository {
             sync: &SyncSave,
         ) -> Result<(), InfrastructureError> {
             self.0
-                .query("UPSERT type::thing('client_sync', $client_id) REPLACE { data: $data }")
+                .query("UPDATE type::thing('client_sync', $client_id) REPLACE { data: $data }")
                 .bind(("client_id", client_id))
                 .bind(("data", serde_json::to_string(sync).unwrap()))
                 .await?
@@ -55,7 +55,7 @@ pub mod repository {
         async fn save_sync_error(
             &self,
             client_id: AppId,
-            error: SyncError,
+            error: &SyncError,
         ) -> Result<(), InfrastructureError> {
             self.0
                 .query("UPDATE type::thing('client_sync', $client_id) SET error=$error")
@@ -69,7 +69,7 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            data: SyncContextData,
+            data: &SyncContextData,
         ) -> Result<(), AppError<UniqueSaveError>> {
             save_changes(&self.0, data).await
         }
@@ -100,40 +100,40 @@ pub mod repository {
 
     pub async fn save_changes(
         con: &Connection,
-        data: SyncContextData,
+        data: &SyncContextData,
     ) -> Result<(), AppError<UniqueSaveError>> {
-        let mut query = con.query(BeginStatement::default());
+        let mut query = con.query(BeginStatement);
 
-        for (id, currency) in data.currencies {
+        for (id, currency) in data.currencies.iter() {
             query = query
-                .query("UPSERT type::thing('currency', $id) CONTENT $data")
+                .query("UPDATE type::thing('currency', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", currency));
         }
 
-        for (id, item) in data.items {
+        for (id, item) in data.items.iter() {
             query = query
-                .query("UPSERT type::thing('item_tag', $id) CONTENT $data")
+                .query("UPDATE type::thing('item_tag', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", item));
         }
 
-        for (id, actor) in data.actors {
+        for (id, actor) in data.actors.iter() {
             query = query
-                .query("UPSERT type::thing('actor', $id) CONTENT $data")
+                .query("UPDATE type::thing('actor', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", actor));
         }
 
-        for (id, wallet) in data.wallets {
+        for (id, wallet) in data.wallets.iter() {
             query = query
-                .query("UPSERT type::thing('wallet', $id) CONTENT $data")
+                .query("UPDATE type::thing('wallet', $id) CONTENT $data")
                 .bind(("id", id))
                 .bind(("data", wallet));
         }
 
         query
-            .query(CommitStatement::default())
+            .query(CommitStatement)
             .await
             .catch_infra()?
             .check()
