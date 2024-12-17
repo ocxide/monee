@@ -39,9 +39,13 @@ pub mod infrastructure {
                 infrastructure::database::{Connection, Entity, EntityKey},
             },
         };
-        use monee_core::{CurrencyId, Wallet};
+        use monee_core::CurrencyId;
         use monee_types::{
-            backoffice::{actors::actor::Actor, currencies::currency::Currency}, host::sync::sync_save::EventEntry, shared::errors::UniqueSaveError
+            backoffice::{
+                actors::actor::Actor, currencies::currency::Currency, wallets::wallet::Wallet,
+            },
+            host::sync::sync_save::EventEntry,
+            shared::errors::UniqueSaveError,
         };
 
         #[derive(FromContext)]
@@ -121,10 +125,7 @@ pub mod infrastructure {
             async fn get_events(
                 &self,
                 guide: monee_types::host::sync::sync_guide::SyncGuide,
-            ) -> Result<
-                Vec<EventEntry>,
-                InfrastructureError,
-            > {
+            ) -> Result<Vec<EventEntry>, InfrastructureError> {
                 let mut response = self
                     .0
                     .query("SELECT * FROM event WHERE date > $date")

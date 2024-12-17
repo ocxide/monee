@@ -1,9 +1,12 @@
 pub mod repository {
-    use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
+    use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
     use monee_types::{
         apps::app_id::AppId,
         backoffice::{
-            actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+            actors::actor::Actor,
+            currencies::currency::Currency,
+            item_tags::item_tag::ItemTag,
+            wallets::{wallet::Wallet, wallet_name::WalletName},
         },
     };
     use surrealdb::sql::statements::{BeginStatement, CommitStatement};
@@ -17,7 +20,7 @@ pub mod repository {
         prelude::*,
         shared::{
             domain::{context::DbContext, date::Datetime, errors::UniqueSaveError},
-            infrastructure::database::{Connection, Entity},
+            infrastructure::database::{Connection, Entity, EntityKey},
         },
     };
 
@@ -84,16 +87,33 @@ pub mod repository {
                 .await
                 .catch_infra()?;
 
+            #[derive(serde::Deserialize)]
+            struct SurrealWallet {
+                pub currency_id: EntityKey<monee_core::CurrencyId>,
+                pub name: WalletName,
+                pub description: String,
+            }
+
+            impl From<SurrealWallet> for Wallet {
+                fn from(value: SurrealWallet) -> Self {
+                    Wallet {
+                        currency_id: value.currency_id.0,
+                        name: value.name,
+                        description: value.description,
+                    }
+                }
+            }
+
             let currencies: Vec<Entity<CurrencyId, Currency>> = response.take(0)?;
             let items: Vec<Entity<ItemTagId, ItemTag>> = response.take(1)?;
             let actors: Vec<Entity<ActorId, Actor>> = response.take(2)?;
-            let wallets: Vec<Entity<WalletId, Wallet>> = response.take(3)?;
+            let wallets: Vec<Entity<WalletId, SurrealWallet>> = response.take(3)?;
 
             Ok(SyncContextData {
                 currencies: currencies.into_iter().map(Entity::into).collect(),
                 items: items.into_iter().map(Entity::into).collect(),
                 actors: actors.into_iter().map(Entity::into).collect(),
-                wallets: wallets.into_iter().map(Entity::into).collect(),
+                wallets: wallets.into_iter().map(|e| (e.0, e.1.into())).collect(),
             })
         }
     }
@@ -106,9 +126,9 @@ pub mod repository {
 
         for (id, currency) in data.currencies.iter() {
             query = query
-                .query("UPDATE type::thing('currency', $id) CONTENT $data")
-                .bind(("id", id))
-                .bind(("data", currency));
+                .query("UPDATE type::thing('currency', $currency_id) SET name = $name, symbol = $symbol, code = $code")
+                .bind(("currency_id", id))
+                .bind(currency);
         }
 
         for (id, item) in data.items.iter() {
@@ -127,9 +147,11 @@ pub mod repository {
 
         for (id, wallet) in data.wallets.iter() {
             query = query
-                .query("UPDATE type::thing('wallet', $id) CONTENT $data")
+                .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name, description = $description")
                 .bind(("id", id))
-                .bind(("data", wallet));
+                .bind(("currency_id", &wallet.currency_id))
+                .bind(("name", &wallet.name))
+                .bind(("description", &wallet.description));
         }
 
         query
@@ -174,6 +196,51 @@ pub mod repository {
 
             let data = repo.get_context_data().await.unwrap();
             assert_eq!(data.items.len(), 1);
+        }
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn gets_context_data() {
+            use super::*;
+            use cream::context::Context;
+            use monee_core::CurrencyId;
+            use monee_types::backoffice::{
+                currencies::currency::Currency, wallets::wallet::Wallet,
+            };
+
+            let con = crate::shared::infrastructure::database::connect()
+                .await
+                .unwrap();
+            let ctx = DbContext::new(con);
+            let repo: SurrealRepository = ctx.provide();
+
+            let currency_id = CurrencyId::default();
+
+            repo.save_changes(&SyncContextData {
+                currencies: vec![(
+                    currency_id,
+                    Currency {
+                        name: "test".to_owned().into(),
+                        symbol: "test".parse().unwrap(),
+                        code: "PEN".parse().unwrap(),
+                    },
+                )],
+                items: vec![],
+                actors: vec![],
+                wallets: vec![(
+                    WalletId::default(),
+                    Wallet {
+                        currency_id,
+                        name: "test".parse().unwrap(),
+                        description: "test".to_owned(),
+                    },
+                )],
+            })
+            .await
+            .unwrap();
+
+            let data = repo.get_context_data().await.unwrap();
+            assert_eq!(data.wallets.len(), 1);
         }
     }
 }

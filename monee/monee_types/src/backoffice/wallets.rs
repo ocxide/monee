@@ -1,6 +1,7 @@
 pub mod wallet {
     use super::wallet_name::WalletName;
 
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
     pub struct Wallet {
         pub currency_id: monee_core::CurrencyId,
         pub name: WalletName,

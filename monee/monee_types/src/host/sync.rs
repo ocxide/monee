@@ -31,13 +31,14 @@ pub mod sync_save {
 }
 
 pub mod sync_context_data {
-    use monee_core::{ActorId, CurrencyId, ItemTagId, Wallet, WalletId};
+    use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
 
     use crate::backoffice::{
         actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+        wallets::wallet::Wallet,
     };
 
-    #[derive(serde::Serialize, serde::Deserialize)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug)]
     pub struct SyncContextData {
         pub actors: Vec<(ActorId, Actor)>,
         pub currencies: Vec<(CurrencyId, Currency)>,
@@ -51,7 +52,7 @@ pub mod sync_report {
 
     use super::sync_context_data::SyncContextData;
 
-    #[derive(serde::Serialize, serde::Deserialize)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug)]
     pub struct SyncReport {
         pub snapshot: Snapshot,
         #[serde(flatten)]
