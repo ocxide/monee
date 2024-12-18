@@ -41,12 +41,11 @@ mod invoke {
         args: &Args,
     ) -> Result<T, E> {
         let response = invoke_catch(cmd, to_value(args).unwrap()).await;
-        let parsed = match response {
+
+        match response {
             Ok(val) => Ok(from_value(val).expect("to deserialize cmd response")),
             Err(e) => Err(from_value(e).expect("to deserialize cmd response")),
-        };
-
-        parsed
+        }
     }
 
     pub async fn tauri_invoke_catch_no_args<
@@ -56,12 +55,10 @@ mod invoke {
         cmd: &str,
     ) -> Result<T, E> {
         let response = invoke_catch_no_args(cmd).await;
-        let parsed = match response {
+        match response {
             Ok(val) => Ok(from_value(val).expect("to deserialize cmd response")),
             Err(e) => Err(from_value(e).expect("to deserialize cmd response")),
-        };
-
-        parsed
+        }
     }
 
     #[macro_export]
