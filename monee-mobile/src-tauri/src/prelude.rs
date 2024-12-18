@@ -16,7 +16,7 @@ pub trait CatchInfra: Sized {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum InternalError {
     Auth,
     Unknown,

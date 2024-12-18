@@ -1,21 +1,19 @@
-use std::sync::Mutex;
-
 use monee::{
     host::nodes::domain::app_id::AppId, nodes::hosts::domain::host::host_dir::HostDir,
     shared::domain::context::AppContextBuilder,
 };
-use node_sync::HostConPort;
+use node_sync::host_sync::HostSync;
 use tauri::Manager;
 
 mod prelude;
 
 use prelude::*;
 use tauri_plugin_http::reqwest::Client;
+use tokio::sync::Mutex;
 
 mod node_sync;
 
-struct HostState(pub Mutex<HostConnection>);
-struct HostConnection(pub Option<(AppId, HostDir)>);
+pub struct HostSyncState(Mutex<HostSync>);
 
 async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let base_dir = app.path().app_data_dir().expect("AppData not found");
@@ -24,13 +22,12 @@ async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let http_client = tauri_plugin_http::reqwest::Client::default();
 
-    let (data_port, host_port) = node_sync::setup(context.clone(), http_client.clone());
+    let (data_port, host_sync) = node_sync::setup(context.clone(), http_client.clone());
 
     app.manage(data_port);
-    app.manage(host_port);
+    app.manage(HostSyncState(Mutex::new(host_sync)));
     app.manage(context);
     app.manage(http_client);
-    app.manage(HostState(Mutex::new(HostConnection(None))));
 
     Ok(())
 }
@@ -48,9 +45,8 @@ async fn get_stats(
 #[tauri::command]
 async fn set_host(
     host_dir: HostDir,
+    host_sync: tauri::State<'_, HostSyncState>,
     http: tauri::State<'_, Client>,
-    host_state: tauri::State<'_, HostState>,
-    host_port: tauri::State<'_, HostConPort>,
 ) -> Result<(), InternalError> {
     dbg!(&host_dir);
     let app_id = http
@@ -63,14 +59,17 @@ async fn set_host(
         .await
         .map_err(|_| InternalError::Unknown)?;
 
-    println!("AppId: {app_id}");
-
-    host_state.0.lock().unwrap().0 = Some((app_id, host_dir.clone()));
-
-    host_port.send(Some((app_id, host_dir))).await;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-    Ok(())
+    host_sync
+        .0
+        .lock()
+        .await
+        .set_binding(
+            monee::nodes::hosts::domain::host::host_binding::HostBinding {
+                dir: host_dir,
+                node_app_id: app_id,
+            },
+        )
+        .await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

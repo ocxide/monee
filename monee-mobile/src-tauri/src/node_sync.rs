@@ -1,19 +1,24 @@
+use host_sync::HostSync;
 use monee::{
     host::{
         nodes::domain::app_id::AppId,
         sync::domain::{sync_guide::SyncGuide, sync_report::SyncReport},
     },
-    nodes::hosts::domain::{host::host_dir::HostDir, sync::changes_record::ChangesRecord},
+    nodes::hosts::domain::{
+        host::{host_binding::HostBinding, host_dir::HostDir},
+        sync::changes_record::ChangesRecord,
+    },
     prelude::AppContext,
 };
 use monee_core::{ActorId, CurrencyId, WalletId};
 use tauri::async_runtime::{Receiver, Sender};
 use tauri_plugin_http::reqwest::Client;
+use tokio::sync::{mpsc, watch};
 
 use crate::prelude::*;
 
 mod host_context {
-    use cream::context::{Context, CreateFromContext, FromContext};
+    use cream::context::{Context, CreateFromContext};
     use monee::{
         host::{
             nodes::domain::app_id::AppId,
@@ -24,7 +29,7 @@ mod host_context {
     };
     use tauri_plugin_http::reqwest::Client;
 
-    use super::{CatchInfra, CatchToInfra};
+    use crate::prelude::*;
 
     #[derive(Clone, Default)]
     pub struct HostContext {
@@ -113,6 +118,55 @@ mod host_context {
     }
 }
 
+pub mod host_sync {
+    use monee::nodes::hosts::domain::host::host_binding::HostBinding;
+    use tokio::sync::{mpsc, watch};
+
+    use super::InternalError;
+
+    pub struct HostSync {
+        info_tx: mpsc::Sender<Option<HostBinding>>,
+        pub sycn_confirm_rx: SyncConfirmer,
+    }
+
+    impl HostSync {
+        pub fn create() -> (
+            Self,
+            mpsc::Receiver<Option<HostBinding>>,
+            watch::Sender<Result<(), InternalError>>,
+        ) {
+            let (info_tx, info_rx) = mpsc::channel(1);
+            let (sycn_confirm_tx, sycn_confirm_rx) = watch::channel(Ok(()));
+
+            let me = Self {
+                info_tx,
+                sycn_confirm_rx: SyncConfirmer(sycn_confirm_rx),
+            };
+
+            (me, info_rx, sycn_confirm_tx)
+        }
+
+        pub async fn set_binding(&mut self, binding: HostBinding) -> Result<(), InternalError> {
+            self.info_tx
+                .send(Some(binding))
+                .await
+                .expect("Failed to send");
+
+            self.sycn_confirm_rx.wait_sync().await
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct SyncConfirmer(watch::Receiver<Result<(), InternalError>>);
+
+    impl SyncConfirmer {
+        pub async fn wait_sync(&mut self) -> Result<(), InternalError> {
+            self.0.changed().await.expect("Failed to read to changes");
+            self.0.borrow().as_ref().copied().map_err(|e| e.clone())
+        }
+    }
+}
+
 pub enum DataChanged {
     Currency(CurrencyId),
     Actor(ActorId),
@@ -142,17 +196,18 @@ type HostConRx = Receiver<Option<(AppId, HostDir)>>;
 pub struct Synced;
 pub enum SyncedEvent {}
 
-pub fn setup(ctx: AppContext, client: Client) -> (DataChangedPort, HostConPort) {
+pub fn setup(ctx: AppContext, client: Client) -> (DataChangedPort, HostSync) {
     let (changes_tx, changes_rx) = tauri::async_runtime::channel(1);
-    let (host_tx, host_rx) = tauri::async_runtime::channel(1);
+    let (host_sync, binding_rx, confirmer_tx) = HostSync::create();
 
-    tauri::async_runtime::spawn(listen(changes_rx, host_rx, ctx, client));
-    (DataChangedPort(changes_tx), HostConPort(host_tx))
+    tauri::async_runtime::spawn(listen(changes_rx, binding_rx, confirmer_tx, ctx, client));
+    (DataChangedPort(changes_tx), host_sync)
 }
 
 async fn listen(
-    mut data_rx: Receiver<DataChanged>,
-    mut host_rx: HostConRx,
+    mut changes_rx: mpsc::Receiver<DataChanged>,
+    mut binding_rx: mpsc::Receiver<Option<HostBinding>>,
+    confirmer_tx: watch::Sender<Result<(), InternalError>>,
     ctx: AppContext,
     http_client: Client,
 ) {
@@ -161,7 +216,7 @@ async fn listen(
 
     loop {
         let should_save_changes = tokio::select! {
-            data_changed = data_rx.recv() => {
+            data_changed = changes_rx.recv() => {
                 if let Some(data_changed) = data_changed {
                     on_data_changed(&mut changes, data_changed);
                     true
@@ -169,7 +224,7 @@ async fn listen(
                 else { false }
             },
 
-            host_changed = host_rx.recv() => {
+            host_changed = binding_rx.recv() => {
                 if let Some(host_changed) = host_changed {
                     host_con = host_changed;
                 }
