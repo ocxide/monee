@@ -15,6 +15,18 @@ pub mod host {
             }
         }
     }
+
+    pub mod host_binding {
+        use crate::apps::app_id::AppId;
+
+        use super::host_dir::HostDir;
+
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+        pub struct HostBinding {
+            pub dir: HostDir,
+            pub node_app_id: AppId,
+        }
+    }
 }
 
 pub mod sync {

@@ -6,7 +6,7 @@ pub mod errors {
     pub struct UnspecifiedError(Box<dyn std::error::Error>);
 
     impl UnspecifiedError {
-        pub fn new<E: std::error::Error>(err: E) -> Self {
+        pub fn new<E: std::error::Error + 'static>(err: E) -> Self {
             Self(Box::new(err))
         }
     }
