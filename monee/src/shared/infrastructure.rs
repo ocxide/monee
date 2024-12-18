@@ -3,10 +3,10 @@ pub mod database;
 pub mod errors {
     #[derive(Debug, thiserror::Error)]
     #[error("infrastructure error: {0}")]
-    pub struct UnspecifiedError(Box<dyn std::error::Error>);
+    pub struct UnspecifiedError(Box<dyn std::error::Error + Send + Sync + 'static>);
 
     impl UnspecifiedError {
-        pub fn new<E: std::error::Error + 'static>(err: E) -> Self {
+        pub fn new<E: std::error::Error + Send + Sync + 'static>(err: E) -> Self {
             Self(Box::new(err))
         }
     }

@@ -1,17 +1,18 @@
-use monee::{
-    host::nodes::domain::app_id::AppId, nodes::hosts::domain::host::host_dir::HostDir,
-    shared::domain::context::AppContextBuilder,
+use host_interop::{
+    host_context::{HostContext, RegisterNode},
+    host_sync::HostSync,
 };
-use node_sync::host_sync::HostSync;
+use monee::{
+    nodes::hosts::domain::host::host_dir::HostDir, shared::domain::context::AppContextBuilder,
+};
 use tauri::Manager;
 
 mod prelude;
 
 use prelude::*;
-use tauri_plugin_http::reqwest::Client;
 use tokio::sync::Mutex;
 
-mod node_sync;
+mod host_interop;
 
 pub struct HostSyncState(Mutex<HostSync>);
 
@@ -20,14 +21,14 @@ async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     dbg!(&base_dir);
     let context = AppContextBuilder { base_dir }.setup().await?;
 
-    let http_client = tauri_plugin_http::reqwest::Client::default();
+    let host_ctx = HostContext::default();
 
-    let (data_port, host_sync) = node_sync::setup(context.clone(), http_client.clone());
+    let (data_port, host_sync) = host_interop::node_sync::setup(context.clone(), host_ctx.clone());
 
     app.manage(data_port);
     app.manage(HostSyncState(Mutex::new(host_sync)));
     app.manage(context);
-    app.manage(http_client);
+    app.manage(host_ctx);
 
     Ok(())
 }
@@ -46,18 +47,11 @@ async fn get_stats(
 async fn set_host(
     host_dir: HostDir,
     host_sync: tauri::State<'_, HostSyncState>,
-    http: tauri::State<'_, Client>,
+    host_ctx: tauri::State<'_, HostContext>,
+    ctx: tauri::State<'_, AppContext>,
 ) -> Result<(), InternalError> {
-    dbg!(&host_dir);
-    let app_id = http
-        .post(format!("{host_dir}/nodes"))
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .map_err(|_| InternalError::Unknown)?
-        .json::<AppId>()
-        .await
-        .map_err(|_| InternalError::Unknown)?;
+    let service: RegisterNode = host_ctx.provide();
+    let node_app_id = service.run(&host_dir).await.catch_infra(&ctx)?;
 
     host_sync
         .0
@@ -66,7 +60,7 @@ async fn set_host(
         .set_binding(
             monee::nodes::hosts::domain::host::host_binding::HostBinding {
                 dir: host_dir,
-                node_app_id: app_id,
+                node_app_id,
             },
         )
         .await
