@@ -135,62 +135,174 @@ pub mod home {
 }
 
 pub mod startup {
-    use leptos::{ev::SubmitEvent, prelude::*, task::spawn_local};
+    use std::ops::Deref;
+
+    use leptos::{ev::SubmitEvent, prelude::*, reactive::graph::Source, task::spawn_local};
     use leptos_router::hooks::use_navigate;
+    use local_action::LocalAction;
 
     use crate::{bind_command, prelude::InternalError};
 
     bind_command!(set_host(host_dir: String) -> (), InternalError);
+
+    #[derive(Clone, Copy)]
+    struct ResourceLocal<T: Send + Sync + 'static> {
+        data: ReadSignal<Option<T>>,
+    }
+
+    impl<T: Send + Sync + 'static> Deref for ResourceLocal<T> {
+        type Target = ReadSignal<Option<T>>;
+        fn deref(&self) -> &Self::Target {
+            &self.data
+        }
+    }
+
+    impl<T: Send + Sync + 'static> ResourceLocal<T> {
+        pub fn new<Fn, Fut>(f: Fn) -> Self
+        where
+            Fn: FnOnce() -> Fut + 'static,
+            Fut: std::future::Future<Output = T> + 'static,
+        {
+            let (data, set_data) = signal(None);
+            spawn_local(async move {
+                let data = f().await;
+                set_data.set(Some(data));
+            });
+
+            Self { data }
+        }
+
+        pub fn loading(self) -> impl Fn() -> bool {
+            move || self.data.with(|data| data.is_none())
+        }
+    }
+
+    mod local_action {
+        use std::sync::{Arc, Mutex};
+
+        use futures_channel::oneshot::Sender;
+        use futures_util::{select, FutureExt};
+        use leptos::prelude::*;
+        use leptos::task::spawn_local;
+
+        pub struct LocalAction<I, O: 'static, Fut> {
+            inner: Arc<Inner<I, O, Fut>>,
+        }
+
+        impl<I, O: 'static, Fut> Clone for LocalAction<I, O, Fut> {
+            fn clone(&self) -> Self {
+                Self {
+                    inner: self.inner.clone(),
+                }
+            }
+        }
+
+        struct Inner<I, O: 'static, Fut> {
+            func: Box<dyn Fn(I) -> Fut + Send + Sync>,
+            cancel_tx: Mutex<Option<Sender<()>>>,
+            output: RwSignal<Option<O>>,
+        }
+
+        impl<I, O: 'static, Fut> Inner<I, O, Fut> {
+            pub fn cancel_current(&self) {
+                if let Some(cancel_tx) = self.cancel_tx.lock().unwrap().take() {
+                    cancel_tx.send(()).ok();
+                }
+            }
+        }
+
+        impl<I, O: 'static, Fut> Drop for Inner<I, O, Fut> {
+            fn drop(&mut self) {
+                self.cancel_current();
+            }
+        }
+
+        impl<I, O, Fut> LocalAction<I, O, Fut>
+        where
+            Fut: std::future::Future<Output = O> + 'static,
+            I: 'static,
+            O: Send + Sync + 'static,
+        {
+            pub fn new(func: impl Fn(I) -> Fut + 'static + Send + Sync) -> Self {
+                Self {
+                    inner: Arc::new(Inner {
+                        func: Box::new(func),
+                        cancel_tx: Mutex::new(None),
+                        output: RwSignal::new(None),
+                    }),
+                }
+            }
+
+            pub fn dispatch(&self, input: I) {
+                self.inner.cancel_current();
+
+                let (tx, mut rx) = futures_channel::oneshot::channel();
+                *self.inner.cancel_tx.lock().unwrap() = Some(tx);
+
+                let mut fut = Box::pin((self.inner.func)(input)).fuse();
+                let output_signal = self.inner.output;
+
+                spawn_local(async move {
+                    select! {
+                        _ = rx => {},
+                        output = fut => {
+                            output_signal.set(Some(output));
+                        }
+                    }
+                });
+            }
+
+            pub fn output(&self) -> ReadSignal<Option<O>> {
+                self.inner.output.read_only()
+            }
+        }
+    }
 
     #[component]
     pub fn StartUp() -> impl IntoView {
         let navigate = use_navigate();
 
         let (host_dir, set_host_dir) = signal(String::default());
-        let (loading, set_loading) = signal(false);
-        let (err, set_err) = signal::<Option<InternalError>>(None);
 
-        let on_submit = move |e: SubmitEvent| {
-            e.prevent_default();
+        let set_host_binding = LocalAction::new(move |host_dir: String| {
+            let navigate = navigate.clone();
+            async move {
+                set_host(host_dir).await?;
+                navigate("/home", Default::default());
 
-            spawn_local({
-                let host_dir = host_dir.get_untracked();
-                let navigate = navigate.clone();
+                Ok(()) as Result<(), InternalError>
+            }
+        });
 
-                set_loading.set(true);
+        let on_submit = {
+            let set_host_binding = set_host_binding.clone();
+            move |e: SubmitEvent| {
+                e.prevent_default();
+                set_host_binding.dispatch(host_dir.get());
+            }
+        };
 
-                async move {
-                    let err = set_host(host_dir).await.err();
-                    let is_err = err.is_some();
-
-                    set_err.set(err);
-                    set_loading.set(false);
-
-                    if !is_err {
-                        navigate("/home", Default::default());
-                    }
-                }
-            });
+        let error_view = move || {
+            set_host_binding
+                .output()
+                .with(|state| state.as_ref().map(|state| state.is_err()))
+                .map(|is_err| view! { <Show when=move || is_err> <p>"Error"</p> </Show> })
         };
 
         view! {
             <div class="grid place-content-center">
                 <form on:submit=on_submit>
                     <input
-                        type="text" 
-                        class="bg-slate-800 px-2 py-1" 
-                        on:input:target=move |e| set_host_dir.set(e.target().value()) 
+                        type="text"
+                        class="bg-slate-800 px-2 py-1"
+                        on:input:target=move |e| set_host_dir.set(e.target().value())
                     />
                     <button>"Submit"</button>
                 </form>
 
-                <Show when=move || err.get().is_some()>
-                    <p>"An error occurred"</p>
-                </Show>
-
-                <Show when=move || loading.get()>
-                    <p>"Loading..."</p>
-                </Show>
+                <Suspense fallback=move || view! { <p>"Loading..."</p> }>
+                    {error_view}
+                </Suspense>
             </div>
         }
     }
