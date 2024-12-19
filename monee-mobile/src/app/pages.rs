@@ -135,15 +135,14 @@ pub mod home {
 }
 
 pub mod startup {
-    use std::ops::Deref;
-
-    use leptos::{ev::SubmitEvent, prelude::*, reactive::graph::Source, task::spawn_local};
+    use leptos::{ev::SubmitEvent, prelude::*};
     use leptos_router::hooks::use_navigate;
     use local_action::LocalAction;
 
     use crate::{bind_command, prelude::InternalError};
 
     bind_command!(set_host(host_dir: String) -> (), InternalError);
+    bind_command!(is_synced() -> bool, InternalError);
 
     mod resource_local {
         use std::ops::Deref;
@@ -172,6 +171,7 @@ pub mod startup {
             where
                 Fut: std::future::Future<Output = T> + 'static,
             {
+                let (output_rx, output_tx) = signal(None);
                 let effect = Effect::new(move || {
                     let mut tracker = FutTracker::default();
                     let fut = func();
@@ -179,12 +179,12 @@ pub mod startup {
                     tracker.spawn_local(
                         async move {
                             let result = fut.await;
+                            output_tx.set(Some(result));
                         }
                         .fuse(),
                     );
                 });
 
-                let (output_rx, output_tx) = signal(None);
                 Self {
                     effect,
                     output_rx,
@@ -315,7 +315,35 @@ pub mod startup {
     #[component]
     pub fn StartUp() -> impl IntoView {
         let navigate = use_navigate();
+        let is_synced = LocalAction::new(move |_: ()| {
+            let navigate = navigate.clone();
+            async move {
+                let is_synced = is_synced().await?;
+                if is_synced {
+                    navigate("/home", Default::default());
+                }
 
+                Ok(is_synced) as Result<bool, InternalError>
+            }
+        });
+
+        let output = is_synced.output();
+        view! {
+            <div class="grid place-content-center">
+                <Suspense fallback=move || view! { <p>"Loading..."</p> }>
+                {move || output.get().map(|result| match result {
+                    Ok(false) => view! { <StartUpForm /> }.into_any(),
+                    Ok(true) => view! { <p>"Synced"</p> }.into_any(),
+                    Err(_) => view! { <p>"Error"</p> }.into_any(),
+                })}
+                </Suspense>
+            </div>
+        }
+    }
+
+    #[component]
+    fn StartUpForm() -> impl IntoView {
+        let navigate = use_navigate();
         let (host_dir, set_host_dir) = signal(String::default());
 
         let set_host_binding = LocalAction::new(move |host_dir: String| {
@@ -342,9 +370,8 @@ pub mod startup {
                 .with(|state| state.as_ref().map(Result::is_err))
                 .map(|is_err| view! { <Show when=move || is_err> <p>"Error"</p> </Show> })
         };
-
         view! {
-            <div class="grid place-content-center">
+            <>
                 <form on:submit=on_submit>
                     <input
                         type="text"
@@ -357,7 +384,7 @@ pub mod startup {
                 <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                     {error_view}
                 </Suspense>
-            </div>
+            </>
         }
     }
 }
