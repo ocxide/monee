@@ -145,42 +145,60 @@ pub mod startup {
 
     bind_command!(set_host(host_dir: String) -> (), InternalError);
 
-    #[derive(Clone, Copy)]
-    struct ResourceLocal<T: Send + Sync + 'static> {
-        data: ReadSignal<Option<T>>,
-    }
+    mod resource_local {
+        use std::ops::Deref;
 
-    impl<T: Send + Sync + 'static> Deref for ResourceLocal<T> {
-        type Target = ReadSignal<Option<T>>;
-        fn deref(&self) -> &Self::Target {
-            &self.data
+        use futures_util::FutureExt;
+        use leptos::prelude::*;
+
+        use super::local_action::FutTracker;
+
+        #[derive(Clone, Copy)]
+        pub struct ResourceLocal<T: Send + Sync + 'static> {
+            effect: Effect<LocalStorage>,
+            output_rx: ReadSignal<Option<T>>,
+            output_tx: WriteSignal<Option<T>>,
+        }
+
+        impl<T: Send + Sync + 'static> Deref for ResourceLocal<T> {
+            type Target = ReadSignal<Option<T>>;
+            fn deref(&self) -> &Self::Target {
+                &self.output_rx
+            }
+        }
+
+        impl<T: Send + Sync + 'static> ResourceLocal<T> {
+            pub fn new<Fut>(func: impl Fn() -> Fut + 'static) -> Self
+            where
+                Fut: std::future::Future<Output = T> + 'static,
+            {
+                let effect = Effect::new(move || {
+                    let mut tracker = FutTracker::default();
+                    let fut = func();
+
+                    tracker.spawn_local(
+                        async move {
+                            let result = fut.await;
+                        }
+                        .fuse(),
+                    );
+                });
+
+                let (output_rx, output_tx) = signal(None);
+                Self {
+                    effect,
+                    output_rx,
+                    output_tx,
+                }
+            }
         }
     }
 
-    impl<T: Send + Sync + 'static> ResourceLocal<T> {
-        pub fn new<Fn, Fut>(f: Fn) -> Self
-        where
-            Fn: FnOnce() -> Fut + 'static,
-            Fut: std::future::Future<Output = T> + 'static,
-        {
-            let (data, set_data) = signal(None);
-            spawn_local(async move {
-                let data = f().await;
-                set_data.set(Some(data));
-            });
-
-            Self { data }
-        }
-
-        pub fn loading(self) -> impl Fn() -> bool {
-            move || self.data.with(|data| data.is_none())
-        }
-    }
-
-    mod local_action {
+    pub mod local_action {
         use std::sync::{Arc, Mutex};
 
         use futures_channel::oneshot::Sender;
+        use futures_util::future::FusedFuture;
         use futures_util::{select, FutureExt};
         use leptos::prelude::*;
         use leptos::task::spawn_local;
@@ -199,21 +217,63 @@ pub mod startup {
 
         struct Inner<I, O: 'static, Fut> {
             func: Box<dyn Fn(I) -> Fut + Send + Sync>,
-            cancel_tx: Mutex<Option<Sender<()>>>,
+            fut_tracker: FutTrackerMutex,
             output: RwSignal<Option<O>>,
         }
 
-        impl<I, O: 'static, Fut> Inner<I, O, Fut> {
-            pub fn cancel_current(&self) {
-                if let Some(cancel_tx) = self.cancel_tx.lock().unwrap().take() {
-                    cancel_tx.send(()).ok();
-                }
+        pub struct FutTrackerMutex(Mutex<FutTracker>);
+
+        impl FutTrackerMutex {
+            pub fn spawn_local(&self, fut: impl FusedFuture<Output = ()> + 'static) {
+                self.0.lock().unwrap().spawn_local(fut);
             }
         }
 
-        impl<I, O: 'static, Fut> Drop for Inner<I, O, Fut> {
+        #[derive(Default)]
+        pub struct FutTracker {
+            cancel_tx: Option<Sender<()>>,
+        }
+
+        impl FutTracker {
+            pub fn cancel_current(&mut self) {
+                if let Some(cancel_tx) = self.cancel_tx.take() {
+                    cancel_tx.send(()).unwrap();
+                }
+            }
+
+            pub fn spawn_local(&mut self, fut: impl FusedFuture<Output = ()> + 'static) {
+                self.cancel_current();
+
+                let (tx, mut rx) = futures_channel::oneshot::channel();
+                self.cancel_tx = Some(tx);
+
+                // TODO: pin
+                let mut fut = Box::pin(fut);
+
+                spawn_local(async move {
+                    select! {
+                        _ = rx => {},
+                        _ = fut => {}
+                    }
+                });
+            }
+        }
+
+        impl Drop for FutTracker {
             fn drop(&mut self) {
                 self.cancel_current();
+            }
+        }
+
+        impl Default for FutTrackerMutex {
+            fn default() -> Self {
+                Self(Mutex::new(Default::default()))
+            }
+        }
+
+        impl FutTrackerMutex {
+            pub fn cancel_current(&self) {
+                self.0.lock().unwrap().cancel_current();
             }
         }
 
@@ -227,29 +287,23 @@ pub mod startup {
                 Self {
                     inner: Arc::new(Inner {
                         func: Box::new(func),
-                        cancel_tx: Mutex::new(None),
+                        fut_tracker: FutTrackerMutex::default(),
                         output: RwSignal::new(None),
                     }),
                 }
             }
 
             pub fn dispatch(&self, input: I) {
-                self.inner.cancel_current();
-
-                let (tx, mut rx) = futures_channel::oneshot::channel();
-                *self.inner.cancel_tx.lock().unwrap() = Some(tx);
-
-                let mut fut = Box::pin((self.inner.func)(input)).fuse();
                 let output_signal = self.inner.output;
+                let fut = (self.inner.func)(input);
 
-                spawn_local(async move {
-                    select! {
-                        _ = rx => {},
-                        output = fut => {
-                            output_signal.set(Some(output));
-                        }
+                self.inner.fut_tracker.spawn_local(
+                    async move {
+                        let output = fut.await;
+                        output_signal.set(Some(output));
                     }
-                });
+                    .fuse(),
+                );
             }
 
             pub fn output(&self) -> ReadSignal<Option<O>> {
@@ -285,7 +339,7 @@ pub mod startup {
         let error_view = move || {
             set_host_binding
                 .output()
-                .with(|state| state.as_ref().map(|state| state.is_err()))
+                .with(|state| state.as_ref().map(Result::is_err))
                 .map(|is_err| view! { <Show when=move || is_err> <p>"Error"</p> </Show> })
         };
 
