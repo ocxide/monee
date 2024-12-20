@@ -135,7 +135,7 @@ pub mod home {
 }
 
 pub mod startup {
-    use leptos::{ev::SubmitEvent, prelude::*};
+    use leptos::{ev::SubmitEvent, html::output, prelude::*};
     use leptos_router::hooks::use_navigate;
     use local_action::LocalAction;
 
@@ -237,7 +237,7 @@ pub mod startup {
         impl FutTracker {
             pub fn cancel_current(&mut self) {
                 if let Some(cancel_tx) = self.cancel_tx.take() {
-                    cancel_tx.send(()).unwrap();
+                    let _ = cancel_tx.send(());
                 }
             }
 
@@ -327,16 +327,37 @@ pub mod startup {
             }
         });
 
-        let output = is_synced.output();
+        Effect::new({
+            let is_synced = is_synced.clone();
+            move || {
+                is_synced.dispatch(());
+            }
+        });
+
+        let output_view = {
+            let is_synced = is_synced.clone();
+            let output = is_synced.output();
+
+            move || {
+                output
+                    .get()
+                    .map(|result| match result {
+                        Ok(false) => view! { <StartUpForm /> }.into_any(),
+                        Ok(true) => view! { <p>"Synced"</p> }.into_any(),
+                        Err(_) => {
+                            let is_synced = is_synced.clone();
+                            view! { <button on:click=move |_| is_synced.dispatch(())>"Try again"</button> }
+                                .into_any()
+                        }
+                    })
+                    .unwrap_or_else(|| view! { <p>"Loading..."</p> }.into_any())
+            }
+        };
+
         view! {
             <div class="grid place-content-center">
-                <Suspense fallback=move || view! { <p>"Loading..."</p> }>
-                {move || output.get().map(|result| match result {
-                    Ok(false) => view! { <StartUpForm /> }.into_any(),
-                    Ok(true) => view! { <p>"Synced"</p> }.into_any(),
-                    Err(_) => view! { <p>"Error"</p> }.into_any(),
-                })}
-                </Suspense>
+                <h1>"Monee Mobile"</h1>
+                {output_view}
             </div>
         }
     }

@@ -4,7 +4,7 @@ pub mod app_id {
     use idn::IdN;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Deserialize, Serialize, Default, Clone, Copy)]
+    #[derive(Debug, Deserialize, Serialize, Default, Clone, Copy, PartialEq, Eq)]
     pub struct AppId(IdN<4>);
 
     impl Display for AppId {

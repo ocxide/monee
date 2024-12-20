@@ -147,7 +147,7 @@ pub mod repository {
 
         for (id, wallet) in data.wallets.iter() {
             query = query
-                .query("CREATE ONLY type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name, description = $description")
+                .query("UPDATE type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name, description = $description")
                 .bind(("id", id))
                 .bind(("currency_id", &wallet.currency_id))
                 .bind(("name", &wallet.name))
@@ -166,10 +166,9 @@ pub mod repository {
 
     #[cfg(test)]
     mod tests {
-
         #[cfg(feature = "db_test")]
         #[tokio::test]
-        async fn it_saves() {
+        async fn it_saves_items() {
             use super::*;
             use cream::context::Context;
             use monee_core::ItemTagId;
@@ -200,7 +199,7 @@ pub mod repository {
 
         #[cfg(feature = "db_test")]
         #[tokio::test]
-        async fn gets_context_data() {
+        async fn saves_wallets() {
             use super::*;
             use cream::context::Context;
             use monee_core::CurrencyId;
@@ -220,8 +219,8 @@ pub mod repository {
                 currencies: vec![(
                     currency_id,
                     Currency {
-                        name: "test".to_owned().into(),
-                        symbol: "test".parse().unwrap(),
+                        name: "sol".to_owned().into(),
+                        symbol: "S/".parse().unwrap(),
                         code: "PEN".parse().unwrap(),
                     },
                 )],
@@ -231,8 +230,8 @@ pub mod repository {
                     WalletId::default(),
                     Wallet {
                         currency_id,
-                        name: "test".parse().unwrap(),
-                        description: "test".to_owned(),
+                        name: "mine".parse().unwrap(),
+                        description: "".to_owned(),
                     },
                 )],
             })
@@ -241,6 +240,116 @@ pub mod repository {
 
             let data = repo.get_context_data().await.unwrap();
             assert_eq!(data.wallets.len(), 1);
+        }
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn saves_twice() {
+            use super::*;
+            use cream::context::Context;
+            use monee_core::{CurrencyId, WalletId};
+            use monee_types::backoffice::{
+                currencies::currency::Currency, wallets::wallet::Wallet,
+            };
+
+            let con = crate::shared::infrastructure::database::connect()
+                .await
+                .unwrap();
+            let ctx = DbContext::new(con);
+            let repo: SurrealRepository = ctx.provide();
+
+            let currency_id = CurrencyId::default();
+            let wallet_id = WalletId::default();
+            let save = || async {
+                repo.save_changes(&SyncContextData {
+                    currencies: vec![(
+                        currency_id,
+                        Currency {
+                            name: "sol".to_owned().into(),
+                            symbol: "S/".parse().unwrap(),
+                            code: "PEN".parse().unwrap(),
+                        },
+                    )],
+                    items: vec![],
+                    actors: vec![],
+                    wallets: vec![(
+                        wallet_id,
+                        Wallet {
+                            currency_id,
+                            name: "mine".parse().unwrap(),
+                            description: "".to_owned(),
+                        },
+                    )],
+                })
+                .await
+                .unwrap();
+            };
+
+            save().await;
+            save().await;
+        }
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn save_multiple() {
+            use super::*;
+            use cream::context::Context;
+            use monee_core::CurrencyId;
+            use monee_types::backoffice::{
+                currencies::currency::Currency, wallets::wallet::Wallet,
+            };
+
+            let con = crate::shared::infrastructure::database::connect()
+                .await
+                .unwrap();
+            let ctx = DbContext::new(con);
+            let repo: SurrealRepository = ctx.provide();
+
+            let currency_id1 = CurrencyId::default();
+            let currency_id2 = CurrencyId::default();
+
+            repo.save_changes(&SyncContextData {
+                currencies: vec![(
+                    currency_id1,
+                    Currency {
+                        name: "sol".to_owned().into(),
+                        symbol: "S/".parse().unwrap(),
+                        code: "PEN".parse().unwrap(),
+                    },
+                ),
+                (
+                    currency_id2,
+                    Currency {
+                        name: "dollar".to_owned().into(),
+                        symbol: "$".parse().unwrap(),
+                        code: "USD".parse().unwrap(),
+                    },
+                )],
+                items: vec![],
+                actors: vec![],
+                wallets: vec![(
+                    WalletId::default(),
+                    Wallet {
+                        currency_id: currency_id1,
+                        name: "mine".parse().unwrap(),
+                        description: "".to_owned(),
+                    },
+                ), 
+                (
+                    WalletId::default(),
+                    Wallet {
+                        currency_id: currency_id2,
+                        name: "othermine".parse().unwrap(),
+                        description: "".to_owned(),
+                    },
+                )],
+            })
+            .await
+            .unwrap();
+
+            let data = repo.get_context_data().await.unwrap();
+            assert_eq!(data.currencies.len(), 2, "Currencies");
+            assert_eq!(data.wallets.len(), 2, "Wallets");
         }
     }
 }

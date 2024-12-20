@@ -1,6 +1,6 @@
 pub mod host {
     pub mod host_dir {
-        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
         pub struct HostDir(String);
 
         impl std::fmt::Display for HostDir {
@@ -14,6 +14,12 @@ pub mod host {
                 &self.0
             }
         }
+
+        impl From<String> for HostDir {
+            fn from(value: String) -> Self {
+                HostDir(value)
+            }
+        }
     }
 
     pub mod host_binding {
@@ -21,7 +27,7 @@ pub mod host {
 
         use super::host_dir::HostDir;
 
-        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
         pub struct HostBinding {
             pub dir: HostDir,
             pub node_app_id: AppId,

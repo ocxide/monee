@@ -35,7 +35,7 @@ pub mod infrastructure {
                 host_binding: &HostBinding,
             ) -> Result<(), InfrastructureError> {
                 self.0
-                    .query("UPDATE host_binding SET dir = $dir, node_app_id = $node_app_id")
+                    .query("UPDATE host_binding:me SET dir = $dir, node_app_id = $node_app_id")
                     .bind(host_binding)
                     .await?;
 
@@ -45,11 +45,40 @@ pub mod infrastructure {
             async fn get_host_binding(&self) -> Result<Option<HostBinding>, InfrastructureError> {
                 let mut response = self
                     .0
-                    .query("SELECT host_dir FROM self_app LIMIT 1")
+                    .query("SELECT dir, node_app_id FROM host_binding LIMIT 1")
                     .await?;
 
                 let host_dir: Option<HostBinding> = response.take(0)?;
                 Ok(host_dir)
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            #[cfg(feature = "db_test")]
+            #[tokio::test]
+            async fn it_saves() {
+                use monee_types::{apps::app_id::AppId, nodes::host::host_binding::HostBinding};
+                use cream::context::Context;
+
+                let con = crate::shared::infrastructure::database::connect()
+                    .await
+                    .unwrap();
+                let ctx= DbContext::new(con);
+
+                let app_id = AppId::default();
+                let og_host_binding = HostBinding {
+                    dir: "/tmp/monee".to_owned().into(), 
+                    node_app_id: app_id
+                };
+
+                let repo: SurrealRepository = ctx.provide();
+                repo.save_host_binding(&og_host_binding).await.unwrap();
+
+                let host_binding = repo.get_host_binding().await.unwrap();
+                assert_eq!(host_binding, Some(og_host_binding));
             }
         }
     }

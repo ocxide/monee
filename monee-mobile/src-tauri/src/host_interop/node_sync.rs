@@ -67,7 +67,7 @@ async fn listen(
                         confirmer_tx.send(result).unwrap();
                     }
                     else {
-                       eprintln!("{}", MSG);
+                       eprintln!("ERROR SYNC SYSTEM: {}", MSG);
                     }
                 }
             },
@@ -80,7 +80,7 @@ async fn listen(
                         confirmer_tx.send(result).unwrap();
                     }
                     else {
-                       eprintln!("{}", MSG);
+                       eprintln!("ERROR SYNC SYSTEM: {}", MSG);
                     }
                 }
             }
