@@ -124,34 +124,54 @@ pub mod repository {
     ) -> Result<(), AppError<UniqueSaveError>> {
         let mut query = con.query(BeginStatement::default());
 
-        for (id, currency) in data.currencies.iter() {
+        for (i, (id, currency)) in data.currencies.iter().enumerate() {
             query = query
-                .query("UPDATE type::thing('currency', $currency_id) SET name = $name, symbol = $symbol, code = $code")
-                .bind(("currency_id", id))
-                .bind(currency);
+                .query(format!(
+                    "UPDATE type::thing('currency', $currency_id{i}) CONTENT $currency{i}"
+                ))
+                .bind((format!("currency_id{i}"), id))
+                .bind((format!("currency{i}"), currency));
         }
 
-        for (id, item) in data.items.iter() {
+        for (i, (id, item)) in data.items.iter().enumerate() {
             query = query
-                .query("UPDATE type::thing('item_tag', $id) CONTENT $data")
-                .bind(("id", id))
-                .bind(("data", item));
+                .query(format!(
+                    "UPDATE type::thing('item_tag', $item_tag_id{i}) CONTENT $item_tag{i}"
+                ))
+                .bind((format!("item_tag_id{i}"), id))
+                .bind((format!("item_tag{i}"), item));
         }
 
-        for (id, actor) in data.actors.iter() {
+        for (i, (id, actor)) in data.actors.iter().enumerate() {
             query = query
-                .query("UPDATE type::thing('actor', $id) CONTENT $data")
-                .bind(("id", id))
-                .bind(("data", actor));
+                .query(format!(
+                    "UPDATE type::thing('actor', $actor_id{i}) CONTENT $actor{i}"
+                ))
+                .bind((format!("actor_id{i}"), id))
+                .bind((format!("actor{i}"), actor));
         }
 
-        for (id, wallet) in data.wallets.iter() {
+        for (i, (id, wallet)) in data.wallets.iter().enumerate() {
+            #[derive(serde::Serialize)]
+            struct SurrealWallet<'w> {
+                pub currency_id: EntityKey<monee_core::CurrencyId>,
+                pub name: &'w WalletName,
+                pub description: &'w String,
+            }
+
             query = query
-                .query("UPDATE type::thing('wallet', $id) SET currency_id = type::thing('currency', $currency_id), name = $name, description = $description")
-                .bind(("id", id))
-                .bind(("currency_id", &wallet.currency_id))
-                .bind(("name", &wallet.name))
-                .bind(("description", &wallet.description));
+                .query(format!(
+                    "UPDATE type::thing('wallet', $wallet_id{i}) CONTENT $wallet{i}"
+                ))
+                .bind((format!("wallet_id{i}"), id))
+                .bind((
+                    format!("wallet{i}"),
+                    SurrealWallet {
+                        currency_id: EntityKey(wallet.currency_id),
+                        name: &wallet.name,
+                        description: &wallet.description,
+                    },
+                ));
         }
 
         query
@@ -309,40 +329,44 @@ pub mod repository {
             let currency_id2 = CurrencyId::default();
 
             repo.save_changes(&SyncContextData {
-                currencies: vec![(
-                    currency_id1,
-                    Currency {
-                        name: "sol".to_owned().into(),
-                        symbol: "S/".parse().unwrap(),
-                        code: "PEN".parse().unwrap(),
-                    },
-                ),
-                (
-                    currency_id2,
-                    Currency {
-                        name: "dollar".to_owned().into(),
-                        symbol: "$".parse().unwrap(),
-                        code: "USD".parse().unwrap(),
-                    },
-                )],
+                currencies: vec![
+                    (
+                        currency_id1,
+                        Currency {
+                            name: "sol".to_owned().into(),
+                            symbol: "S/".parse().unwrap(),
+                            code: "PEN".parse().unwrap(),
+                        },
+                    ),
+                    (
+                        currency_id2,
+                        Currency {
+                            name: "dollar".to_owned().into(),
+                            symbol: "$".parse().unwrap(),
+                            code: "USD".parse().unwrap(),
+                        },
+                    ),
+                ],
                 items: vec![],
                 actors: vec![],
-                wallets: vec![(
-                    WalletId::default(),
-                    Wallet {
-                        currency_id: currency_id1,
-                        name: "mine".parse().unwrap(),
-                        description: "".to_owned(),
-                    },
-                ), 
-                (
-                    WalletId::default(),
-                    Wallet {
-                        currency_id: currency_id2,
-                        name: "othermine".parse().unwrap(),
-                        description: "".to_owned(),
-                    },
-                )],
+                wallets: vec![
+                    (
+                        WalletId::default(),
+                        Wallet {
+                            currency_id: currency_id1,
+                            name: "mine".parse().unwrap(),
+                            description: "".to_owned(),
+                        },
+                    ),
+                    (
+                        WalletId::default(),
+                        Wallet {
+                            currency_id: currency_id2,
+                            name: "othermine".parse().unwrap(),
+                            description: "".to_owned(),
+                        },
+                    ),
+                ],
             })
             .await
             .unwrap();
@@ -350,6 +374,65 @@ pub mod repository {
             let data = repo.get_context_data().await.unwrap();
             assert_eq!(data.currencies.len(), 2, "Currencies");
             assert_eq!(data.wallets.len(), 2, "Wallets");
+        }
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn saves_all() {
+            use super::*;
+            use cream::context::Context;
+            use monee_core::{ActorId, ItemTagId};
+            use monee_types::backoffice::{
+                actors::actor::Actor, currencies::currency::Currency, item_tags::item_tag::ItemTag,
+            };
+            let con = crate::shared::infrastructure::database::connect()
+                .await
+                .unwrap();
+            let ctx = DbContext::new(con);
+            let repo: SurrealRepository = ctx.provide();
+
+            let currency_id = CurrencyId::default();
+            repo.save_changes(&SyncContextData {
+                currencies: vec![(
+                    currency_id,
+                    Currency {
+                        name: "sol".to_owned().into(),
+                        symbol: "S/".parse().unwrap(),
+                        code: "PEN".parse().unwrap(),
+                    },
+                )],
+                items: vec![
+                    (
+                        ItemTagId::default(),
+                        ItemTag {
+                            name: "test".parse().unwrap(),
+                        },
+                    ),
+                    (
+                        ItemTagId::default(),
+                        ItemTag {
+                            name: "test2".parse().unwrap(),
+                        },
+                    ),
+                ],
+                actors: vec![(
+                    ActorId::default(),
+                    Actor {
+                        name: "test".to_owned().into(),
+                        actor_type: "n".parse().unwrap(),
+                        alias: Some("test".parse().unwrap()),
+                    },
+                )],
+                wallets: vec![],
+            })
+            .await
+            .unwrap();
+
+            let data = repo.get_context_data().await.unwrap();
+            assert_eq!(data.currencies.len(), 1, "Currencies");
+            assert_eq!(data.items.len(), 2, "Items");
+            assert_eq!(data.actors.len(), 1, "Actors");
+            assert_eq!(data.wallets.len(), 0, "Wallets");
         }
     }
 }
