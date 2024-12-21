@@ -13,7 +13,7 @@ pub mod get_sync_guide {
     }
 }
 
-pub mod do_sync {
+pub mod sync_node_changes {
     use cream::event_bus::EventBusPort;
     use monee_types::apps::app_id::AppId;
 
@@ -21,25 +21,25 @@ pub mod do_sync {
         apply_event::apply_event, repository::Repository as EventsRepository,
     };
     use crate::backoffice::snapshot::application::snapshot_io::SnapshotIO;
-    use crate::host::sync::domain::client_synced::ClientSynced;
+    use crate::host::sync::domain::node_synced::NodeSynced;
     use crate::host::sync::domain::sync_error::SyncError;
-    use crate::host::sync::domain::{repository::Repository, sync_save::SyncSave};
+    use crate::host::sync::domain::{repository::Repository, node_changes::NodeChanges};
     use crate::{iprelude::*, prelude::*};
 
     #[derive(FromContext)]
     #[context(AppContext)]
-    pub struct DoSync {
+    pub struct SyncNodeChanges {
         sync_repo: Box<dyn Repository>,
         snapshot_io: SnapshotIO,
         events_repo: Box<dyn EventsRepository>,
         event_bus: EventBusPort,
     }
 
-    impl DoSync {
+    impl SyncNodeChanges {
         pub async fn run(
             &self,
             client_id: AppId,
-            sync: SyncSave,
+            sync: NodeChanges,
         ) -> Result<(), AppError<SyncError>> {
             self.sync_repo.save_sync(client_id, &sync).await?;
 
@@ -70,31 +70,31 @@ pub mod do_sync {
 
             self.events_repo.save_many(sync.events).await?;
 
-            self.event_bus.publish(ClientSynced(client_id));
+            self.event_bus.publish(NodeSynced(client_id));
 
             Ok(())
         }
     }
 }
 
-pub mod get_sync_report {
-    use monee_types::host::sync::sync_report::SyncReport;
+pub mod get_host_state {
+    use monee_types::host::sync::host_state::HostState;
 
     use crate::iprelude::*;
     use crate::{backoffice::snapshot::application::snapshot_io::SnapshotIO, prelude::*};
 
     #[derive(FromContext)]
     #[context(AppContext)]
-    pub struct GetSyncReport {
+    pub struct GetHostState {
         snapshot_io: SnapshotIO,
         sync_repo: Box<dyn crate::host::sync::domain::repository::Repository>,
     }
 
-    impl GetSyncReport {
-        pub async fn run(&self) -> Result<SyncReport, InfrastructureError> {
+    impl GetHostState {
+        pub async fn run(&self) -> Result<HostState, InfrastructureError> {
             let snapshot = self.snapshot_io.read_last().await?;
             let data = self.sync_repo.get_context_data().await?;
-            Ok(SyncReport { snapshot, data })
+            Ok(HostState { snapshot, data })
         }
     }
 }

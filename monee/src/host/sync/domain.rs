@@ -9,8 +9,8 @@ pub mod repository {
     };
 
     use super::{
-        sync_context_data::SyncContextData, sync_error::SyncError, sync_guide::SyncGuide,
-        sync_save::SyncSave,
+        catalog::Catalog, sync_error::SyncError, sync_guide::SyncGuide,
+        node_changes::NodeChanges,
     };
 
     #[async_trait::async_trait]
@@ -20,7 +20,7 @@ pub mod repository {
         async fn save_sync(
             &self,
             app_id: AppId,
-            sync: &SyncSave,
+            sync: &NodeChanges,
         ) -> Result<(), InfrastructureError>;
 
         async fn save_sync_error(
@@ -31,9 +31,9 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            data: &SyncContextData,
+            data: &Catalog,
         ) -> Result<(), AppError<UniqueSaveError>>;
 
-        async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError>;
+        async fn get_context_data(&self) -> Result<Catalog, InfrastructureError>;
     }
 }

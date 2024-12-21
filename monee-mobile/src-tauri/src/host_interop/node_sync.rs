@@ -106,14 +106,14 @@ async fn on_changes(
     let service: HostCon = host_context.create(host_binding);
     let sync_guide = service.get_guide().await.catch_infra(ctx)?;
 
-    let save_service: monee::nodes::sync::application::get_sync_save::GetSyncSave =
+    let get_service: monee::nodes::sync::application::get_node_changes::GetNodeChanges =
         ctx.provide();
-    let sync_save = save_service
+    let node_changes = get_service
         .run(sync_guide, changes_record)
         .await
         .catch_infra(ctx)?;
 
-    service.sync_to_host(&sync_save).await.catch_infra(ctx)?;
+    service.sync_to_host(&node_changes).await.catch_infra(ctx)?;
 
     sync_from_host(ctx, host_context, host_binding, changes_record).await
 }
@@ -137,10 +137,10 @@ async fn sync_from_host(
     changes_record: &mut ChangesRecord,
 ) -> Result<(), InternalError> {
     let service: HostCon = host_context.create(host_binding);
-    let report = service.get_report().await.catch_infra(ctx)?;
+    let host_state = service.get_host_state().await.catch_infra(ctx)?;
 
     let service: monee::nodes::sync::application::rewrite_system::RewriteSystem = ctx.provide();
-    let result = service.run(report).await.catch_infra(ctx)?;
+    let result = service.run(host_state).await.catch_infra(ctx)?;
     if result.is_err() {
         eprintln!("WARNING: Failed to overwrite system");
     }
@@ -149,4 +149,3 @@ async fn sync_from_host(
 
     Ok(())
 }
-

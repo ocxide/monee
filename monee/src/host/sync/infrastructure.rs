@@ -13,8 +13,8 @@ pub mod repository {
 
     use crate::{
         host::sync::domain::{
-            repository::Repository, sync_context_data::SyncContextData, sync_error::SyncError,
-            sync_guide::SyncGuide, sync_save::SyncSave,
+            repository::Repository, catalog::Catalog, sync_error::SyncError,
+            sync_guide::SyncGuide, node_changes::NodeChanges,
         },
         iprelude::*,
         prelude::*,
@@ -43,7 +43,7 @@ pub mod repository {
         async fn save_sync(
             &self,
             client_id: AppId,
-            sync: &SyncSave,
+            sync: &NodeChanges,
         ) -> Result<(), InfrastructureError> {
             self.0
                 .query("UPDATE type::thing('client_sync', $client_id) REPLACE { data: $data }")
@@ -72,12 +72,12 @@ pub mod repository {
 
         async fn save_changes(
             &self,
-            data: &SyncContextData,
+            data: &Catalog,
         ) -> Result<(), AppError<UniqueSaveError>> {
             save_changes(&self.0, data).await
         }
 
-        async fn get_context_data(&self) -> Result<SyncContextData, InfrastructureError> {
+        async fn get_context_data(&self) -> Result<Catalog, InfrastructureError> {
             let mut response = self
                 .0
                 .query("SELECT * FROM currency")
@@ -109,7 +109,7 @@ pub mod repository {
             let actors: Vec<Entity<ActorId, Actor>> = response.take(2)?;
             let wallets: Vec<Entity<WalletId, SurrealWallet>> = response.take(3)?;
 
-            Ok(SyncContextData {
+            Ok(Catalog {
                 currencies: currencies.into_iter().map(Entity::into).collect(),
                 items: items.into_iter().map(Entity::into).collect(),
                 actors: actors.into_iter().map(Entity::into).collect(),
@@ -120,7 +120,7 @@ pub mod repository {
 
     pub async fn save_changes(
         con: &Connection,
-        data: &SyncContextData,
+        data: &Catalog,
     ) -> Result<(), AppError<UniqueSaveError>> {
         let mut query = con.query(BeginStatement::default());
 
@@ -198,7 +198,7 @@ pub mod repository {
                 .await
                 .unwrap();
             let ctx = DbContext::new(con);
-            let data = SyncContextData {
+            let data = Catalog {
                 currencies: vec![],
                 items: vec![(
                     ItemTagId::default(),
@@ -235,7 +235,7 @@ pub mod repository {
 
             let currency_id = CurrencyId::default();
 
-            repo.save_changes(&SyncContextData {
+            repo.save_changes(&Catalog {
                 currencies: vec![(
                     currency_id,
                     Currency {
@@ -281,7 +281,7 @@ pub mod repository {
             let currency_id = CurrencyId::default();
             let wallet_id = WalletId::default();
             let save = || async {
-                repo.save_changes(&SyncContextData {
+                repo.save_changes(&Catalog {
                     currencies: vec![(
                         currency_id,
                         Currency {
@@ -328,7 +328,7 @@ pub mod repository {
             let currency_id1 = CurrencyId::default();
             let currency_id2 = CurrencyId::default();
 
-            repo.save_changes(&SyncContextData {
+            repo.save_changes(&Catalog {
                 currencies: vec![
                     (
                         currency_id1,
@@ -392,7 +392,7 @@ pub mod repository {
             let repo: SurrealRepository = ctx.provide();
 
             let currency_id = CurrencyId::default();
-            repo.save_changes(&SyncContextData {
+            repo.save_changes(&Catalog {
                 currencies: vec![(
                     currency_id,
                     Currency {

@@ -20,7 +20,7 @@ async fn serve() {
         .route("/nodes", post(clients::register))
         .route("/sync/guide", get(sync::get_sync_guide))
         .route("/sync", patch(sync::do_sync))
-        .route("/sync/report", get(sync::get_sync_report))
+        .route("/sync/report", get(sync::get_host_state))
         .route("/health", get(|| async { StatusCode::OK }))
         .with_state(ctx);
 
@@ -67,9 +67,9 @@ mod sync {
     use axum::http::{HeaderMap, StatusCode};
     use axum::Json;
     use monee::host::nodes::domain::app_id::AppId;
-    use monee::host::sync::domain::sync_report::SyncReport;
+    use monee::host::sync::domain::host_state::HostState;
     use monee::host::sync::domain::{
-        sync_error::SyncError, sync_guide::SyncGuide, sync_save::SyncSave,
+        sync_error::SyncError, sync_guide::SyncGuide, node_changes::NodeChanges,
     };
     use monee::prelude::*;
     use monee::shared::domain::errors::UniqueSaveError;
@@ -98,7 +98,7 @@ mod sync {
     pub async fn do_sync(
         State(ctx): State<AppContext>,
         headers: HeaderMap,
-        Json(payload): Json<SyncSave>,
+        Json(payload): Json<NodeChanges>,
     ) -> Result<(), StatusCode> {
         println!("do_sync");
         let id = get_client_id(&headers)?;
@@ -107,7 +107,7 @@ mod sync {
             return Err(StatusCode::UNAUTHORIZED);
         }
 
-        let service: monee::host::sync::application::do_sync::DoSync = ctx.provide();
+        let service: monee::host::sync::application::sync_node_changes::SyncNodeChanges = ctx.provide();
         service
             .run(id, payload)
             .await
@@ -119,13 +119,13 @@ mod sync {
     }
 
     #[axum::debug_handler]
-    pub async fn get_sync_report(
+    pub async fn get_host_state(
         State(ctx): State<AppContext>,
         headers: HeaderMap,
-    ) -> Result<Json<SyncReport>, StatusCode> {
-        println!("get_sync_report");
+    ) -> Result<Json<HostState>, StatusCode> {
+        println!("get_host_state");
         let _ = get_client_id(&headers)?;
-        let service: monee::host::sync::application::get_sync_report::GetSyncReport = ctx.provide();
+        let service: monee::host::sync::application::get_host_state::GetHostState = ctx.provide();
         service.run().await.catch_infra(&ctx).map(Json)
     }
 }

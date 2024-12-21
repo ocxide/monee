@@ -2,7 +2,7 @@ use cream::context::{Context, CreateFromContext, FromContext};
 use monee::{
     host::{
         nodes::domain::app_id::AppId,
-        sync::domain::{sync_guide::SyncGuide, sync_report::SyncReport, sync_save::SyncSave},
+        sync::domain::{sync_guide::SyncGuide, host_state::HostState, node_changes::NodeChanges},
     },
     nodes::hosts::domain::host::{host_binding::HostBinding, host_dir::HostDir},
     prelude::InfrastructureError,
@@ -55,7 +55,7 @@ impl<'a> HostCon<'a> {
         Ok(sync_guide)
     }
 
-    pub async fn get_report(&self) -> Result<SyncReport, InfrastructureError> {
+    pub async fn get_host_state(&self) -> Result<HostState, InfrastructureError> {
         let sync_report = self
             .http
             .get(format!("{}/sync/report", self.info.dir))
@@ -63,14 +63,14 @@ impl<'a> HostCon<'a> {
             .send()
             .await
             .catch_to_infra()?
-            .json::<SyncReport>()
+            .json::<HostState>()
             .await
             .catch_to_infra()?;
 
         Ok(sync_report)
     }
 
-    pub async fn sync_to_host(&self, data: &SyncSave) -> Result<(), InfrastructureError> {
+    pub async fn sync_to_host(&self, data: &NodeChanges) -> Result<(), InfrastructureError> {
         self.http
             .post(format!("{}/sync/save", self.info.dir))
             .header("X-Node-Id", self.info.node_app_id.to_string())

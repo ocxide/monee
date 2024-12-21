@@ -7,18 +7,18 @@ pub mod sync_guide {
     }
 }
 
-pub mod sync_save {
+pub mod node_changes {
     use monee_core::EventId;
 
     use crate::{backoffice::events::event::Event, shared::date::Datetime};
 
-    use super::sync_context_data::SyncContextData;
+    use super::catalog::Catalog;
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    pub struct SyncSave {
+    pub struct NodeChanges {
         pub events: Vec<EventEntry>,
         #[serde(flatten)]
-        pub data: SyncContextData,
+        pub data: Catalog,
     }
 
     #[derive(serde::Serialize, serde::Deserialize)]
@@ -30,7 +30,7 @@ pub mod sync_save {
     }
 }
 
-pub mod sync_context_data {
+pub mod catalog {
     use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
 
     use crate::backoffice::{
@@ -39,7 +39,7 @@ pub mod sync_context_data {
     };
 
     #[derive(serde::Serialize, serde::Deserialize, Debug)]
-    pub struct SyncContextData {
+    pub struct Catalog {
         pub actors: Vec<(ActorId, Actor)>,
         pub currencies: Vec<(CurrencyId, Currency)>,
         pub items: Vec<(ItemTagId, ItemTag)>,
@@ -47,16 +47,16 @@ pub mod sync_context_data {
     }
 }
 
-pub mod sync_report {
+pub mod host_state {
     use monee_core::Snapshot;
 
-    use super::sync_context_data::SyncContextData;
+    use super::catalog::Catalog;
 
     #[derive(serde::Serialize, serde::Deserialize, Debug)]
-    pub struct SyncReport {
+    pub struct HostState {
         pub snapshot: Snapshot,
         #[serde(flatten)]
-        pub data: SyncContextData,
+        pub data: Catalog,
     }
 }
 
@@ -79,15 +79,15 @@ pub mod sync_error {
     }
 }
 
-pub mod client_synced {
+pub mod node_synced {
     use cream_events_core::DomainEvent;
 
     use crate::apps::app_id::AppId;
 
-    pub struct ClientSynced(pub AppId);
-    impl DomainEvent for ClientSynced {
+    pub struct NodeSynced(pub AppId);
+    impl DomainEvent for NodeSynced {
         fn name(&self) -> &'static str {
-            "ClientSynced"
+            "NodeSynced"
         }
 
         fn version(&self) -> &'static str {

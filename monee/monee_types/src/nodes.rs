@@ -37,11 +37,11 @@ pub mod host {
 
 pub mod sync {
     pub mod sync_context_data {
-        pub use crate::host::sync::sync_context_data::SyncContextData;
+        pub use crate::host::sync::catalog::Catalog;
     }
 
     pub mod sync_report {
-        pub use crate::host::sync::sync_report::SyncReport;
+        pub use crate::host::sync::host_state::HostState;
     }
 
     pub mod changes_record {
@@ -56,6 +56,6 @@ pub mod sync {
     }
 
     pub mod sync_save {
-        pub use crate::host::sync::sync_save::SyncSave;
+        pub use crate::host::sync::node_changes::NodeChanges;
     }
 }

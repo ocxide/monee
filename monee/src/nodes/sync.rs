@@ -1,8 +1,8 @@
 pub mod domain {
     pub mod repository {
         use monee_types::{
-            host::sync::{sync_guide::SyncGuide, sync_save::EventEntry},
-            nodes::sync::{changes_record::ChangesRecord, sync_context_data::SyncContextData},
+            host::sync::{sync_guide::SyncGuide, node_changes::EventEntry},
+            nodes::sync::{changes_record::ChangesRecord, sync_context_data::Catalog},
             shared::errors::UniqueSaveError,
         };
 
@@ -13,12 +13,12 @@ pub mod domain {
             async fn truncate_events(&self) -> Result<(), InfrastructureError>;
             async fn save_changes(
                 &self,
-                data: &SyncContextData,
+                data: &Catalog,
             ) -> Result<(), AppError<UniqueSaveError>>;
-            async fn get_context_data(
+            async fn get_catalog(
                 &self,
                 changes: &ChangesRecord,
-            ) -> Result<SyncContextData, InfrastructureError>;
+            ) -> Result<Catalog, InfrastructureError>;
             async fn get_events(
                 &self,
                 guide: SyncGuide,
@@ -44,7 +44,7 @@ pub mod infrastructure {
             backoffice::{
                 actors::actor::Actor, currencies::currency::Currency, wallets::wallet::Wallet,
             },
-            host::sync::sync_save::EventEntry,
+            host::sync::node_changes::EventEntry,
             shared::errors::UniqueSaveError,
         };
 
@@ -61,16 +61,16 @@ pub mod infrastructure {
 
             async fn save_changes(
                 &self,
-                data: &monee_types::host::sync::sync_context_data::SyncContextData,
+                data: &monee_types::host::sync::catalog::Catalog,
             ) -> Result<(), AppError<UniqueSaveError>> {
                 save_changes(&self.0, data).await
             }
 
-            async fn get_context_data(
+            async fn get_catalog(
                 &self,
                 changes: &monee_types::nodes::sync::changes_record::ChangesRecord,
             ) -> Result<
-                monee_types::host::sync::sync_context_data::SyncContextData,
+                monee_types::host::sync::catalog::Catalog,
                 InfrastructureError,
             > {
                 let mut response = self
@@ -112,7 +112,7 @@ pub mod infrastructure {
                 let wallets: Vec<Entity<monee_core::WalletId, Wallet>> = response.take(2)?;
 
                 Ok(
-                    monee_types::host::sync::sync_context_data::SyncContextData {
+                    monee_types::host::sync::catalog::Catalog {
                         currencies: currencies.into_iter().map(Into::into).collect(),
                         actors: actors.into_iter().map(Into::into).collect(),
                         wallets: wallets.into_iter().map(Into::into).collect(),
@@ -140,7 +140,7 @@ pub mod infrastructure {
 
 pub mod application {
     pub mod rewrite_system {
-        use monee_types::{nodes::sync::sync_report::SyncReport, shared::errors::UniqueSaveError};
+        use monee_types::{nodes::sync::sync_report::HostState, shared::errors::UniqueSaveError};
 
         use crate::backoffice::snapshot::application::snapshot_io::SnapshotIO;
 
@@ -155,7 +155,7 @@ pub mod application {
         }
 
         impl RewriteSystem {
-            pub async fn run(&self, data: SyncReport) -> Result<(), AppError<UniqueSaveError>> {
+            pub async fn run(&self, data: HostState) -> Result<(), AppError<UniqueSaveError>> {
                 self.repo.save_changes(&data.data).await?;
                 self.snapshot_io.save(data.snapshot).await?;
 
@@ -166,10 +166,10 @@ pub mod application {
         }
     }
 
-    pub mod get_sync_save {
+    pub mod get_node_changes {
         use monee_types::{
             host::sync::sync_guide::SyncGuide,
-            nodes::sync::{changes_record::ChangesRecord, sync_save::SyncSave},
+            nodes::sync::{changes_record::ChangesRecord, sync_save::NodeChanges},
         };
 
         use super::super::domain::repository::Repository;
@@ -177,19 +177,19 @@ pub mod application {
 
         #[derive(FromContext)]
         #[context(AppContext)]
-        pub struct GetSyncSave {
+        pub struct GetNodeChanges {
             repo: Box<dyn Repository>,
         }
 
-        impl GetSyncSave {
+        impl GetNodeChanges {
             pub async fn run(
                 &self,
                 guide: SyncGuide,
                 changes: &ChangesRecord,
-            ) -> Result<SyncSave, InfrastructureError> {
+            ) -> Result<NodeChanges, InfrastructureError> {
                 let events = self.repo.get_events(guide).await?;
-                let data = self.repo.get_context_data(changes).await?;
-                Ok(SyncSave { events, data })
+                let data = self.repo.get_catalog(changes).await?;
+                Ok(NodeChanges { events, data })
             }
         }
     }
