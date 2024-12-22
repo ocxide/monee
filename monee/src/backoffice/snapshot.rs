@@ -30,7 +30,7 @@ pub mod application {
         impl Handler for OnWalletCreated {
             type Event = crate::backoffice::wallets::domain::wallet_created::WalletCreated;
 
-            async fn handle(&self, event: Self::Event) -> Result<(), cream::events::Error> {
+            async fn handle(self, event: Self::Event) -> Result<(), cream::events::Error> {
                 let mut snapshot = self
                     .snapshot_io
                     .read_last()

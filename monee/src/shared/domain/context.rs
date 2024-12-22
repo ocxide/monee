@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 
-use cream::context::{
-    events_context::{EventsContext, EventsContextBuilder},
-    Context, CreamContext, FromContext,
+use cream::{
+    context::{Context, CreamContext, FromContext},
+    events::{
+        context::{EventsContext, EventsContextBuilder, EventsContextSetup},
+        dispatch_listener::DispatchListener,
+    },
 };
 
 use crate::shared::infrastructure::errors::InfrastructureError;
@@ -32,19 +35,14 @@ pub struct AppContextBuilder {
 }
 
 impl AppContextBuilder {
-    pub async fn setup(self) -> Result<AppContext, InfrastructureError> {
+    pub async fn build(self) -> Result<AppContextSetup, InfrastructureError> {
         #[cfg(any(feature = "embedded", feature = "remote"))]
         let db = crate::shared::infrastructure::database::connect(self.base_dir).await?;
         #[cfg(feature = "db_test")]
         let db = crate::shared::infrastructure::database::connect().await?;
 
         let cream = CreamContext::default();
-        let mut router = cream::events::router::Router::default();
-        // Add event handlers
-        router
-            .add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
-
-        let (events_ctx, setup) = EventsContextBuilder::default().build(&cream);
+        let (events_ctx, setup) = cream.provide::<EventsContextBuilder>().build();
 
         let ctx = AppContext {
             events_ctx,
@@ -52,9 +50,29 @@ impl AppContextBuilder {
             db: DbContext(db),
         };
 
-        setup.setup(router, ctx.clone());
+        Ok(AppContextSetup {
+            ctx,
+            events_setup: setup,
+        })
+    }
+}
 
-        Ok(ctx)
+pub struct AppContextSetup {
+    ctx: AppContext,
+    events_setup: EventsContextSetup,
+}
+
+impl AppContextSetup {
+    pub fn setup(self) -> AppContext {
+        let mut dispatcher = cream::events::dispatcher::Dispatcher::<AppContext>::default();
+        // Add event handlers
+        dispatcher
+            .add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
+
+        self.events_setup
+            .setup::<DispatchListener<_>>((self.ctx.clone(), dispatcher));
+
+        self.ctx
     }
 }
 
@@ -64,7 +82,8 @@ pub async fn setup() -> Result<AppContext, InfrastructureError> {
     #[cfg(not(feature = "embedded"))]
     let base_dir = PathBuf::default();
 
-    AppContextBuilder { base_dir }.setup().await
+    let setup = AppContextBuilder { base_dir }.build().await?;
+    Ok(setup.setup())
 }
 
 impl FromContext<DbContext> for crate::shared::infrastructure::database::Connection {
@@ -74,7 +93,10 @@ impl FromContext<DbContext> for crate::shared::infrastructure::database::Connect
 }
 
 mod extends {
-    use cream::context::{events_context::EventsContext, ContextExtend, CreamContext};
+    use cream::{
+        context::{ContextExtend, CreamContext},
+        events::context::EventsContext,
+    };
 
     use super::{AppContext, DbContext};
 
@@ -99,8 +121,8 @@ mod extends {
 
 mod provides_export {
     use cream::{
-        context::{events_context::EventsContext, pub_provide, CreamContext},
-        event_bus::EventBusPort,
+        context::{pub_provide, CreamContext},
+        events::{bus::EventBusPort, context::EventsContext},
         tasks::{Shutdown, Tasks},
     };
 

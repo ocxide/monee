@@ -14,7 +14,7 @@ pub mod get_sync_guide {
 }
 
 pub mod sync_node_changes {
-    use cream::event_bus::EventBusPort;
+    use cream::events::bus::EventBusPort;
     use monee_types::apps::app_id::AppId;
 
     use crate::backoffice::events::domain::{

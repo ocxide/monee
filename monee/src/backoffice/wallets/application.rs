@@ -23,7 +23,7 @@ pub mod name_resolve {
 }
 
 pub mod create_one {
-    use cream::{context::FromContext, event_bus::EventBusPort};
+    use cream::{context::FromContext, events::bus::EventBusPort};
     use monee_core::WalletId;
 
     use crate::{
@@ -94,4 +94,3 @@ pub mod update_one {
         }
     }
 }
-
