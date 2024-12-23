@@ -9,69 +9,59 @@ use monee::{
 };
 use tauri::Manager;
 
-mod prelude;
-
 use prelude::*;
 
 mod host_interop;
+mod host_sync_state;
+mod prelude;
+mod monee_commands {
+    macro_rules! write_command {
+        ($service: path: $name: ident( $( $arg: ident: $arg_type: path ),*) -> $ret: ty, $err: ty ) => {
+            #[tauri::command]
+            pub async fn $name(
+                $( $arg: $arg_type, )*
+                ctx: tauri::State<'_, monee::prelude::AppContext>,
+                confirmer: tauri::State<'_, crate::host_sync_state::SyncConfirmState>,
+            ) -> Result<$ret, $err> {
+                use monee::prelude::*;
+                let service: $service = ctx.provide();
+                #[allow(clippy::let_unit_value)]
+                let response = service.run( $( $arg ),* ).await?;
 
-mod host_sync_state {
-    use monee::{
-        nodes::hosts::{
-            application::save_host_dir::SetHostBinding, domain::host::host_binding::HostBinding,
-        },
-        prelude::*,
-    };
-    use tokio::sync::Mutex;
+                confirmer.wait_sync().await?;
 
-    use crate::{
-        host_interop::host_sync::{HostSync, SyncConfirmer},
-        prelude::*,
-    };
-
-    pub struct HostSyncState {
-        host_sync: Mutex<HostSync>,
-        ctx: AppContext,
-    }
-
-    impl HostSyncState {
-        pub fn new(ctx: AppContext, host_sync: HostSync) -> Self {
-            Self {
-                host_sync: Mutex::new(host_sync),
-                ctx,
+                Ok(response)
             }
-        }
-
-        pub async fn set_binding(&self, binding: HostBinding) -> Result<(), InternalError> {
-            let service: SetHostBinding = self.ctx.provide();
-            service.run(&binding).await.catch_infra(&self.ctx)?;
-
-            self.send_binding(binding).await
-        }
-
-        pub async fn send_binding(&self, binding: HostBinding) -> Result<(), InternalError> {
-            self.host_sync.lock().await.set_binding(binding).await
-        }
+        };
     }
 
-    pub struct SyncConfirmState(Mutex<SyncConfirmer>);
-
-    impl SyncConfirmState {
-        pub fn new(sync_confirmer: SyncConfirmer) -> Self {
-            Self(Mutex::new(sync_confirmer))
-        }
-
-        pub async fn wait_sync(&mut self) -> Result<(), InternalError> {
-            self.0.lock().await.wait_sync().await
-        }
+    macro_rules! read_command {
+        ($service: path: $name: ident( $( $arg: ident: $arg_type: path ),*) -> $ret: ty, $err: ty ) => {
+            #[tauri::command]
+            pub async fn $name(
+               $( $arg: $arg_type, )*
+               ctx: tauri::State<'_, monee::prelude::AppContext>,
+            ) -> Result<$ret, $err> {
+               use monee::prelude::*;
+               let service: $service = ctx.provide();
+               service.run( $( $arg ),* ).await.catch_infra(&ctx)
+            }
+        };
     }
 
-    pub fn setup(ctx: AppContext, host_sync: HostSync) -> (SyncConfirmState, HostSyncState) {
-        let sync_confirmer = SyncConfirmState::new(host_sync.sycn_confirm_rx.clone());
-        let host_sync = HostSyncState::new(ctx.clone(), host_sync);
+    use monee::backoffice::events::application::add as add_event;
 
-        (sync_confirmer, host_sync)
-    }
+    use monee::backoffice::item_tags::application::get_all as get_all_items;
+    use monee::backoffice::item_tags::domain::item_tag_node::ItemTagNode;
+
+    use monee::reports::wallets::application::get_all as get_all_wallets;
+    use monee_core::WalletId;
+
+    use crate::prelude::*;
+
+    write_command!(add_event::Add : add_event( event: add_event::Event ) -> (), MoneeError<add_event::Error>);
+    read_command!(get_all_items::GetAll : get_all_items() -> Vec<ItemTagNode>, InternalError);
+    read_command!(get_all_wallets::GetAll : get_all_wallets() -> Vec<(WalletId, (get_all_wallets::Wallet, get_all_wallets::Money))>, InternalError);
 }
 
 async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -161,7 +151,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .setup(|app| tauri::async_runtime::block_on(setup(app)))
-        .invoke_handler(tauri::generate_handler![get_stats, set_host, is_synced])
+        .invoke_handler(tauri::generate_handler![
+            get_stats,
+            set_host,
+            is_synced,
+            monee_commands::add_event,
+            monee_commands::get_all_items,
+            monee_commands::get_all_wallets
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

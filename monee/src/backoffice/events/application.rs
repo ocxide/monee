@@ -5,12 +5,13 @@ pub mod add {
 
     use crate::{
         backoffice::{
-            events::domain::{apply_event, event::Event, repository::Repository},
+            events::domain::{apply_event, repository::Repository},
             snapshot::application::snapshot_io::SnapshotIO,
         },
         shared::{domain::context::AppContext, infrastructure::errors::AppError},
     };
 
+    pub use crate::backoffice::events::domain::event::Event;
     pub use apply_event::{Error, MoveValueError};
 
     #[derive(FromContext)]

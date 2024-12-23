@@ -34,6 +34,7 @@ pub mod item_tag_node {
     use super::{item_name::ItemName, item_tag::ItemTag};
     use monee_core::ItemTagId;
 
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     pub struct ItemTagNode {
         pub id: ItemTagId,
         pub tag: ItemTag,

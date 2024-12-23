@@ -67,3 +67,24 @@ impl<T> CatchToInfra for tauri_plugin_http::reqwest::Result<T> {
         })
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum MoneeError<E> {
+    App(E),
+    Internal(InternalError),
+}
+
+impl<E> From<InternalError> for MoneeError<E> {
+    fn from(value: InternalError) -> Self {
+        Self::Internal(value)
+    }
+}
+
+impl<E> From<AppError<E>> for MoneeError<E> {
+    fn from(value: AppError<E>) -> Self {
+        match value {
+            AppError::App(e) => Self::App(e),
+            AppError::Infrastructure(e) => Self::Internal(InternalError::from_ref(&e)),
+        }
+    }
+}

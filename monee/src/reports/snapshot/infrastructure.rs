@@ -106,6 +106,20 @@ loans.currency_id, loans.actor_id",
                     .collect(),
             })
         }
+
+        async fn get_wallets(
+            &self,
+        ) -> Result<Vec<(WalletId, (Wallet, Money))>, InfrastructureError> {
+            let mut response = self
+                .0
+                .query("SELECT wallets FROM snapshot FETCH wallets.currency_id, wallets.id LIMIT 1")
+                .await?;
+
+            let wallets: Vec<SurrealWallet> = response.take("wallets")?;
+            Ok(wallets
+                .into_iter()
+                .map(|w| (w.data.0, (w.data.1, w.money.into())))
+                .collect())
+        }
     }
 }
-
