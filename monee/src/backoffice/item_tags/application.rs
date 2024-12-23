@@ -67,7 +67,7 @@ pub mod link_one {
             match self.repository.link(parent_id, child_id).await {
                 Ok(_) => Ok(Status::Linked),
                 Err(AppError::Infrastructure(e)) => Err(e),
-                Err(AppError::App(UniqueSaveError::AlreadyExists)) => Ok(Status::AlreadyContains),
+                Err(AppError::App(UniqueSaveError::AlreadyExists(_))) => Ok(Status::AlreadyContains),
             }
         }
     }

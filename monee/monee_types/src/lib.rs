@@ -1,8 +1,8 @@
+pub mod apps;
 pub mod backoffice;
 pub mod host;
-pub mod reports;
-pub mod apps;
 pub mod nodes;
+pub mod reports;
 
 pub mod shared {
     pub mod alias;
@@ -14,7 +14,7 @@ pub mod shared {
     pub mod errors {
         #[derive(serde::Serialize, Debug)]
         pub enum UniqueSaveError {
-            AlreadyExists,
+            AlreadyExists(&'static str),
         }
     }
 }

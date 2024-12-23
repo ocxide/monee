@@ -65,7 +65,7 @@ mod handlers {
     impl Handler for OnWalletCreated {
         type Event = WalletCreated;
         async fn handle(self, event: Self::Event) -> Result<(), Error> {
-            self.port.send(super::DataChanged::Wallet(event.id));
+            self.port.send(super::DataChanged::Wallet(event.id)).await;
             Ok(())
         }
     }
@@ -78,7 +78,7 @@ mod handlers {
     impl Handler for OnCurrencyCreated {
         type Event = CurrencyCreated;
         async fn handle(self, event: Self::Event) -> Result<(), Error> {
-            self.port.send(super::DataChanged::Currency(event.id));
+            self.port.send(super::DataChanged::Currency(event.id)).await;
             Ok(())
         }
     }
@@ -92,7 +92,7 @@ mod handlers {
     impl Handler for OnActorCreated {
         type Event = ActorCreated;
         async fn handle(self, event: Self::Event) -> Result<(), Error> {
-            self.port.send(super::DataChanged::Actor(event.id));
+            self.port.send(super::DataChanged::Actor(event.id)).await;
             Ok(())
         }
     }
@@ -106,7 +106,7 @@ mod handlers {
     impl Handler for OnEventAdded {
         type Event = EventAdded;
         async fn handle(self, _: Self::Event) -> Result<(), Error> {
-            self.port.send(super::DataChanged::Event);
+            self.port.send(super::DataChanged::Event).await;
             Ok(())
         }
     }
@@ -237,8 +237,8 @@ async fn sync_from_host(
 
     let service: monee::nodes::sync::application::rewrite_system::RewriteSystem = ctx.provide();
     let result = service.run(host_state).await.catch_infra(ctx)?;
-    if result.is_err() {
-        eprintln!("WARNING: Failed to overwrite system");
+    if let Err(e) = result {
+        eprintln!("WARNING: Failed to overwrite system: error: {e:?}");
     }
 
     *changes_record = ChangesRecord::default();

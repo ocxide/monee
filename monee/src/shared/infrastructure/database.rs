@@ -76,9 +76,7 @@ async fn init_host(connection: &Connection) -> Result<()> {
 }
 
 #[cfg(feature = "embedded")]
-async fn create_connection(base_dir: PathBuf) -> surrealdb::Result<(Connection, bool)> {
-    use std::path::PathBuf;
-
+async fn create_connection(base_dir: std::path::PathBuf) -> surrealdb::Result<(Connection, bool)> {
     let path = base_dir.join(DB_DIR);
     // For now, just run definition queries
     /* let exists = tokio::fs::try_exists(&path).await.unwrap_or_else(|_| {
@@ -109,7 +107,7 @@ async fn create_connection(url: String) -> surrealdb::Result<(Connection, bool)>
 }
 
 pub async fn connect(
-    #[cfg(feature = "embedded")] base_dir: PathBuf,
+    #[cfg(feature = "embedded")] base_dir: std::path::PathBuf,
     #[cfg(feature = "remote")] url: String,
 ) -> surrealdb::Result<Connection> {
     #[cfg(feature = "embedded")]

@@ -1,4 +1,4 @@
-use cream::events::multi_dispatch_listener::MultiDispatchers;
+use cream::events::multi_dispatch_listener::{MultiDispatchListener, MultiDispatchers};
 use host_interop::{
     host_context::{HostContext, RegisterNode},
     node_sync::NodeSyncContext,
@@ -85,22 +85,25 @@ async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         host_interop::node_sync::setup(setup.ctx.clone(), host_ctx.clone());
     let (sync_confirmer, host_sync) = host_sync_state::setup(setup.ctx.clone(), host_sync);
 
-    setup
-        .cfg_events(move |cfg| {
-            let mut multi = MultiDispatchers::default();
-            multi.add(cfg.ctx.clone(), cfg.dispatcher);
+    let ctx = setup
+        .cfg_events({
+            let data_port = data_port.clone();
+            move |cfg| {
+                let mut multi = MultiDispatchers::default();
+                multi.add(cfg.ctx.clone(), cfg.dispatcher);
 
-            let (node_sync_ctx, dispatcher) = NodeSyncContext::setup(data_port);
-            multi.add(node_sync_ctx, dispatcher);
+                let (node_sync_ctx, dispatcher) = NodeSyncContext::setup(data_port);
+                multi.add(node_sync_ctx, dispatcher);
 
-            cfg.events_setup.build(multi)
+                cfg.events_setup.build::<MultiDispatchListener>(multi)
+            }
         })
         .setup();
 
     app.manage(data_port);
     app.manage(sync_confirmer);
     app.manage(host_sync);
-    app.manage(setup);
+    app.manage(ctx);
     app.manage(host_ctx);
 
     Ok(())
