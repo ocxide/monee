@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 pub use surrealdb::Result;
 
 #[cfg(feature = "embedded")]
@@ -99,25 +97,28 @@ async fn create_connection(base_dir: PathBuf) -> surrealdb::Result<(Connection, 
 }
 
 #[cfg(feature = "db_test")]
-pub async fn connect() -> surrealdb::Result<Connection>  {
+pub async fn create_connection() -> surrealdb::Result<(Connection, bool)> {
     let db = surrealdb::Surreal::new::<surrealdb::engine::local::Mem>(()).await?;
-    db.use_ns("monee").use_db("monee").await?;
-
-    init(&db).await?;
-
-    Ok(db)
-}
-
-#[cfg(feature = "remote")]
-async fn create_connection(_base_dir: PathBuf) -> surrealdb::Result<(Connection, bool)> {
-    let db: Connection =
-        surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>("0.0.0.0:6767").await?;
     Ok((db, false))
 }
 
-#[cfg(any(feature = "embedded", feature = "remote"))]
-pub async fn connect(base_dir: PathBuf) -> surrealdb::Result<Connection> {
+#[cfg(feature = "remote")]
+async fn create_connection(url: String) -> surrealdb::Result<(Connection, bool)> {
+    let db: Connection = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(url).await?;
+    Ok((db, false))
+}
+
+pub async fn connect(
+    #[cfg(feature = "embedded")] base_dir: PathBuf,
+    #[cfg(feature = "remote")] url: String,
+) -> surrealdb::Result<Connection> {
+    #[cfg(feature = "embedded")]
     let (db, exists) = create_connection(base_dir).await?;
+    #[cfg(feature = "remote")]
+    let (db, exists) = create_connection(url).await?;
+    #[cfg(feature = "db_test")]
+    let (db, exists) = create_connection().await?;
+
     db.use_ns("monee").use_db("monee").await?;
 
     if !exists {

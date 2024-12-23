@@ -55,23 +55,22 @@ pub mod infrastructure {
 
         #[cfg(test)]
         mod tests {
-            use super::*;
-
             #[cfg(feature = "db_test")]
             #[tokio::test]
             async fn it_saves() {
-                use monee_types::{apps::app_id::AppId, nodes::host::host_binding::HostBinding};
+                use super::*;
                 use cream::context::Context;
+                use monee_types::{apps::app_id::AppId, nodes::host::host_binding::HostBinding};
 
                 let con = crate::shared::infrastructure::database::connect()
                     .await
                     .unwrap();
-                let ctx= DbContext::new(con);
+                let ctx = DbContext::new(con);
 
                 let app_id = AppId::default();
                 let og_host_binding = HostBinding {
-                    dir: "/tmp/monee".to_owned().into(), 
-                    node_app_id: app_id
+                    dir: "/tmp/monee".to_owned().into(),
+                    node_app_id: app_id,
                 };
 
                 let repo: SurrealRepository = ctx.provide();

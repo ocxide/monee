@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use cream::{
     context::{Context, CreamContext, FromContext},
     events::{
@@ -31,15 +29,31 @@ impl DbContext {
 }
 
 pub struct AppContextBuilder {
-    pub base_dir: PathBuf,
+    #[cfg(feature = "embedded")]
+    pub base_dir: std::path::PathBuf,
+    #[cfg(feature = "remote")]
+    pub db_url: String,
+}
+
+impl Default for AppContextBuilder {
+    fn default() -> Self {
+        Self {
+            #[cfg(feature = "embedded")]
+            base_dir: crate::shared::infrastructure::filesystem::create_local_path(),
+            #[cfg(feature = "remote")]
+            db_url: "0.0.0.0:6767".to_owned(),
+        }
+    }
 }
 
 impl AppContextBuilder {
     pub async fn build(self) -> Result<AppContextSetup, InfrastructureError> {
-        #[cfg(any(feature = "embedded", feature = "remote"))]
+        #[cfg(feature = "embedded")]
         let db = crate::shared::infrastructure::database::connect(self.base_dir).await?;
         #[cfg(feature = "db_test")]
         let db = crate::shared::infrastructure::database::connect().await?;
+        #[cfg(feature = "remote")]
+        let db = crate::shared::infrastructure::database::connect(self.db_url).await?;
 
         let cream = CreamContext::default();
         let (events_ctx, setup) = cream.provide::<EventsContextBuilder>().build();
@@ -79,8 +93,12 @@ impl AppContextSetup {
         self.ctx
     }
 
-    pub fn cfg_events<L: ListenerLaunch>(mut self, cfg_fn: impl FnOnce(AppEventsBuilder) -> L) -> Self {
-        self.try_cfg_events(cfg_fn).expect("events already configured");
+    pub fn cfg_events<L: ListenerLaunch>(
+        mut self,
+        cfg_fn: impl FnOnce(AppEventsBuilder) -> L,
+    ) -> Self {
+        self.try_cfg_events(cfg_fn)
+            .expect("events already configured");
         self
     }
 
@@ -105,16 +123,6 @@ impl AppContextSetup {
 
         Some(())
     }
-}
-
-pub async fn setup() -> Result<AppContext, InfrastructureError> {
-    #[cfg(feature = "embedded")]
-    let base_dir = crate::shared::infrastructure::filesystem::create_local_path();
-    #[cfg(not(feature = "embedded"))]
-    let base_dir = PathBuf::default();
-
-    let setup = AppContextBuilder { base_dir }.build().await?;
-    Ok(setup.setup())
 }
 
 impl FromContext<DbContext> for crate::shared::infrastructure::database::Connection {

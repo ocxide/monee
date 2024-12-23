@@ -1,13 +1,10 @@
-
-
 pub mod snapshot {
     use std::collections::HashMap;
 
     use monee_core::{Amount, DebtId, WalletId};
 
     use crate::backoffice::{
-        actors::actor::Actor, currencies::currency::Currency,
-        wallets::wallet_name::WalletName,
+        actors::actor::Actor, currencies::currency::Currency, wallets::wallet_name::WalletName,
     };
 
     #[derive(serde::Deserialize, serde::Serialize)]
@@ -34,4 +31,3 @@ pub mod snapshot {
         pub description: String,
     }
 }
-
