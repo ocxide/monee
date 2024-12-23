@@ -100,11 +100,11 @@ pub mod repository {
 
     #[async_trait::async_trait]
     impl Repository for SurrealRepository {
-        async fn add(&self, event: Event) -> Result<(), InfrastructureError> {
-            let _: Option<()> = self
-                .0
-                .insert(("event", EventId::default().to_string()))
-                .content(SurrealMoneeEvent::from(event))
+        async fn add(&self, id: EventId, event: Event) -> Result<(), InfrastructureError> {
+            self.0
+                .query("CREATE type::thing('event', $id) CONTENT $event")
+                .bind(("id", id))
+                .bind(("event", SurrealMoneeEvent::from(event)))
                 .await?;
 
             Ok(())
@@ -134,4 +134,3 @@ pub mod repository {
         }
     }
 }
-

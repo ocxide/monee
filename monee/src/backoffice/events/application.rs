@@ -1,5 +1,7 @@
 pub mod add {
-    use cream::context::FromContext;
+    use cream::{context::FromContext, events::bus::EventBusPort};
+    use monee_core::EventId;
+    use monee_types::backoffice::events::event_added::EventAdded;
 
     use crate::{
         backoffice::{
@@ -16,6 +18,7 @@ pub mod add {
     pub struct Add {
         repository: Box<dyn Repository>,
         snapshot_io: SnapshotIO,
+        port: EventBusPort,
     }
 
     impl Add {
@@ -25,8 +28,12 @@ pub mod add {
                 return Err(AppError::App(e));
             }
 
-            self.repository.add(event).await?;
+            let id = EventId::default();
+
+            self.repository.add(id, event).await?;
             self.snapshot_io.save(snapshot).await?;
+
+            self.port.publish(EventAdded { id });
 
             Ok(())
         }
