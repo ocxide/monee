@@ -1,6 +1,7 @@
 pub mod create_one {
-    use cream::context::FromContext;
+    use cream::{context::FromContext, events::bus::EventBusPort};
     use monee_core::ItemTagId;
+    use monee_types::backoffice::item_tags::item_tag_created::ItemTagCreated;
 
     use crate::{
         backoffice::item_tags::domain::{item_tag::ItemTag, repository::Repository},
@@ -12,12 +13,17 @@ pub mod create_one {
     #[context(AppContext)]
     pub struct CreateOne {
         repository: Box<dyn Repository>,
+        port: EventBusPort,
     }
 
     impl CreateOne {
         pub async fn run(&self, tag: ItemTag) -> Result<(), AppError<UniqueSaveError>> {
             let id = ItemTagId::new();
-            self.repository.save(id, tag).await
+
+            self.repository.save(id, tag).await?;
+            self.port.publish(ItemTagCreated { id });
+
+            Ok(())
         }
     }
 }

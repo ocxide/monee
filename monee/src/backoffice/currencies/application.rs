@@ -1,6 +1,7 @@
 pub mod save_one {
-    use cream::context::FromContext;
+    use cream::{context::FromContext, events::bus::EventBusPort};
     use monee_core::CurrencyId;
+    use monee_types::backoffice::currencies::currency_created::CurrencyCreated;
 
     use crate::{
         backoffice::currencies::domain::{currency::Currency, repository::Repository},
@@ -12,11 +13,19 @@ pub mod save_one {
     #[context(AppContext)]
     pub struct SaveOne {
         repository: Box<dyn Repository>,
+        port: EventBusPort,
     }
 
     impl SaveOne {
         pub async fn run(&self, currency: Currency) -> Result<(), AppError<UniqueSaveError>> {
-            self.repository.save(CurrencyId::new(), currency).await
+            let id = CurrencyId::new();
+
+            self.repository.save(id, currency).await?;
+            self.port.publish(CurrencyCreated {
+                id
+            });
+
+            Ok(())
         }
     }
 }

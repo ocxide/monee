@@ -1,6 +1,7 @@
 pub mod create_one {
-    use cream::context::FromContext;
+    use cream::{context::FromContext, events::bus::EventBusPort};
     use monee_core::ActorId;
+    use monee_types::backoffice::actors::actor_created::ActorCreated;
 
     use crate::{
         backoffice::actors::domain::{actor::Actor, repository::Repository},
@@ -12,11 +13,19 @@ pub mod create_one {
     #[context(AppContext)]
     pub struct CreateOne {
         repository: Box<dyn Repository>,
+        port: EventBusPort,
     }
 
     impl CreateOne {
         pub async fn run(&self, actor: Actor) -> Result<(), AppError<UniqueSaveError>> {
-            self.repository.save(ActorId::new(), actor).await
+            let id = ActorId::new();
+
+            self.repository.save(id, actor).await?;
+            self.port.publish(ActorCreated {
+                id
+            });
+
+            Ok(())
         }
     }
 }
