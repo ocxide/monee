@@ -4,6 +4,7 @@ use app::*;
 use leptos::{mount::mount_to_body, view};
 
 mod tauri_interop;
+mod leptos_util;
 
 mod prelude {
     #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
