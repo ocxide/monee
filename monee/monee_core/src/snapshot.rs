@@ -1,9 +1,9 @@
-use money::{MoneyError, MoneyHost};
+use money::MoneyHost;
 use serde::{Deserialize, Serialize};
 
 use crate::{ActorId, Amount, CurrencyId, DebtId, WalletId};
 
-pub use money::{Money, MoneyMap};
+pub use money::{Money, MoneyError, MoneyMap};
 
 mod money;
 

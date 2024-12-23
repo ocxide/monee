@@ -7,28 +7,34 @@ bind_command!(get_stats() -> Snapshot, InternalError);
 struct EventButton {
     name: &'static str,
     color: &'static str,
+    href: &'static str,
 }
 
 const EVENT_BUTTONS: &[EventButton] = &[
     EventButton {
         name: "Purchase",
         color: "border-green-500",
+        href: "/events/purchase",
     },
     EventButton {
         name: "Buy",
         color: "border-blue-500",
+        href: "/events/buy",
     },
     EventButton {
         name: "Buy",
         color: "border-gray-500",
+        href: "/events/buy",
     },
     EventButton {
         name: "Buy",
         color: "border-green-500",
+        href: "/events/buy",
     },
     EventButton {
         name: "Buy",
         color: "border-green-500",
+        href: "/events/buy",
     },
 ];
 
@@ -41,7 +47,7 @@ pub fn Home() -> impl IntoView {
             <LoadStats />
 
             <ul class="flex flex-wrap gap-4 justify-center">
-                {EVENT_BUTTONS.iter().map(|event| view! { <li><EventButton name=event.name color=event.color /></li> } ).collect::<Vec<_>>()}
+                {EVENT_BUTTONS.iter().map(|event| view! { <li><EventButton name=event.name color=event.color href=event.href /></li> } ).collect::<Vec<_>>()}
             </ul>
         </main>
     }
@@ -121,14 +127,13 @@ fn LoadStats() -> impl IntoView {
 }
 
 #[component]
-fn EventButton(name: &'static str, color: &'static str) -> impl IntoView {
+fn EventButton(name: &'static str, color: &'static str, href: &'static str) -> impl IntoView {
     view! {
         <a
-            href="/"
+            href=href
             class=format!("inline-block p-8 text-xl rounded-full bg-slate-800 active:bg-slate-950 shadow-md shadow-slate-700 border-2 {color}")
         >
             {name}
         </a>
     }
 }
-

@@ -49,19 +49,22 @@ mod monee_commands {
         };
     }
 
-    use monee::backoffice::events::application::add as add_event;
+    use monee::backoffice::{actors::domain::actor::Actor, events::application::add as add_event};
 
     use monee::backoffice::item_tags::application::get_all as get_all_items;
     use monee::backoffice::item_tags::domain::item_tag_node::ItemTagNode;
 
     use monee::reports::wallets::application::get_all as get_all_wallets;
-    use monee_core::WalletId;
+    use monee_core::{ActorId, WalletId};
+
+    use monee::backoffice::actors::application::get_all as get_all_actors;
 
     use crate::prelude::*;
 
     write_command!(add_event::Add : add_event( event: add_event::Event ) -> (), MoneeError<add_event::Error>);
     read_command!(get_all_items::GetAll : get_all_items() -> Vec<ItemTagNode>, InternalError);
     read_command!(get_all_wallets::GetAll : get_all_wallets() -> Vec<(WalletId, (get_all_wallets::Wallet, get_all_wallets::Money))>, InternalError);
+    read_command!(get_all_actors::GetAll : get_all_actors() -> Vec<(ActorId, Actor)>, InternalError);
 }
 
 async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -157,7 +160,8 @@ pub fn run() {
             is_synced,
             monee_commands::add_event,
             monee_commands::get_all_items,
-            monee_commands::get_all_wallets
+            monee_commands::get_all_wallets,
+            monee_commands::get_all_actors,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
