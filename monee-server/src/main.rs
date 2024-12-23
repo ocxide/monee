@@ -3,6 +3,7 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
+use monee::shared::domain::context::AppContextBuilder;
 
 mod prelude;
 
@@ -12,9 +13,11 @@ fn main() {
 }
 
 async fn serve() {
-    let ctx = monee::shared::domain::context::setup()
+    let ctx = AppContextBuilder::default()
+        .build()
         .await
-        .expect("To setup context");
+        .expect("To build context")
+        .setup();
 
     let app = Router::new()
         .route("/nodes", post(clients::register))
@@ -33,9 +36,9 @@ mod clients {
     use axum::extract::State;
     use axum::http::StatusCode;
     use axum::Json;
+    use monee::host;
     use monee::host::nodes::domain::app_id::AppId;
     use monee::host::nodes::domain::app_name::AppName;
-    use monee::host;
     use monee::prelude::*;
 
     use crate::prelude::CatchInfra;
@@ -68,9 +71,8 @@ mod sync {
     use axum::Json;
     use monee::host::nodes::domain::app_id::AppId;
     use monee::host::sync::domain::host_state::HostState;
-    use monee::host::sync::domain::{
-        sync_error::SyncError, sync_guide::SyncGuide, node_changes::NodeChanges,
-    };
+    use monee::host::sync::domain::node_changes::NodeChanges;
+    use monee::host::sync::domain::{sync_error::SyncError, sync_guide::SyncGuide};
     use monee::prelude::*;
     use monee::shared::domain::errors::UniqueSaveError;
 
@@ -107,7 +109,8 @@ mod sync {
             return Err(StatusCode::UNAUTHORIZED);
         }
 
-        let service: monee::host::sync::application::sync_node_changes::SyncNodeChanges = ctx.provide();
+        let service: monee::host::sync::application::sync_node_changes::SyncNodeChanges =
+            ctx.provide();
         service
             .run(id, payload)
             .await

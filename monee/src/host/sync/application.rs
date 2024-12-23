@@ -14,7 +14,6 @@ pub mod get_sync_guide {
 }
 
 pub mod sync_node_changes {
-    use cream::events::bus::EventBusPort;
     use monee_types::apps::app_id::AppId;
 
     use crate::backoffice::events::domain::{
@@ -25,6 +24,7 @@ pub mod sync_node_changes {
     use crate::host::sync::domain::sync_error::SyncError;
     use crate::host::sync::domain::{repository::Repository, node_changes::NodeChanges};
     use crate::{iprelude::*, prelude::*};
+    use cream::events::bus::EventBusPort;
 
     #[derive(FromContext)]
     #[context(AppContext)]

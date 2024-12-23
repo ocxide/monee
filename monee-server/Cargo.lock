@@ -709,8 +709,8 @@ dependencies = [
 
 [[package]]
 name = "cream"
-version = "0.2.0"
-source = "git+https://github.com/ocxide/cream.git#d6629c677990d21fd446fa2649b87b84c0720b35"
+version = "0.2.1"
+source = "git+https://github.com/ocxide/cream.git#f4eab3ff1f7b9426a1c4acf8ca41745af12057f9"
 dependencies = [
  "async-trait",
  "cream_derive",
@@ -722,7 +722,7 @@ dependencies = [
 [[package]]
 name = "cream_derive"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#d6629c677990d21fd446fa2649b87b84c0720b35"
+source = "git+https://github.com/ocxide/cream.git#f4eab3ff1f7b9426a1c4acf8ca41745af12057f9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -732,7 +732,7 @@ dependencies = [
 [[package]]
 name = "cream_events_core"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#d6629c677990d21fd446fa2649b87b84c0720b35"
+source = "git+https://github.com/ocxide/cream.git#f4eab3ff1f7b9426a1c4acf8ca41745af12057f9"
 
 [[package]]
 name = "critical-section"
@@ -1917,7 +1917,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]

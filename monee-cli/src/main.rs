@@ -74,7 +74,7 @@ mod error {
 
 use clap::Parser;
 use cream::{context::Context, tasks::Shutdown};
-use monee::shared::domain::context::AppContext;
+use monee::shared::domain::context::{AppContext, AppContextBuilder};
 
 mod commands;
 
@@ -116,9 +116,11 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> miette::Result<()> {
-    let ctx = monee::shared::domain::context::setup()
+    let ctx = AppContextBuilder::default()
+        .build()
         .await
-        .expect("To setup context");
+        .expect("To build context")
+        .setup();
 
     let cli = CliParser::parse();
     run(&ctx, cli).await?;
