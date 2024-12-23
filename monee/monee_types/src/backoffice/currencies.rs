@@ -11,8 +11,6 @@ pub mod currency {
     }
 }
 
-
-
 pub mod currency_symbol {
     use std::{fmt::Display, str::FromStr};
 
@@ -173,6 +171,25 @@ pub mod currency_code {
         fn prints_as_str() {
             let code: CurrencyCode = "ABC".parse().unwrap();
             assert_eq!(&code.to_string(), "ABC");
+        }
+    }
+}
+
+pub mod currency_created {
+    use cream_events_core::DomainEvent;
+
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+    pub struct CurrencyCreated {
+        pub id: monee_core::CurrencyId,
+    }
+
+    impl DomainEvent for CurrencyCreated {
+        fn name(&self) -> &'static str {
+            "backoffice.currencies.created"
+        }
+
+        fn version(&self) -> &'static str {
+            "1.0.0"
         }
     }
 }

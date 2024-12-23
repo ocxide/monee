@@ -1,4 +1,8 @@
-use host_interop::host_context::{HostContext, RegisterNode};
+use cream::events::multi_dispatch_listener::MultiDispatchers;
+use host_interop::{
+    host_context::{HostContext, RegisterNode},
+    node_sync::NodeSyncContext,
+};
 use host_sync_state::HostSyncState;
 use monee::{
     nodes::hosts::domain::host::host_dir::HostDir, shared::domain::context::AppContextBuilder,
@@ -73,17 +77,30 @@ mod host_sync_state {
 async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let base_dir = app.path().app_data_dir().expect("AppData not found");
     dbg!(&base_dir);
-    let context = AppContextBuilder { base_dir }.setup().await?;
+    let setup = AppContextBuilder { base_dir }.build().await?;
 
     let host_ctx = HostContext::default();
 
-    let (data_port, host_sync) = host_interop::node_sync::setup(context.clone(), host_ctx.clone());
-    let (sync_confirmer, host_sync) = host_sync_state::setup(context.clone(), host_sync);
+    let (data_port, host_sync) =
+        host_interop::node_sync::setup(setup.ctx.clone(), host_ctx.clone());
+    let (sync_confirmer, host_sync) = host_sync_state::setup(setup.ctx.clone(), host_sync);
+
+    setup
+        .cfg_events(move |cfg| {
+            let mut multi = MultiDispatchers::default();
+            multi.add(cfg.ctx.clone(), cfg.dispatcher);
+
+            let (node_sync_ctx, dispatcher) = NodeSyncContext::setup(data_port);
+            multi.add(node_sync_ctx, dispatcher);
+
+            cfg.events_setup.build(multi)
+        })
+        .setup();
 
     app.manage(data_port);
     app.manage(sync_confirmer);
     app.manage(host_sync);
-    app.manage(context);
+    app.manage(setup);
     app.manage(host_ctx);
 
     Ok(())

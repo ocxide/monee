@@ -1,3 +1,4 @@
+use cream::{context::FromContext, events::dispatcher::Dispatcher};
 use monee::{
     nodes::hosts::{
         application::save_host_dir::SetHostBinding,
@@ -15,6 +16,101 @@ use super::{
     host_context::{HostCon, HostContext},
     host_sync::HostSync,
 };
+
+#[derive(Clone)]
+pub struct NodeSyncContext {
+    port: DataChangedPort,
+}
+
+impl NodeSyncContext {
+    pub fn setup(port: DataChangedPort) -> (Self, Dispatcher<NodeSyncContext>) {
+        let ctx = NodeSyncContext { port };
+        let mut dispatcher = Dispatcher::default();
+
+        dispatcher.add::<handlers::OnWalletCreated>();
+        dispatcher.add::<handlers::OnCurrencyCreated>();
+        dispatcher.add::<handlers::OnActorCreated>();
+        dispatcher.add::<handlers::OnEventAdded>();
+
+        (ctx, dispatcher)
+    }
+}
+
+impl Context for NodeSyncContext {}
+
+impl FromContext<NodeSyncContext> for DataChangedPort {
+    fn from_context(ctx: &NodeSyncContext) -> Self {
+        ctx.port.clone()
+    }
+}
+
+mod handlers {
+    use cream::{
+        context::FromContext,
+        events::{Error, Handler},
+    };
+    use monee::backoffice::{
+        actors::domain::actor_created::ActorCreated,
+        currencies::domain::currency_created::CurrencyCreated,
+        events::domain::event_added::EventAdded, wallets::domain::wallet_created::WalletCreated,
+    };
+
+    use super::{DataChangedPort, NodeSyncContext};
+
+    #[derive(FromContext)]
+    #[context(NodeSyncContext)]
+    pub struct OnWalletCreated {
+        port: DataChangedPort,
+    }
+    impl Handler for OnWalletCreated {
+        type Event = WalletCreated;
+        async fn handle(self, event: Self::Event) -> Result<(), Error> {
+            self.port.send(super::DataChanged::Wallet(event.id));
+            Ok(())
+        }
+    }
+
+    #[derive(FromContext)]
+    #[context(NodeSyncContext)]
+    pub struct OnCurrencyCreated {
+        port: DataChangedPort,
+    }
+    impl Handler for OnCurrencyCreated {
+        type Event = CurrencyCreated;
+        async fn handle(self, event: Self::Event) -> Result<(), Error> {
+            self.port.send(super::DataChanged::Currency(event.id));
+            Ok(())
+        }
+    }
+
+    #[derive(FromContext)]
+    #[context(NodeSyncContext)]
+    pub struct OnActorCreated {
+        port: DataChangedPort,
+    }
+
+    impl Handler for OnActorCreated {
+        type Event = ActorCreated;
+        async fn handle(self, event: Self::Event) -> Result<(), Error> {
+            self.port.send(super::DataChanged::Actor(event.id));
+            Ok(())
+        }
+    }
+
+    #[derive(FromContext)]
+    #[context(NodeSyncContext)]
+    pub struct OnEventAdded {
+        port: DataChangedPort,
+    }
+
+    impl Handler for OnEventAdded {
+        type Event = EventAdded;
+        async fn handle(self, _: Self::Event) -> Result<(), Error> {
+            self.port.send(super::DataChanged::Event);
+            Ok(())
+        }
+    }
+}
 
 pub enum DataChanged {
     Currency(CurrencyId),

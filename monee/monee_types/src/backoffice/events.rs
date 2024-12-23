@@ -171,3 +171,22 @@ pub mod apply_event {
         }
     }
 }
+
+pub mod event_added {
+    use cream_events_core::DomainEvent;
+
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+    pub struct EventAdded {
+        pub id: monee_core::EventId,
+    }
+
+    impl DomainEvent for EventAdded {
+        fn name(&self) -> &'static str {
+            "backoffice.events.added"
+        }
+
+        fn version(&self) -> &'static str {
+            "1.0.0"
+        }
+    }
+}

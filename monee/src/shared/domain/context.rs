@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use cream::{
     context::{Context, CreamContext, FromContext},
     events::{
-        context::{EventsContext, EventsContextBuilder, EventsContextSetup},
+        context::{EventsContext, EventsContextBuilder, ListenerBuilder, ListenerLaunch},
         dispatch_listener::DispatchListener,
     },
 };
@@ -52,27 +52,58 @@ impl AppContextBuilder {
 
         Ok(AppContextSetup {
             ctx,
-            events_setup: setup,
+            events_setup: Some(setup),
         })
     }
 }
 
 pub struct AppContextSetup {
-    ctx: AppContext,
-    events_setup: EventsContextSetup,
+    pub ctx: AppContext,
+    events_setup: Option<ListenerBuilder>,
+}
+
+pub struct AppEventsBuilder<'c> {
+    pub ctx: &'c AppContext,
+    pub dispatcher: cream::events::dispatcher::Dispatcher<AppContext>,
+    pub events_setup: ListenerBuilder,
 }
 
 impl AppContextSetup {
-    pub fn setup(self) -> AppContext {
+    pub fn setup(mut self) -> AppContext {
+        let _ = self.try_cfg_events(|builder| {
+            builder
+                .events_setup
+                .build::<DispatchListener<_>>((builder.ctx.clone(), builder.dispatcher))
+        });
+
+        self.ctx
+    }
+
+    pub fn cfg_events<L: ListenerLaunch>(mut self, cfg_fn: impl FnOnce(AppEventsBuilder) -> L) -> Self {
+        self.try_cfg_events(cfg_fn).expect("events already configured");
+        self
+    }
+
+    pub fn try_cfg_events<L: ListenerLaunch>(
+        &mut self,
+        cfg_fn: impl FnOnce(AppEventsBuilder) -> L,
+    ) -> Option<()> {
+        let setup = self.events_setup.take()?;
+
         let mut dispatcher = cream::events::dispatcher::Dispatcher::<AppContext>::default();
-        // Add event handlers
         dispatcher
             .add::<crate::backoffice::snapshot::application::on_wallet_created::OnWalletCreated>();
 
-        self.events_setup
-            .setup::<DispatchListener<_>>((self.ctx.clone(), dispatcher));
+        let builder = AppEventsBuilder {
+            ctx: &self.ctx,
+            dispatcher,
+            events_setup: setup,
+        };
 
-        self.ctx
+        let listener = cfg_fn(builder);
+        listener.launch();
+
+        Some(())
     }
 }
 

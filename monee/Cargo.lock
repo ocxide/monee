@@ -646,7 +646,7 @@ dependencies = [
 [[package]]
 name = "cream"
 version = "0.2.1"
-source = "git+https://github.com/ocxide/cream.git#74c2f4e203fba9fba9a4baa3a493898432c8df04"
+source = "git+https://github.com/ocxide/cream.git#f4eab3ff1f7b9426a1c4acf8ca41745af12057f9"
 dependencies = [
  "async-trait",
  "cream_derive",
@@ -658,7 +658,7 @@ dependencies = [
 [[package]]
 name = "cream_derive"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#74c2f4e203fba9fba9a4baa3a493898432c8df04"
+source = "git+https://github.com/ocxide/cream.git#f4eab3ff1f7b9426a1c4acf8ca41745af12057f9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -668,7 +668,7 @@ dependencies = [
 [[package]]
 name = "cream_events_core"
 version = "0.1.0"
-source = "git+https://github.com/ocxide/cream.git#74c2f4e203fba9fba9a4baa3a493898432c8df04"
+source = "git+https://github.com/ocxide/cream.git#f4eab3ff1f7b9426a1c4acf8ca41745af12057f9"
 
 [[package]]
 name = "critical-section"

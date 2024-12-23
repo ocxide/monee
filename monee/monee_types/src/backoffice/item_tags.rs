@@ -1,5 +1,3 @@
-
-
 pub mod item_tag {
     use super::item_name::ItemName;
 
@@ -40,5 +38,24 @@ pub mod item_tag_node {
         pub id: ItemTagId,
         pub tag: ItemTag,
         pub parents_name: Vec<ItemName>,
+    }
+}
+
+pub mod item_tag_created {
+    use cream_events_core::DomainEvent;
+
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+    pub struct ItemTagCreated {
+        pub id: monee_core::ItemTagId,
+    }
+
+    impl DomainEvent for ItemTagCreated {
+        fn name(&self) -> &'static str {
+            "backoffice.item_tags.created"
+        }
+
+        fn version(&self) -> &'static str {
+            "1.0.0"
+        }
     }
 }

@@ -1,5 +1,3 @@
-
-
 pub mod actor {
     use super::{actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType};
 
@@ -91,6 +89,25 @@ pub mod actor_type {
                     _ => Err(Error {}),
                 }
             }
+        }
+    }
+}
+
+pub mod actor_created {
+    use cream_events_core::DomainEvent;
+
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+    pub struct ActorCreated {
+        pub id: monee_core::ActorId,
+    }
+
+    impl DomainEvent for ActorCreated {
+        fn name(&self) -> &'static str {
+            "backoffice.actors.created"
+        }
+
+        fn version(&self) -> &'static str {
+            "1.0.0"
         }
     }
 }
