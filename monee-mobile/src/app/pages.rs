@@ -3,7 +3,7 @@ pub mod startup;
 pub mod purchase {
     use leptos::{ev::SubmitEvent, prelude::*};
     use leptos_router::hooks::use_navigate;
-    use monee_core::{ActorId, MoneyError, WalletId};
+    use monee_core::{ActorId, Amount, ItemTagId, MoneyError, WalletId};
     use monee_types::{
         backoffice::{
             actors::actor::Actor,
@@ -15,6 +15,8 @@ pub mod purchase {
         },
         reports::snapshot::snapshot::{Money, Wallet},
     };
+    use wasm_bindgen::JsCast;
+    use web_sys::HtmlOptionElement;
 
     use crate::{
         bind_command,
@@ -31,6 +33,11 @@ pub mod purchase {
 
     #[component]
     pub fn Purchase() -> impl IntoView {
+        let (wallet_id, set_wallet_id) = signal::<Option<WalletId>>(None);
+        let (item_id, set_item_id) = signal::<Option<ItemTagId>>(None);
+        let (actor_ids, set_actor_ids) = signal::<Vec<ActorId>>(Vec::new());
+        let (amount, set_amount) = signal::<Amount>(Amount::default());
+
         let navigate = use_navigate();
         let navigate_back = move || {
             navigate("/home", Default::default());
@@ -69,7 +76,7 @@ pub mod purchase {
 
         let actors = LocalResource::new(get_all_actors);
         let actors_options = create_options(actors, |(id, actor)| {
-            let msg = match actor.alias {
+            let msg = match &actor.alias {
                 Some(alias) => format!("{} - {}", alias, actor.name),
                 None => actor.name.to_string(),
             };
@@ -86,17 +93,27 @@ pub mod purchase {
             }
         });
 
-        let on_submit = move |e: SubmitEvent| {
-            e.prevent_default();
+        let on_submit = {
+            let add_event_action = add_event_action.clone();
+            move |e: SubmitEvent| {
+                e.prevent_default();
 
-            /* let event = Event::Buy(Buy {
-                item: (),
-                actors: (),
-                wallet_id: (),
-                amount: (),
-            });
+                if let (Some(wallet_id), Some(item_id), actor_ids, amount) = (
+                    wallet_id.get(),
+                    item_id.get(),
+                    actor_ids.get(),
+                    amount.get(),
+                ) {
+                    let event = Event::Buy(Buy {
+                        item: item_id,
+                        actors: actor_ids.into(),
+                        wallet_id,
+                        amount,
+                    });
 
-            add_event_action.dispatch(event); */
+                    add_event_action.dispatch(event);
+                }
+            }
         };
 
         let output = add_event_action.output();
@@ -120,6 +137,23 @@ pub mod purchase {
             view! { <p>{msg}</p> }
         };
 
+        let on_change =
+            move |e: leptos::ev::Targeted<web_sys::Event, web_sys::HtmlSelectElement>| {
+                let collection = e.target().selected_options();
+                let ids = (0..collection.length())
+                    .flat_map(|i| collection.item(i))
+                    .map(|el| {
+                        el.dyn_into::<HtmlOptionElement>()
+                            .unwrap()
+                            .value()
+                            .parse()
+                            .unwrap()
+                    })
+                    .collect();
+
+                set_actor_ids.set(ids);
+            };
+
         view! {
             <div class="container mx-auto">
                 <a href="/home">"Back"</a>
@@ -127,19 +161,19 @@ pub mod purchase {
                 <form on:submit=on_submit class="grid place-content-center gap-4">
                     <h2>Purchase</h2>
 
-                    <select class="bg-slate-800 p-2" name="wallet_id">
+                    <select required class="bg-slate-800 p-2" name="wallet_id" on:change:target=move |e| { set_wallet_id.set(Some(e.target().value().parse().unwrap())) }>
                         {wallets_options}
                     </select>
 
-                    <select class="bg-slate-800 p-2" name="item_tag_id">
+                    <select required class="bg-slate-800 p-2" name="item_tag_id" on:change:target=move |e| { set_item_id.set(Some(e.target().value().parse().unwrap())) }>
                         {items_options}
                     </select>
 
-                    <select class="bg-slate-800 p-2" name="actor_ids" multiple>
+                    <select required class="bg-slate-800 p-2" name="actor_ids" multiple on:change:target=on_change>
                         {actors_options}
                     </select>
 
-                    <input class="bg-slate-800 p-2" type="number" name="amount" placeholder="Amount" />
+                    <input required class="bg-slate-800 p-2" type="number" name="amount" placeholder="Amount" on:change:target=move |e| { set_amount.set(e.target().value().parse().unwrap()) } />
 
                     <button type="submit" class="bg-blue-800 p-2">"Save"</button>
 
@@ -148,7 +182,7 @@ pub mod purchase {
                         match state {
                             None => view! { <p>"Loading..."</p> }.into_any(),
                             Some(Err(e)) => match e {
-                                MoneeError::Internal(e) => view! { <p>"Internal Error :("</p> }.into_any(),
+                                MoneeError::Internal(_) => view! { <p>"Internal Error :("</p> }.into_any(),
                                 MoneeError::App(e) => err(e).into_any(),
                             }
                             _ => view! { <p>"Success!"</p> }.into_any(),
