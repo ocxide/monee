@@ -151,10 +151,10 @@ async fn listen(
     ctx: AppContext,
     host_context: HostContext,
 ) {
-    let mut changes = ChangesRecord::default();
-    let mut host_con = None;
+    let changes_getter: monee::nodes::changes::application::load::Load = ctx.provide();
 
-    const MSG: &str = "WARNING: changes not sent due no host connection";
+    let mut changes = changes_getter.run().await.expect("to load initial changes");
+    let mut host_con = None;
 
     enum SyncOrder {
         SaveChanges,
@@ -243,7 +243,10 @@ async fn listen(
             changes = ChangesRecord::default();
         }
 
-         // TODO: save changes
+        let changes_saver: monee::nodes::changes::application::save::Save = ctx.provide();
+        if let Err(e) = changes_saver.run(&changes).await {
+            eprintln!("WARNING: failed to save changes: {}", e);
+        };
     }
 }
 

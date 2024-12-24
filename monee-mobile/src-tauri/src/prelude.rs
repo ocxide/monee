@@ -1,6 +1,5 @@
 pub use monee::prelude::*;
 use monee::shared::infrastructure::errors::UnspecifiedError;
-use tauri::http::request;
 
 use crate::host_interop::host_context::ConnectError;
 
@@ -71,13 +70,19 @@ impl<T> CatchToInfra for tauri_plugin_http::reqwest::Result<T> {
     }
 }
 
-impl From<tauri_plugin_http::reqwest::Error> for AppError<ConnectError> {
-    fn from(value: tauri_plugin_http::reqwest::Error) -> Self {
-        if value.is_connect() {
-            AppError::App(ConnectError)
-        }
+pub trait CatchToApp<T, E> {
+    fn catch_to_app(self) -> Result<T, AppError<E>>;
+}
 
-        InfrastructureError::Unspecified(UnspecifiedError::new(value)).into()
+impl<T> CatchToApp<T, ConnectError> for tauri_plugin_http::reqwest::Result<T> {
+    fn catch_to_app(self) -> Result<T, AppError<ConnectError>> {
+        self.map_err(|value| {
+            if value.is_connect() {
+                return AppError::App(ConnectError);
+            }
+
+            InfrastructureError::Unspecified(UnspecifiedError::new(value)).into()
+        })
     }
 }
 

@@ -46,7 +46,8 @@ impl<'a> HostCon<'a> {
             .get(format!("{}/sync/guide", self.info.dir))
             .header("X-Node-Id", self.info.node_app_id.to_string())
             .send()
-            .await?
+            .await
+            .catch_to_app()?
             .json::<SyncGuide>()
             .await
             .catch_to_infra()?;
@@ -60,7 +61,8 @@ impl<'a> HostCon<'a> {
             .get(format!("{}/sync/report", self.info.dir))
             .header("X-Node-Id", self.info.node_app_id.to_string())
             .send()
-            .await?
+            .await
+            .catch_to_app()?
             .json::<HostState>()
             .await
             .catch_to_infra()?;
@@ -75,7 +77,8 @@ impl<'a> HostCon<'a> {
             .header("Content-Type", "application/json")
             .json(&data)
             .send()
-            .await?;
+            .await
+            .catch_to_app()?;
 
         Ok(())
     }

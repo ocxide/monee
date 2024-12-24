@@ -211,6 +211,10 @@ mod provides_config {
     };
 
     use crate::nodes::{
+        changes::{
+            domain::repository::Repository as ChangesRepository,
+            infrastructure::repository::SurrealRepository as ChangesSurrealRepository,
+        },
         hosts::{
             domain::repository::Repository as HostsRepository,
             infrastructure::repository::SurrealRepository as HostsSurrealRepository,
@@ -257,7 +261,9 @@ mod provides_config {
         SyncRepository: SyncSurrealRepository,
 
         HostsRepository: HostsSurrealRepository,
-        NodeSyncRepository: NodeSyncSurrealRepository
+        NodeSyncRepository: NodeSyncSurrealRepository,
+
+        ChangesRepository: ChangesSurrealRepository,
     }}
 
     impl cream::context::FromContext<super::AppContext>
