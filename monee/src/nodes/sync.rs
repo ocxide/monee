@@ -1,7 +1,7 @@
 pub mod domain {
     pub mod repository {
         use monee_types::{
-            host::sync::{sync_guide::SyncGuide, node_changes::EventEntry},
+            host::sync::{node_changes::EventEntry, sync_guide::SyncGuide},
             nodes::sync::{changes_record::ChangesRecord, sync_context_data::Catalog},
             shared::errors::UniqueSaveError,
         };
@@ -11,10 +11,7 @@ pub mod domain {
         #[async_trait::async_trait]
         pub trait Repository: Send + Sync + 'static {
             async fn truncate_events(&self) -> Result<(), InfrastructureError>;
-            async fn save_changes(
-                &self,
-                data: &Catalog,
-            ) -> Result<(), AppError<UniqueSaveError>>;
+            async fn save_changes(&self, data: &Catalog) -> Result<(), AppError<UniqueSaveError>>;
             async fn get_catalog(
                 &self,
                 changes: &ChangesRecord,
@@ -39,13 +36,14 @@ pub mod infrastructure {
                 infrastructure::database::{Connection, Entity, EntityKey},
             },
         };
-        use monee_core::CurrencyId;
+        use monee_core::{CurrencyId, ItemTagId};
         use monee_types::{
             backoffice::{
-                actors::actor::Actor, currencies::currency::Currency, wallets::wallet::Wallet,
+                actors::actor::Actor, currencies::currency::Currency, events::event::Event,
+                item_tags::item_tag::ItemTag, wallets::wallet::Wallet,
             },
             host::sync::node_changes::EventEntry,
-            shared::errors::UniqueSaveError,
+            shared::{date::Datetime, errors::UniqueSaveError},
         };
 
         #[derive(FromContext)]
@@ -69,10 +67,8 @@ pub mod infrastructure {
             async fn get_catalog(
                 &self,
                 changes: &monee_types::nodes::sync::changes_record::ChangesRecord,
-            ) -> Result<
-                monee_types::host::sync::catalog::Catalog,
-                InfrastructureError,
-            > {
+            ) -> Result<monee_types::host::sync::catalog::Catalog, InfrastructureError>
+            {
                 let mut response = self
                     .0
                     .query("SELECT * FROM $currencies")
@@ -105,34 +101,57 @@ pub mod infrastructure {
                             .map(EntityKey)
                             .collect::<Vec<_>>(),
                     ))
+                    .query("SELECT * FROM $items")
+                    .bind((
+                        "items",
+                        changes
+                            .items
+                            .iter()
+                            .copied()
+                            .map(EntityKey)
+                            .collect::<Vec<_>>(),
+                    ))
                     .await?;
 
                 let currencies: Vec<Entity<CurrencyId, Currency>> = response.take(0)?;
                 let actors: Vec<Entity<monee_core::ActorId, Actor>> = response.take(1)?;
                 let wallets: Vec<Entity<monee_core::WalletId, Wallet>> = response.take(2)?;
+                let items: Vec<Entity<ItemTagId, ItemTag>> = response.take(3)?;
 
-                Ok(
-                    monee_types::host::sync::catalog::Catalog {
-                        currencies: currencies.into_iter().map(Into::into).collect(),
-                        actors: actors.into_iter().map(Into::into).collect(),
-                        wallets: wallets.into_iter().map(Into::into).collect(),
-                        // TODO
-                        items: vec![],
-                    },
-                )
+                Ok(monee_types::host::sync::catalog::Catalog {
+                    currencies: currencies.into_iter().map(Into::into).collect(),
+                    actors: actors.into_iter().map(Into::into).collect(),
+                    wallets: wallets.into_iter().map(Into::into).collect(),
+                    items: items.into_iter().map(Into::into).collect(),
+                })
             }
 
             async fn get_events(
                 &self,
                 guide: monee_types::host::sync::sync_guide::SyncGuide,
             ) -> Result<Vec<EventEntry>, InfrastructureError> {
+                #[derive(serde::Serialize, serde::Deserialize)]
+                struct SurrealEventEntry {
+                    id: EntityKey<monee_core::EventId>,
+                    event: Event,
+                    created_at: Datetime,
+                }
+
                 let mut response = self
                     .0
                     .query("SELECT * FROM event WHERE date > $date")
                     .bind(("date", guide.last_event_date))
                     .await?;
 
-                Ok(response.take(0)?)
+                let events: Vec<SurrealEventEntry> = response.take(0)?;
+                Ok(events
+                    .into_iter()
+                    .map(|e| EventEntry {
+                        id: e.id.0,
+                        event: e.event,
+                        created_at: e.created_at,
+                    })
+                    .collect())
             }
         }
     }

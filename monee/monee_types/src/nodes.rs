@@ -45,13 +45,14 @@ pub mod sync {
     }
 
     pub mod changes_record {
-        use monee_core::{ActorId, CurrencyId, WalletId};
+        use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
 
         #[derive(Default, serde::Serialize, serde::Deserialize, Clone)]
         pub struct ChangesRecord {
             pub currencies: Vec<CurrencyId>,
             pub actors: Vec<ActorId>,
             pub wallets: Vec<WalletId>,
+            pub items: Vec<ItemTagId>,
         }
     }
 
