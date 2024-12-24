@@ -22,7 +22,10 @@ use wasm_bindgen::JsCast;
 use web_sys::{HtmlOptionElement, HtmlSelectElement};
 
 use crate::{
-    app::{components::dialog_form::create_dialog, forms::create_actor::CreateActorForm},
+    app::{
+        components::dialog_form::create_dialog,
+        forms::{create_actor::CreateActorForm, create_item::CreateItemForm},
+    },
     bind_command,
     leptos_util::local::action::LocalAction,
     prelude::{InternalError, MoneeError},
@@ -73,7 +76,11 @@ pub fn Purchase() -> impl IntoView {
         view! { <option value={id.to_string()}>{format!("{}: {} {}{}", wallet.name, money.currency.code, money.currency.symbol, money.amount)}</option> }
     });
 
-    let items = LocalResource::new(get_all_items);
+    let (item_refresh, set_item_refresh) = signal(());
+    let items = LocalResource::new(move || async move {
+        item_refresh.get();        
+        get_all_items().await
+    });
     let items_options = create_options(items, |item| {
         view! { <option value={item.id.to_string()}>{item.tag.name.to_string()}</option> }
     });
@@ -159,6 +166,15 @@ pub fn Purchase() -> impl IntoView {
         set_actor_refresh.set(());
     });
 
+    let (open_item_form, item_form) = create_dialog::<CreateItemForm>(move |item_id| {
+        item_select
+            .get()
+            .unwrap()
+            .set_value(item_id.to_string().as_str());
+
+        set_item_refresh.set(());
+    });
+
     let err = |error: &AddEventError| {
         let msg = match error {
             AddEventError::MoveValue(MoveValueError::CurrenciesNonEqual) => {
@@ -186,6 +202,7 @@ pub fn Purchase() -> impl IntoView {
             <a href="/home">"Back"</a>
 
             {actor_form}
+            {item_form}
 
             <form on:submit=on_submit class="grid place-content-center gap-4">
                 <h2>Purchase</h2>
@@ -194,9 +211,13 @@ pub fn Purchase() -> impl IntoView {
                     {wallets_options}
                 </select>
 
-                <select node_ref=item_select required class="bg-slate-800 p-2" name="item_tag_id">
-                    {items_options}
-                </select>
+                <div class="flex gap-x-4">
+                    <select node_ref=item_select required class="bg-slate-800 p-2 flex-1" name="item_tag_id">
+                        {items_options}
+                    </select>
+
+                    <button type="button" class="bg-blue-800 p-2 rounded-full" on:click=move |_| open_item_form()>+</button>
+                </div>
 
                 <div class="flex gap-x-4">
                     <select node_ref=actor_select class="bg-slate-800 p-2" name="actor_ids" multiple>

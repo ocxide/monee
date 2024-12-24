@@ -92,3 +92,56 @@ pub mod create_actor {
         }
     }
 }
+
+pub mod create_item {
+    use leptos::{html::Input, prelude::*};
+    use monee_core::ItemTagId;
+    use monee_types::backoffice::item_tags::{item_name::ItemName, item_tag::ItemTag};
+    use web_sys::SubmitEvent;
+
+    use crate::{
+        app::components::dialog_form::EntityForm, leptos_util::local::action::LocalAction,
+    };
+
+    pub struct CreateItemForm;
+    impl EntityForm for CreateItemForm {
+        type Id = ItemTagId;
+        fn create_view(
+            on_save: impl Fn(ItemTagId) + Send + Sync + 'static + Copy,
+        ) -> impl IntoView + 'static {
+            view! { <CreateItemFormC on_save=on_save/> }
+        }
+    }
+
+    #[component]
+    fn CreateItemFormC(
+        on_save: impl Fn(ItemTagId) + Send + Sync + 'static + Copy,
+    ) -> impl IntoView {
+        let name_ref = NodeRef::<Input>::new();
+        let (name_err, name_err_msg) = signal::<Option<String>>(None);
+
+        let action = LocalAction::new(move |item: ItemTag| async move {
+            on_save(ItemTagId::default());
+        });
+
+        let on_submit = move |e: SubmitEvent| {
+            e.prevent_default();
+
+            let name = name_ref.get().unwrap().value().parse::<ItemName>();
+            match name {
+                Ok(name) => action.dispatch(ItemTag { name }),
+                Err(e) => name_err_msg.set(Some(e.to_string())),
+            }
+        };
+
+        view! {
+            <form class="grid gap-4" on:submit=on_submit>
+                <h2>"Create Item"</h2>
+                <input node_ref=name_ref required class="bg-slate-800 p-2" type="text" name="name" placeholder="Name" />
+                {move || name_err.get().map(|msg| view! { <p class="text-red-500">{msg}</p> })}
+
+                <button type="submit" class="bg-blue-800 p-2">"Save"</button>
+            </form>
+        }
+    }
+}

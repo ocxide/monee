@@ -51,7 +51,10 @@ pub mod dialog_form {
         let on_dialog_closed = move || {
             set_open.set(false);
             set_try_close.set(false);
-            on_save(id_store.get_value().expect("Id to be defined"));
+
+            if let Some(id) = id_store.get_value() {
+                on_save(id);
+            }
         };
 
         let dialog = view! {
