@@ -12,9 +12,9 @@ pub mod shared {
     }
 
     pub mod errors {
-        #[derive(serde::Serialize, Debug)]
+        #[derive(serde::Serialize, Debug, Clone, serde::Deserialize)]
         pub enum UniqueSaveError {
-            AlreadyExists(&'static str),
+            AlreadyExists(String),
         }
     }
 }

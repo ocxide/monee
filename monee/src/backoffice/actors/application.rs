@@ -17,7 +17,7 @@ pub mod create_one {
     }
 
     impl CreateOne {
-        pub async fn run(&self, actor: Actor) -> Result<(), AppError<UniqueSaveError>> {
+        pub async fn run(&self, actor: Actor) -> Result<ActorId, AppError<UniqueSaveError>> {
             let id = ActorId::new();
 
             self.repository.save(id, actor).await?;
@@ -25,7 +25,7 @@ pub mod create_one {
                 id
             });
 
-            Ok(())
+            Ok(id)
         }
     }
 }

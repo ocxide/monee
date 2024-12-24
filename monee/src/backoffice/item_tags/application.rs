@@ -17,13 +17,13 @@ pub mod create_one {
     }
 
     impl CreateOne {
-        pub async fn run(&self, tag: ItemTag) -> Result<(), AppError<UniqueSaveError>> {
+        pub async fn run(&self, tag: ItemTag) -> Result<ItemTagId, AppError<UniqueSaveError>> {
             let id = ItemTagId::new();
 
             self.repository.save(id, tag).await?;
             self.port.publish(ItemTagCreated { id });
 
-            Ok(())
+            Ok(id)
         }
     }
 }

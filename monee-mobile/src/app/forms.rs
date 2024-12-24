@@ -4,15 +4,20 @@ pub mod create_actor {
         prelude::*,
     };
     use monee_core::ActorId;
-    use monee_types::backoffice::actors::{
-        actor::Actor, actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType,
+    use monee_types::{
+        backoffice::actors::{
+            actor::Actor, actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType,
+        },
+        shared::errors::UniqueSaveError,
     };
     use web_sys::SubmitEvent;
 
     use crate::{
         app::components::dialog_form::EntityForm, bind_command,
-        leptos_util::local::action::LocalAction,
+        leptos_util::local::action::LocalAction, prelude::MoneeError,
     };
+
+    bind_command!(create_actor(actor: Actor) -> ActorId, MoneeError<UniqueSaveError>);
 
     pub struct CreateActorForm;
     impl EntityForm for CreateActorForm {
@@ -62,16 +67,25 @@ pub mod create_actor {
         };
 
         let action = LocalAction::new(move |actor: Actor| async move {
-            on_save(ActorId::default());
+            let id = create_actor(actor).await?;
+            on_save(id);
+
+            Ok(()) as Result<_, MoneeError<UniqueSaveError>>
         });
 
-        let on_submit = move |e: SubmitEvent| {
-            e.prevent_default();
-            let actor = get_actor();
-            if let Some(actor) = actor {
-                action.dispatch(actor);
+        let on_submit = {
+            let action = action.clone();
+            move |e: SubmitEvent| {
+                e.prevent_default();
+                let actor = get_actor();
+                if let Some(actor) = actor {
+                    action.dispatch(actor);
+                }
             }
         };
+
+        let pending = action.pending();
+        let error = action.error();
 
         view! {
             <form on:submit=on_submit class="grid gap-4">
@@ -81,6 +95,12 @@ pub mod create_actor {
 
                 <input node_ref=alias_input class="bg-slate-800 p-2" type="text" name="alias" placeholder="Alias" />
                 {move || alias_err.get().map(|msg| view! { <p class="text-red-500">{msg}</p> })}
+
+                {move || if pending.get() { Some(view! { <p>"Saving..."</p> }) } else { None } }
+                {move || error().map(|e| match e {
+                    MoneeError::App(UniqueSaveError::AlreadyExists(_)) => view! { <p class="text-red-500">"Actor already exists"</p> }.into_any(),
+                    MoneeError::Internal(_) => view! { <p class="text-red-500">"Internal error"</p> }.into_any(),
+                })}
 
                 <select node_ref=type_select required class="bg-slate-800 p-2" name="type">
                     <option value="n">"Natural"</option>
@@ -96,12 +116,18 @@ pub mod create_actor {
 pub mod create_item {
     use leptos::{html::Input, prelude::*};
     use monee_core::ItemTagId;
-    use monee_types::backoffice::item_tags::{item_name::ItemName, item_tag::ItemTag};
+    use monee_types::{
+        backoffice::item_tags::{item_name::ItemName, item_tag::ItemTag},
+        shared::errors::UniqueSaveError,
+    };
     use web_sys::SubmitEvent;
 
     use crate::{
-        app::components::dialog_form::EntityForm, leptos_util::local::action::LocalAction,
+        app::components::dialog_form::EntityForm, bind_command,
+        leptos_util::local::action::LocalAction, prelude::MoneeError,
     };
+
+    bind_command!(create_item(item: ItemTag) -> ItemTagId, MoneeError<UniqueSaveError>);
 
     pub struct CreateItemForm;
     impl EntityForm for CreateItemForm {
@@ -121,24 +147,39 @@ pub mod create_item {
         let (name_err, name_err_msg) = signal::<Option<String>>(None);
 
         let action = LocalAction::new(move |item: ItemTag| async move {
-            on_save(ItemTagId::default());
+            let id = create_item(item).await?;
+            on_save(id);
+
+            Ok(()) as Result<_, MoneeError<UniqueSaveError>>
         });
 
-        let on_submit = move |e: SubmitEvent| {
-            e.prevent_default();
+        let on_submit = {
+            let action = action.clone();
+            move |e: SubmitEvent| {
+                e.prevent_default();
 
-            let name = name_ref.get().unwrap().value().parse::<ItemName>();
-            match name {
-                Ok(name) => action.dispatch(ItemTag { name }),
-                Err(e) => name_err_msg.set(Some(e.to_string())),
+                let name = name_ref.get().unwrap().value().parse::<ItemName>();
+                match name {
+                    Ok(name) => action.dispatch(ItemTag { name }),
+                    Err(e) => name_err_msg.set(Some(e.to_string())),
+                }
             }
         };
+
+        let pending = action.pending();
+        let error = action.error();
 
         view! {
             <form class="grid gap-4" on:submit=on_submit>
                 <h2>"Create Item"</h2>
                 <input node_ref=name_ref required class="bg-slate-800 p-2" type="text" name="name" placeholder="Name" />
                 {move || name_err.get().map(|msg| view! { <p class="text-red-500">{msg}</p> })}
+
+                {move || if pending.get() { Some(view! { <p>"Saving..."</p> }) } else { None } }
+                {move || error().map(|e| match e {
+                    MoneeError::App(UniqueSaveError::AlreadyExists(_)) => view! { <p class="text-red-500">"Item already exists"</p> }.into_any(),
+                    MoneeError::Internal(_) => view! { <p class="text-red-500">"Internal error"</p> }.into_any(),
+                })}
 
                 <button type="submit" class="bg-blue-800 p-2">"Save"</button>
             </form>
