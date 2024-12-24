@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use cream::{context::FromContext, events::dispatcher::Dispatcher};
 use monee::{
     nodes::hosts::{
@@ -10,10 +12,10 @@ use monee_core::{ActorId, CurrencyId, WalletId};
 use tauri::async_runtime::Sender;
 use tokio::sync::{mpsc, watch};
 
-use crate::prelude::*;
+use crate::{prelude::*, CatchInfra};
 
 use super::{
-    host_context::{HostCon, HostContext},
+    host_context::{ConnectError, HostCon, HostContext},
     host_sync::HostSync,
 };
 
@@ -154,94 +156,137 @@ async fn listen(
 
     const MSG: &str = "WARNING: changes not sent due no host connection";
 
+    enum SyncOrder {
+        SaveChanges,
+        PullHost,
+    }
+
     loop {
-        tokio::select! {
+        let result = tokio::select! {
             data_changed = changes_rx.recv() => {
                 if let Some(data_changed) = data_changed {
-                    if let Some(host_binding) = host_con.as_ref() {
-                        let result = on_changes(&ctx, &host_context, &mut changes, host_binding, data_changed).await ;
-                        confirmer_tx.send(result).unwrap();
+                    match data_changed {
+                        DataChanged::Currency(id) => changes.currencies.push(id),
+                        DataChanged::Actor(id) => changes.actors.push(id),
+                        DataChanged::Wallet(id) => changes.wallets.push(id),
+                        // Should save too?
+                        DataChanged::Event => {}
                     }
-                    else {
-                       eprintln!("ERROR SYNC SYSTEM: {}", MSG);
-                    }
+
+                    Some(Ok((Ok(()), SyncOrder::SaveChanges)))
+                }
+                else {
+                    None
                 }
             },
 
             host_changed = binding_rx.recv() => {
                 if let Some(host_changed) = host_changed {
                     host_con = host_changed;
-                    if let Some(host_binding) = host_con.as_ref() {
-                        let result = on_host_set(&ctx, &host_context, &mut changes, host_binding).await;
-                        confirmer_tx.send(result).unwrap();
+
+                    match host_con.as_ref() {
+                        Some(host_con) => {
+                            let host_set: SetHostBinding = ctx.provide();
+                            let result = host_set.run(host_con).await.catch_infra(&ctx);
+
+                            Some(Ok((result, SyncOrder::PullHost)))
+                        }
+                        None => Some(Err(())),
                     }
-                    else {
-                       eprintln!("ERROR SYNC SYSTEM: {}", MSG);
-                    }
-                }
+                } else { None }
             }
         };
+
+        let Some(result) = result else {
+            eprintln!("WARNING: sync channel closed");
+            break;
+        };
+
+        let Ok((result, sync_order)) = result else {
+            eprint!("WARNING: skipping sync: {}", file!());
+            continue;
+        };
+
+        let Some(host_con) = &host_con else {
+            eprintln!("WARNING: host binding not set");
+            continue;
+        };
+
+        if let Err(e) = result {
+            confirmer_tx.send(Err(e)).unwrap();
+            continue;
+        }
+
+        let order = match sync_order {
+            SyncOrder::SaveChanges => {
+                let sync = async {
+                    let service: HostCon = host_context.create(host_con);
+                    let sync_guide = service.get_guide().await?;
+
+                    let get_service: monee::nodes::sync::application::get_node_changes::GetNodeChanges =
+                        ctx.provide();
+                    let node_changes = get_service.run(sync_guide, &changes).await?;
+
+                    service.sync_to_host(&node_changes).await?;
+
+                    sync_from_host(&ctx, &host_context, &host_con).await
+                };
+                do_sync(&ctx, confirmer_tx.clone(), sync).await
+            }
+            SyncOrder::PullHost => {
+                let sync = async { sync_from_host(&ctx, &host_context, &host_con).await };
+                do_sync(&ctx, confirmer_tx.clone(), sync).await
+            }
+        };
+
+        if let ChangesOrder::Clear = order {
+            changes = ChangesRecord::default();
+        }
+
+         // TODO: save changes
     }
 }
 
-async fn on_changes(
-    ctx: &AppContext,
-    host_context: &HostContext,
-    changes_record: &mut ChangesRecord,
-    host_binding: &HostBinding,
-    change: DataChanged,
-) -> Result<(), InternalError> {
-    match change {
-        DataChanged::Currency(id) => changes_record.currencies.push(id),
-        DataChanged::Actor(id) => changes_record.actors.push(id),
-        DataChanged::Wallet(id) => changes_record.wallets.push(id),
-        // Should save too?
-        DataChanged::Event => {}
-    }
-
-    let service: HostCon = host_context.create(host_binding);
-    let sync_guide = service.get_guide().await.catch_infra(ctx)?;
-
-    let get_service: monee::nodes::sync::application::get_node_changes::GetNodeChanges =
-        ctx.provide();
-    let node_changes = get_service
-        .run(sync_guide, changes_record)
-        .await
-        .catch_infra(ctx)?;
-
-    service.sync_to_host(&node_changes).await.catch_infra(ctx)?;
-
-    sync_from_host(ctx, host_context, host_binding, changes_record).await
+enum ChangesOrder {
+    Preserve,
+    Clear,
 }
 
-async fn on_host_set(
+async fn do_sync(
     ctx: &AppContext,
-    host_context: &HostContext,
-    changes_record: &mut ChangesRecord,
-    host_binding: &HostBinding,
-) -> Result<(), InternalError> {
-    let host_set: SetHostBinding = ctx.provide();
-    host_set.run(host_binding).await.catch_infra(ctx)?;
+    confirmer_tx: watch::Sender<Result<(), InternalError>>,
+    sync: impl Future<Output = Result<(), AppError<ConnectError>>>,
+) -> ChangesOrder {
+    let (result, order) = match sync.await.catch_infra(ctx) {
+        Ok(Ok(())) => (Ok(()), ChangesOrder::Clear),
+        Ok(Err(_)) => {
+            eprintln!("WARNING: Failed to connect host, skipping sync");
+            (Ok(()), ChangesOrder::Preserve)
+        }
+        Err(e) => (Err(e), ChangesOrder::Preserve),
+    };
 
-    sync_from_host(ctx, host_context, host_binding, changes_record).await
+    confirmer_tx.send(result).unwrap();
+    order
 }
 
 async fn sync_from_host(
     ctx: &AppContext,
     host_context: &HostContext,
     host_binding: &HostBinding,
-    changes_record: &mut ChangesRecord,
-) -> Result<(), InternalError> {
+) -> Result<(), AppError<ConnectError>> {
     let service: HostCon = host_context.create(host_binding);
-    let host_state = service.get_host_state().await.catch_infra(ctx)?;
+    let host_state = service.get_host_state().await?;
 
     let service: monee::nodes::sync::application::rewrite_system::RewriteSystem = ctx.provide();
-    let result = service.run(host_state).await.catch_infra(ctx)?;
+    let result = match service.run(host_state).await {
+        Ok(_) => Ok(()),
+        Err(AppError::Infrastructure(e)) => return Err(e.into()),
+        Err(AppError::App(e)) => Err(e),
+    };
     if let Err(e) = result {
         eprintln!("WARNING: Failed to overwrite system: error: {e:?}");
     }
-
-    *changes_record = ChangesRecord::default();
 
     Ok(())
 }
