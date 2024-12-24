@@ -122,21 +122,24 @@ pub mod local {
         use super::fut_tracker::FutTrackerMutex;
 
         pub struct LocalAction<I, O: 'static, Fut> {
-            inner: Arc<Inner<I, O, Fut>>,
+            inner: Arc<Inner<I, Fut>>,
+            output: (ReadSignal<Option<O>>, WriteSignal<Option<O>>),
+            pending: (ReadSignal<bool>, WriteSignal<bool>),
+        }
+
+        struct Inner<I, Fut> {
+            tracker: FutTrackerMutex,
+            func: Box<dyn Fn(I) -> Fut + 'static + Send + Sync>,
         }
 
         impl<I, O: 'static, Fut> Clone for LocalAction<I, O, Fut> {
             fn clone(&self) -> Self {
                 Self {
                     inner: self.inner.clone(),
+                    output: self.output,
+                    pending: self.pending,
                 }
             }
-        }
-
-        struct Inner<I, O: 'static, Fut> {
-            func: Box<dyn Fn(I) -> Fut + Send + Sync>,
-            fut_tracker: FutTrackerMutex,
-            output: RwSignal<Option<O>>,
         }
 
         impl<I, O, Fut> LocalAction<I, O, Fut>
@@ -148,30 +151,57 @@ pub mod local {
             pub fn new(func: impl Fn(I) -> Fut + 'static + Send + Sync) -> Self {
                 Self {
                     inner: Arc::new(Inner {
+                        tracker: Default::default(),
                         func: Box::new(func),
-                        fut_tracker: FutTrackerMutex::default(),
-                        output: RwSignal::new(None),
                     }),
+                    output: signal(None),
+                    pending: signal(false),
                 }
             }
 
             pub fn dispatch(&self, input: I) {
-                let output_signal = self.inner.output;
+                let output_signal = self.output.1;
                 let fut = (self.inner.func)(input);
 
-                self.inner.fut_tracker.spawn_local(
+                let pending = self.pending.1;
+                pending.set(true);
+
+                self.inner.tracker.spawn_local(
                     async move {
                         let output = fut.await;
                         output_signal.set(Some(output));
+                        pending.set(false);
                     }
                     .fuse(),
                 );
             }
 
             pub fn output(&self) -> ReadSignal<Option<O>> {
-                self.inner.output.read_only()
+                self.output.0
+            }
+
+            pub fn pending(&self) -> ReadSignal<bool> {
+                self.pending.0
+            }
+        }
+
+        impl<I, T: 'static, E: 'static, Fut> LocalAction<I, Result<T, E>, Fut>
+        where
+            T: Send + Sync + 'static,
+            E: Send + Sync + 'static,
+        {
+            pub fn error(&self) -> impl Fn() -> Option<E>
+            where
+                E: Clone,
+            {
+                let output = self.output.0;
+                move || output.with(|state| state.as_ref().and_then(|r| r.as_ref().err().cloned()))
+            }
+
+            pub fn is_err(&self) -> bool {
+                let output = self.output.0;
+                output.with(|state| state.as_ref().map(|r| r.is_err()).unwrap_or(false))
             }
         }
     }
 }
-
