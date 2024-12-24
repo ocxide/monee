@@ -87,7 +87,7 @@ mod catch_app {
             match self {
                 Ok(_) => Ok(StatusCode::OK),
                 Err(AppError::Infrastructure(e)) => Err(e),
-                Err(AppError::App(UniqueSaveError::AlreadyExists)) => Ok(StatusCode::CONFLICT),
+                Err(AppError::App(UniqueSaveError::AlreadyExists(_))) => Ok(StatusCode::CONFLICT),
             }
         }
     }

@@ -116,7 +116,7 @@ mod sync {
             .await
             .catch_infra(&ctx)?
             .map_err(|e| match e {
-                SyncError::Save(UniqueSaveError::AlreadyExists) => StatusCode::CONFLICT,
+                SyncError::Save(UniqueSaveError::AlreadyExists(_)) => StatusCode::CONFLICT,
                 SyncError::Event(_) => StatusCode::BAD_REQUEST,
             })
     }

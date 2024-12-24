@@ -40,7 +40,7 @@ pub mod wallet {
                 };
 
                 service.run(wallet).await.map_app_err(ctx, |e| match e {
-                    UniqueSaveError::AlreadyExists => miette::diagnostic! {
+                    UniqueSaveError::AlreadyExists(_) => miette::diagnostic! {
                         "Wallet with this name already exists"
                     }
                     .into(),
