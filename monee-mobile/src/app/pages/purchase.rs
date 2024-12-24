@@ -22,6 +22,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{HtmlOptionElement, HtmlSelectElement};
 
 use crate::{
+    app::{components::dialog_form::create_dialog, forms::create_actor::CreateActorForm},
     bind_command,
     leptos_util::local::action::LocalAction,
     prelude::{InternalError, MoneeError},
@@ -77,7 +78,11 @@ pub fn Purchase() -> impl IntoView {
         view! { <option value={item.id.to_string()}>{item.tag.name.to_string()}</option> }
     });
 
-    let actors = LocalResource::new(get_all_actors);
+    let (actor_refresh, set_actor_refresh) = signal(());
+    let actors = LocalResource::new(move || async move {
+        actor_refresh.get();
+        get_all_actors().await
+    });
     let actors_options = create_options(actors, |(id, actor)| {
         let msg = match &actor.alias {
             Some(alias) => format!("{} - {}", alias, actor.name),
@@ -150,6 +155,10 @@ pub fn Purchase() -> impl IntoView {
         }
     };
 
+    let (open_actor_form, actor_form) = create_dialog::<CreateActorForm>(move |_| {
+        set_actor_refresh.set(());
+    });
+
     let err = |error: &AddEventError| {
         let msg = match error {
             AddEventError::MoveValue(MoveValueError::CurrenciesNonEqual) => {
@@ -176,6 +185,8 @@ pub fn Purchase() -> impl IntoView {
         <div class="container mx-auto">
             <a href="/home">"Back"</a>
 
+            {actor_form}
+
             <form on:submit=on_submit class="grid place-content-center gap-4">
                 <h2>Purchase</h2>
 
@@ -187,9 +198,13 @@ pub fn Purchase() -> impl IntoView {
                     {items_options}
                 </select>
 
-                <select node_ref=actor_select class="bg-slate-800 p-2" name="actor_ids" multiple>
-                    {actors_options}
-                </select>
+                <div class="flex gap-x-4">
+                    <select node_ref=actor_select class="bg-slate-800 p-2" name="actor_ids" multiple>
+                        {actors_options}
+                    </select>
+
+                    <button type="button" class="bg-blue-800 p-2 rounded-full" on:click=move |_| open_actor_form()>+</button>
+                </div>
 
                 <input node_ref=amount_input required class="bg-slate-800 p-2" type="number" name="amount" placeholder="Amount" />
 

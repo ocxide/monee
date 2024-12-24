@@ -5,6 +5,8 @@ use leptos_router::{
 };
 
 mod pages;
+mod forms;
+mod components;
 
 #[component]
 pub fn App() -> impl IntoView {

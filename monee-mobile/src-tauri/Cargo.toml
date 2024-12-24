@@ -28,3 +28,4 @@ monee_core = { path = "../../monee/monee_core" }
 cream = { git = "https://github.com/ocxide/cream.git" }
 tokio = { version = "1.42.0", features = ["macros"] }
 tauri-plugin-http = { version = "2" }
+leptos-use = "0.15.0"
