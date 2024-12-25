@@ -1,7 +1,7 @@
 pub mod actor {
     use super::{actor_alias::ActorAlias, actor_name::ActorName, actor_type::ActorType};
 
-    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
     pub struct Actor {
         pub name: ActorName,
         #[serde(rename = "type")]
@@ -13,7 +13,7 @@ pub mod actor {
 pub mod actor_name {
     use std::fmt::Display;
 
-    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
     pub struct ActorName(String);
 
     impl Display for ActorName {
@@ -34,7 +34,7 @@ pub mod actor_alias {
 
     use crate::shared::alias::{from_str::Error, Alias};
 
-    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
     pub struct ActorAlias(Alias);
 
     impl Display for ActorAlias {
@@ -53,7 +53,7 @@ pub mod actor_alias {
 }
 
 pub mod actor_type {
-    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+    #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
     pub enum ActorType {
         Natural,
         Business,

@@ -1,7 +1,7 @@
 pub mod wallet {
     use super::wallet_name::WalletName;
 
-    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct Wallet {
         pub currency_id: monee_core::CurrencyId,
         pub name: WalletName,
@@ -12,7 +12,7 @@ pub mod wallet {
 pub mod wallet_name {
     use std::{fmt::Display, str::FromStr};
 
-    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct WalletName(String);
 
     impl Display for WalletName {

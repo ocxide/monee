@@ -33,7 +33,7 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
 
     #[cfg(all(test, feature = "db_test"))]
     mod tests {
-        use monee_core::{ActorId, Amount, CurrencyId, ItemTagId, WalletId};
+        use monee_core::{ActorId, Amount, CurrencyId, EventId, ItemTagId, WalletId};
         use cream::context::Context;
         use std::str::FromStr;
 
@@ -83,7 +83,7 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
                 };
                 wallet_repo.save(wallet_id, wallet).await.unwrap();
 
-                save_repo.add(AddEvent::Buy(Buy {
+                save_repo.add(EventId::default(), AddEvent::Buy(Buy {
                     item: item_id,
                     actors: vec![actor_id].into(),
                     wallet_id: WalletId::new(),
@@ -122,7 +122,7 @@ currency_id as currency, actor_id as actor, payment_promise FROM event FETCH act
                     code: "code_1".parse().unwrap(),
                 }).await.unwrap();
 
-                save_repo.add(AddEvent::RegisterDebt(DebtRegister {
+                save_repo.add(EventId::default(), AddEvent::RegisterDebt(DebtRegister {
                     amount: "1.00".parse().unwrap(),
                     currency_id,
                     actor_id,

@@ -38,7 +38,7 @@ pub mod catalog {
         wallets::wallet::Wallet,
     };
 
-    #[derive(serde::Serialize, serde::Deserialize, Debug)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
     pub struct Catalog {
         pub actors: Vec<(ActorId, Actor)>,
         pub currencies: Vec<(CurrencyId, Currency)>,

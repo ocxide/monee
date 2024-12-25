@@ -1,6 +1,7 @@
 pub mod repository {
     use cream::context::FromContext;
     use monee_core::{ActorId, Amount, CurrencyId, EventId, ItemTagId, WalletId};
+    use monee_types::backoffice::events::event::PaymentReceived;
 
     use crate::{
         backoffice::events::domain::{event::Event, repository::Repository},
@@ -21,7 +22,7 @@ pub mod repository {
         }
     }
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(rename_all = "snake_case", tag = "type")]
     pub enum SurrealMoneeEvent {
         Buy {
@@ -94,6 +95,66 @@ pub mod repository {
                     wallet_id: EntityKey(payment.wallet_id),
                     amount: payment.amount,
                 },
+            }
+        }
+    }
+
+    impl From<SurrealMoneeEvent> for Event {
+        fn from(value: SurrealMoneeEvent) -> Self {
+            match value {
+                SurrealMoneeEvent::Buy {
+                    item,
+                    amount,
+                    wallet_id,
+                    actors,
+                } => Event::Buy(monee_types::backoffice::events::event::Buy {
+                    item: item.0,
+                    amount,
+                    wallet_id: wallet_id.0,
+                    actors: actors.into_iter().map(|k| k.0).collect(),
+                }),
+                SurrealMoneeEvent::RegisterBalance { wallet_id, amount } => Event::RegisterBalance(
+                    monee_types::backoffice::events::event::RegisterBalance {
+                        wallet_id: wallet_id.0,
+                        amount,
+                    },
+                ),
+                SurrealMoneeEvent::RegisterDebt {
+                    amount,
+                    currency_id,
+                    actor_id,
+                } => Event::RegisterDebt(monee_types::backoffice::events::event::DebtRegister {
+                    amount,
+                    currency_id: currency_id.0,
+                    actor_id: actor_id.0,
+                    payment_promise: None,
+                }),
+                SurrealMoneeEvent::RegisterLoan {
+                    amount,
+                    currency_id,
+                    actor_id,
+                } => Event::RegisterLoan(monee_types::backoffice::events::event::DebtRegister {
+                    amount,
+                    currency_id: currency_id.0,
+                    actor_id: actor_id.0,
+                    payment_promise: None,
+                }),
+                SurrealMoneeEvent::MoveValue { from, to, amount } => {
+                    Event::MoveValue(monee_types::backoffice::events::event::MoveValue {
+                        from: from.0,
+                        to: to.0,
+                        amount,
+                    })
+                }
+                SurrealMoneeEvent::PaymentReceived {
+                    actor_id,
+                    wallet_id,
+                    amount,
+                } => Event::PaymentReceived(PaymentReceived {
+                    actor_id: actor_id.0,
+                    wallet_id: wallet_id.0,
+                    amount,
+                }),
             }
         }
     }

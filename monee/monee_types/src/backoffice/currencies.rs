@@ -3,7 +3,7 @@ pub mod currency {
         currency_code::CurrencyCode, currency_name::CurrencyName, currency_symbol::CurrencySymbol,
     };
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct Currency {
         pub name: CurrencyName,
         pub symbol: CurrencySymbol,
@@ -14,7 +14,7 @@ pub mod currency {
 pub mod currency_symbol {
     use std::{fmt::Display, str::FromStr};
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct CurrencySymbol(String);
 
     impl Display for CurrencySymbol {
@@ -52,7 +52,7 @@ pub mod currency_symbol {
 pub mod currency_name {
     use std::fmt::Display;
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct CurrencyName(String);
 
     impl Display for CurrencyName {
@@ -71,7 +71,7 @@ pub mod currency_name {
 pub mod currency_code {
     use std::{fmt::Display, str::FromStr};
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct CurrencyCode(Inner);
 
     impl Display for CurrencyCode {

@@ -1,4 +1,4 @@
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
     pub struct Alias(Box<str>);
 
     impl AsRef<str> for Alias {

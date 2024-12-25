@@ -1,7 +1,7 @@
 pub mod item_tag {
     use super::item_name::ItemName;
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct ItemTag {
         pub name: ItemName,
     }
@@ -12,7 +12,7 @@ pub mod item_name {
 
     use crate::shared::alias::{from_str::Error, Alias};
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub struct ItemName(Alias);
 
     impl Display for ItemName {

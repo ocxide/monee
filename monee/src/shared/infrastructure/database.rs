@@ -153,6 +153,10 @@ mod entity {
         pub fn into_key(self) -> K {
             self.0
         }
+
+        pub fn into_inner(self) -> (K, T) {
+            self.into()
+        }
     }
 
     pub(crate) mod de {
