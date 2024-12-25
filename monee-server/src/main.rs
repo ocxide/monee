@@ -7,12 +7,21 @@ use monee::shared::domain::context::AppContextBuilder;
 
 mod prelude;
 
-fn main() {
-    use tokio::runtime::Runtime;
-    Runtime::new().unwrap().block_on(serve());
+#[derive(clap::Parser)]
+struct Args {
+    #[clap(short, long)]
+    port: Option<u16>,
 }
 
-async fn serve() {
+fn main() {
+    use clap::Parser;
+    let args = Args::parse();
+
+    use tokio::runtime::Runtime;
+    Runtime::new().unwrap().block_on(serve(args));
+}
+
+async fn serve(args: Args) {
     let ctx = AppContextBuilder::default()
         .build()
         .await
@@ -27,8 +36,16 @@ async fn serve() {
         .route("/health", get(|| async { StatusCode::OK }))
         .with_state(ctx);
 
+    let host = "0.0.0.0";
+    let port = args.port.unwrap_or(3000);
+
+    println!("listening on {}:{}", host, port);
+
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind((host, port))
+        .await
+        .unwrap();
+
     axum::serve(listener, app).await.unwrap();
 }
 
