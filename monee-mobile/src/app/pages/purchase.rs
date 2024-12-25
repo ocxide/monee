@@ -12,7 +12,7 @@ use monee_types::{
         actors::actor::Actor,
         events::{
             apply_event::MoveValueError,
-            event::{Buy, Event},
+            event::{Purchase, Event},
         },
         item_tags::item_tag_node::ItemTagNode,
     },
@@ -138,7 +138,7 @@ pub fn Purchase() -> impl IntoView {
         if let (Some(wallet_id), Some(item_id), actor_ids, Some(amount)) =
             (wallet_id, item_id, actor_ids, amount)
         {
-            let event = Event::Buy(Buy {
+            let event = Event::Purchase(Purchase {
                 item: item_id,
                 actors: actor_ids.into(),
                 wallet_id,

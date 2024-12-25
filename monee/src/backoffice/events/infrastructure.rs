@@ -19,7 +19,7 @@ pub mod repository {
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(rename_all = "snake_case", tag = "type")]
     pub enum SurrealMoneeEvent {
-        Buy {
+        Purchase {
             item: EntityKey<ItemTagId>,
             amount: Amount,
             wallet_id: EntityKey<WalletId>,
@@ -59,11 +59,11 @@ pub mod repository {
     impl From<Event> for SurrealMoneeEvent {
         fn from(value: Event) -> Self {
             match value {
-                Event::Buy(buy) => SurrealMoneeEvent::Buy {
-                    item: EntityKey(buy.item),
-                    amount: buy.amount,
-                    wallet_id: EntityKey(buy.wallet_id),
-                    actors: IntoIterator::into_iter(buy.actors).map(EntityKey).collect(),
+                Event::Purchase(purchase) => SurrealMoneeEvent::Purchase {
+                    item: EntityKey(purchase.item),
+                    amount: purchase.amount,
+                    wallet_id: EntityKey(purchase.wallet_id),
+                    actors: IntoIterator::into_iter(purchase.actors).map(EntityKey).collect(),
                 },
                 Event::RegisterBalance(register) => SurrealMoneeEvent::RegisterBalance {
                     wallet_id: EntityKey(register.wallet_id),
@@ -96,12 +96,12 @@ pub mod repository {
     impl From<SurrealMoneeEvent> for Event {
         fn from(value: SurrealMoneeEvent) -> Self {
             match value {
-                SurrealMoneeEvent::Buy {
+                SurrealMoneeEvent::Purchase {
                     item,
                     amount,
                     wallet_id,
                     actors,
-                } => Event::Buy(monee_types::backoffice::events::event::Buy {
+                } => Event::Purchase(monee_types::backoffice::events::event::Purchase {
                     item: item.0,
                     amount,
                     wallet_id: wallet_id.0,
@@ -210,7 +210,7 @@ pub mod repository {
             let repo: SurrealRepository = ctx.provide();
             repo.save_many(vec![EventEntry {
                 id: EventId::default(),
-                event: Event::Buy(monee_types::backoffice::events::event::Buy {
+                event: Event::Purchase(monee_types::backoffice::events::event::Purchase {
                     item: ItemTagId::default(),
                     amount: Amount::default(),
                     wallet_id: WalletId::default(),

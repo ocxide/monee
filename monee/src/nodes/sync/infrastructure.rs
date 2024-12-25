@@ -159,7 +159,7 @@ pub mod repository {
         use monee_types::{
             backoffice::{
                 actors::actor_type::ActorType,
-                events::event::{Buy, Event},
+                events::event::{Purchase, Event},
             },
             host::sync::catalog::Catalog,
             nodes::sync::changes_record::ChangesRecord,
@@ -254,7 +254,7 @@ pub mod repository {
             back_repo
                 .add(
                     EventId::default(),
-                    Event::Buy(Buy {
+                    Event::Purchase(Purchase {
                         item: ItemTagId::default(),
                         actors: vec![ActorId::default()].into(),
                         wallet_id: WalletId::default(),
@@ -272,8 +272,8 @@ pub mod repository {
 
             assert_eq!(events.len(), 1, "should have one event");
             assert!(
-                matches!(events[0].event, Event::Buy(_)),
-                "event should be buy"
+                matches!(events[0].event, Event::Purchase(_)),
+                "event should be purchase"
             );
         }
 
@@ -290,7 +290,7 @@ pub mod repository {
             back_repo
                 .add(
                     EventId::default(),
-                    Event::Buy(Buy {
+                    Event::Purchase(Purchase {
                         item: ItemTagId::default(),
                         actors: vec![ActorId::default()].into(),
                         wallet_id: WalletId::default(),
@@ -308,8 +308,8 @@ pub mod repository {
 
             assert_eq!(events.len(), 1, "should have one event");
             assert!(
-                matches!(events[0].event, Event::Buy(_)),
-                "event should be buy"
+                matches!(events[0].event, Event::Purchase(_)),
+                "event should be purchase"
             );
         }
     }

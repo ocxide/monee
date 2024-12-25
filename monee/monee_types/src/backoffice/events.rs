@@ -12,7 +12,7 @@ pub mod event {
     }
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    pub struct Buy {
+    pub struct Purchase {
         pub item: ItemTagId,
         pub actors: Box<[ActorId]>,
         pub wallet_id: WalletId,
@@ -42,7 +42,7 @@ pub mod event {
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(rename_all = "snake_case", tag = "type")]
     pub enum Event {
-        Buy(Buy),
+        Purchase(Purchase),
         MoveValue(MoveValue),
         RegisterBalance(RegisterBalance),
         RegisterDebt(DebtRegister),
@@ -54,11 +54,11 @@ pub mod event {
 pub mod apply_event {
     use monee_core::{DebtId, WalletId};
 
-    use super::event::{Buy, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance};
+    use super::event::{Purchase, DebtRegister, Event, MoveValue, PaymentReceived, RegisterBalance};
 
     pub fn apply_event(snapshot: &mut monee_core::Snapshot, event: &Event) -> Result<(), Error> {
         match event {
-            Event::Buy(Buy {
+            Event::Purchase(Purchase {
                 amount, wallet_id, ..
             }) => snapshot.apply(monee_core::Operation::Wallet(
                 monee_core::WalletOperation::Deduct {

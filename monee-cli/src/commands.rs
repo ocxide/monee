@@ -56,7 +56,7 @@ pub mod events {
 
     use crate::prelude::MapAppErr;
     use monee::{
-        backoffice::events::domain::event::{Buy, Event, RegisterBalance},
+        backoffice::events::domain::event::{Purchase, Event, RegisterBalance},
         prelude::AppContext,
     };
     use monee_core::{ActorId, Amount, ItemTagId, WalletId};
@@ -81,7 +81,7 @@ pub mod events {
             amount: Amount,
         },
 
-        Buy {
+        Purchase {
             #[arg(short, long)]
             item: MaybeAlias<ItemTagId>,
 
@@ -118,7 +118,7 @@ pub mod events {
                 Event::RegisterBalance(RegisterBalance { amount, wallet_id })
             }
 
-            AddEventCommand::Buy {
+            AddEventCommand::Purchase {
                 item,
                 actors,
                 wallet,
@@ -133,7 +133,7 @@ pub mod events {
 
                 let (wallet_id, item_id, actors) = try_join!(wallet_id, item_id, actors)?;
 
-                Event::Buy(Buy {
+                Event::Purchase(Purchase {
                     actors: actors.into(),
                     amount,
                     item: item_id,

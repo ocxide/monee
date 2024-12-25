@@ -14,7 +14,7 @@ pub mod event {
     #[derive(serde::Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "snake_case")]
     pub enum Event {
-        Buy {
+        Purchase {
             item: String,
             actors: Box<[Actor]>,
             wallet: WalletName,

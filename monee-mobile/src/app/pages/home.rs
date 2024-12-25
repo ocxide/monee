@@ -17,24 +17,24 @@ const EVENT_BUTTONS: &[EventButton] = &[
         href: "/events/purchase",
     },
     EventButton {
-        name: "Buy",
+        name: "Purchase",
         color: "border-blue-500",
-        href: "/events/buy",
+        href: "/events/purchase",
     },
     EventButton {
-        name: "Buy",
+        name: "Purchase",
         color: "border-gray-500",
-        href: "/events/buy",
+        href: "/events/purchase",
     },
     EventButton {
-        name: "Buy",
+        name: "Purchase",
         color: "border-green-500",
-        href: "/events/buy",
+        href: "/events/purchase",
     },
     EventButton {
-        name: "Buy",
+        name: "Purchase",
         color: "border-green-500",
-        href: "/events/buy",
+        href: "/events/purchase",
     },
 ];
 
