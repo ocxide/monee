@@ -87,6 +87,8 @@ mod sync {
     }
 
     fn get_client_id(headers: &HeaderMap) -> Result<AppId, StatusCode> {
+        dbg!(headers.get("X-Node-Id"));
+
         headers
             .get("X-Node-Id")
             .ok_or(StatusCode::UNAUTHORIZED)?

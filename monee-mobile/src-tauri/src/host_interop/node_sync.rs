@@ -8,7 +8,7 @@ use monee::{
     },
     prelude::AppContext,
 };
-use monee_core::{ActorId, CurrencyId, WalletId};
+use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
 use tauri::async_runtime::Sender;
 use tokio::sync::{mpsc, watch};
 
@@ -33,6 +33,7 @@ impl NodeSyncContext {
         dispatcher.add::<handlers::OnCurrencyCreated>();
         dispatcher.add::<handlers::OnActorCreated>();
         dispatcher.add::<handlers::OnEventAdded>();
+        dispatcher.add::<handlers::OnItemCreated>();
 
         (ctx, dispatcher)
     }
@@ -54,7 +55,9 @@ mod handlers {
     use monee::backoffice::{
         actors::domain::actor_created::ActorCreated,
         currencies::domain::currency_created::CurrencyCreated,
-        events::domain::event_added::EventAdded, wallets::domain::wallet_created::WalletCreated,
+        events::domain::event_added::EventAdded,
+        item_tags::domain::item_tag_created::ItemTagCreated,
+        wallets::domain::wallet_created::WalletCreated,
     };
 
     use super::{DataChangedPort, NodeSyncContext};
@@ -112,12 +115,27 @@ mod handlers {
             Ok(())
         }
     }
+
+    #[derive(FromContext)]
+    #[context(NodeSyncContext)]
+    pub struct OnItemCreated {
+        port: DataChangedPort,
+    }
+
+    impl Handler for OnItemCreated {
+        type Event = ItemTagCreated;
+        async fn handle(self, event: Self::Event) -> Result<(), Error> {
+            self.port.send(super::DataChanged::Item(event.id)).await;
+            Ok(())
+        }
+    }
 }
 
 pub enum DataChanged {
     Currency(CurrencyId),
     Actor(ActorId),
     Wallet(WalletId),
+    Item(ItemTagId),
     Event,
 }
 
@@ -169,11 +187,12 @@ async fn listen(
                         DataChanged::Currency(id) => changes.currencies.push(id),
                         DataChanged::Actor(id) => changes.actors.push(id),
                         DataChanged::Wallet(id) => changes.wallets.push(id),
+                        DataChanged::Item(id) => changes.items.push(id),
                         // Should save too?
                         DataChanged::Event => {}
                     }
 
-                    Some(Ok((Ok(()), SyncOrder::SaveChanges)))
+                    Some(Ok(Ok(())))
                 }
                 else {
                     None
@@ -189,7 +208,7 @@ async fn listen(
                             let host_set: SetHostBinding = ctx.provide();
                             let result = host_set.run(host_con).await.catch_infra(&ctx);
 
-                            Some(Ok((result, SyncOrder::PullHost)))
+                            Some(Ok(result))
                         }
                         None => Some(Err(())),
                     }
@@ -202,7 +221,7 @@ async fn listen(
             break;
         };
 
-        let Ok((result, sync_order)) = result else {
+        let Ok(result) = result else {
             eprint!("WARNING: skipping sync: {}", file!());
             continue;
         };
@@ -217,27 +236,21 @@ async fn listen(
             continue;
         }
 
-        let order = match sync_order {
-            SyncOrder::SaveChanges => {
-                let sync = async {
-                    let service: HostCon = host_context.create(host_con);
-                    let sync_guide = service.get_guide().await?;
+        let sync = async {
+            let service: HostCon = host_context.create(host_con);
+            let sync_guide = service.get_guide().await?;
 
-                    let get_service: monee::nodes::sync::application::get_node_changes::GetNodeChanges =
-                        ctx.provide();
-                    let node_changes = get_service.run(sync_guide, &changes).await?;
+            let get_service: monee::nodes::sync::application::get_node_changes::GetNodeChanges =
+                ctx.provide();
+            let node_changes = get_service.run(sync_guide, &changes).await?;
 
-                    service.sync_to_host(&node_changes).await?;
+            dbg!("SYNC TO HOST");
+            service.sync_to_host(&node_changes).await?;
+            println!("SYNCED TO HOST");
 
-                    sync_from_host(&ctx, &host_context, &host_con).await
-                };
-                do_sync(&ctx, confirmer_tx.clone(), sync).await
-            }
-            SyncOrder::PullHost => {
-                let sync = async { sync_from_host(&ctx, &host_context, &host_con).await };
-                do_sync(&ctx, confirmer_tx.clone(), sync).await
-            }
+            sync_from_host(&ctx, &host_context, &host_con).await
         };
+        let order = do_sync(&ctx, confirmer_tx.clone(), sync).await;
 
         if let ChangesOrder::Clear = order {
             changes = ChangesRecord::default();

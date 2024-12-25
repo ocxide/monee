@@ -77,6 +77,7 @@ pub trait CatchToApp<T, E> {
 impl<T> CatchToApp<T, ConnectError> for tauri_plugin_http::reqwest::Result<T> {
     fn catch_to_app(self) -> Result<T, AppError<ConnectError>> {
         self.map_err(|value| {
+            dbg!(&value);
             if value.is_connect() {
                 return AppError::App(ConnectError);
             }

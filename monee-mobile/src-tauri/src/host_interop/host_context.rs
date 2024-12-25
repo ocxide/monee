@@ -48,6 +48,8 @@ impl<'a> HostCon<'a> {
             .send()
             .await
             .catch_to_app()?
+            .error_for_status()
+            .catch_to_infra()?
             .json::<SyncGuide>()
             .await
             .catch_to_infra()?;
@@ -63,6 +65,8 @@ impl<'a> HostCon<'a> {
             .send()
             .await
             .catch_to_app()?
+            .error_for_status()
+            .catch_to_infra()?
             .json::<HostState>()
             .await
             .catch_to_infra()?;
@@ -71,14 +75,17 @@ impl<'a> HostCon<'a> {
     }
 
     pub async fn sync_to_host(&self, data: &NodeChanges) -> Result<(), AppError<ConnectError>> {
+        println!("CALLING API");
         self.http
-            .post(format!("{}/sync/save", self.info.dir))
+            .patch(format!("{}/sync", self.info.dir))
             .header("X-Node-Id", self.info.node_app_id.to_string())
             .header("Content-Type", "application/json")
             .json(&data)
             .send()
             .await
-            .catch_to_app()?;
+            .catch_to_app()?
+            .error_for_status()
+            .catch_to_infra()?;
 
         Ok(())
     }
