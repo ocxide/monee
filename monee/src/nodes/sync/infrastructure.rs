@@ -155,9 +155,19 @@ pub mod repository {
     mod tests {
         #![allow(unused)]
 
+        use monee_core::{ActorId, EventId, WalletId};
         use monee_types::{
-            backoffice::actors::actor_type::ActorType, host::sync::catalog::Catalog,
+            backoffice::{
+                actors::actor_type::ActorType,
+                events::event::{Buy, Event},
+            },
+            host::sync::catalog::Catalog,
             nodes::sync::changes_record::ChangesRecord,
+        };
+
+        use crate::{
+            backoffice::events::domain::repository::Repository as EventsRepo,
+            nodes::sync::domain::repository::Repository,
         };
 
         use super::*;
@@ -208,7 +218,7 @@ pub mod repository {
 
         #[cfg(feature = "db_test")]
         #[tokio::test]
-        async fn saves_catalog() {
+        async fn gets_catalog() {
             use crate::shared::infrastructure::database::connect;
             let db = connect().await.unwrap();
             let ctx = DbContext::new(db);
@@ -229,6 +239,78 @@ pub mod repository {
             let catalog = repo.get_catalog(&record).await.expect("should get catalog");
 
             assert_eq!(catalog, org_catalog, "catalog should be the same");
+        }
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn gets_events() {
+            use crate::shared::infrastructure::database::connect;
+            let db = connect().await.unwrap();
+            let ctx = DbContext::new(db);
+
+            let back_repo: crate::backoffice::events::infrastructure::repository::SurrealRepository =
+                ctx.provide();
+
+            back_repo
+                .add(
+                    EventId::default(),
+                    Event::Buy(Buy {
+                        item: ItemTagId::default(),
+                        actors: vec![ActorId::default()].into(),
+                        wallet_id: WalletId::default(),
+                        amount: "1.00".parse().unwrap(),
+                    }),
+                )
+                .await
+                .expect("should add event");
+
+            let guide = monee_types::host::sync::sync_guide::SyncGuide {
+                last_event_date: None,
+            };
+            let repo: SurrealRepository = ctx.provide();
+            let events = repo.get_events(guide).await.expect("should get events");
+
+            assert_eq!(events.len(), 1, "should have one event");
+            assert!(
+                matches!(events[0].event, Event::Buy(_)),
+                "event should be buy"
+            );
+        }
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn gets_events_with_date() {
+            use crate::shared::infrastructure::database::connect;
+            let db = connect().await.unwrap();
+            let ctx = DbContext::new(db);
+
+            let back_repo: crate::backoffice::events::infrastructure::repository::SurrealRepository =
+            ctx.provide();
+
+            back_repo
+                .add(
+                    EventId::default(),
+                    Event::Buy(Buy {
+                        item: ItemTagId::default(),
+                        actors: vec![ActorId::default()].into(),
+                        wallet_id: WalletId::default(),
+                        amount: "1.00".parse().unwrap(),
+                    }),
+                )
+                .await
+                .expect("should add event");
+
+            let guide = monee_types::host::sync::sync_guide::SyncGuide {
+                last_event_date: Some(Datetime::MIN_UTC),
+            };
+            let repo: SurrealRepository = ctx.provide();
+            let events = repo.get_events(guide).await.expect("should get events");
+
+            assert_eq!(events.len(), 1, "should have one event");
+            assert!(
+                matches!(events[0].event, Event::Buy(_)),
+                "event should be buy"
+            );
         }
     }
 }
