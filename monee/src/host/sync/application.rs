@@ -69,6 +69,7 @@ pub mod sync_node_changes {
             }
 
             self.events_repo.save_many(sync.events).await?;
+            self.snapshot_io.save(snapshot).await?;
 
             self.event_bus.publish(NodeSynced(client_id));
 

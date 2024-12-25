@@ -273,7 +273,9 @@ pub mod actor {
                         "Duplicated actor alias",
                     }
                     .into()
-                })
+                })?;
+
+                Ok(())
             }
 
             ActorCommand::List => {
