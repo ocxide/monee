@@ -11,6 +11,7 @@ pub mod prelude {
     pub use crate::shared::infrastructure::errors::InfrastructureError;
 
     pub use cream::context::Context;
+    pub(crate) use crate::iprelude::*;
 }
 
 /// Private prelude

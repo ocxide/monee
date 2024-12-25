@@ -16,12 +16,6 @@ pub mod repository {
     #[context(DbContext)]
     pub struct SurrealRepository(crate::shared::infrastructure::database::Connection);
 
-    impl SurrealRepository {
-        pub fn new(connection: crate::shared::infrastructure::database::Connection) -> Self {
-            Self(connection)
-        }
-    }
-
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(rename_all = "snake_case", tag = "type")]
     pub enum SurrealMoneeEvent {
@@ -189,9 +183,43 @@ pub mod repository {
                 })
                 .collect();
 
-            let _: Vec<()> = self.0.insert("event").content(rows).await?;
+            self.0
+                .query("INSERT INTO event $rows")
+                .bind(("rows", rows))
+                .await?;
 
             Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #![allow(unused)]
+
+        use crate::prelude::*;
+        use crate::shared::infrastructure::database::connect;
+
+        use super::*;
+
+        #[cfg(feature = "db_test")]
+        #[tokio::test]
+        async fn saves_many() {
+            let db = connect().await.unwrap();
+            let ctx = DbContext::new(db);
+
+            let repo: SurrealRepository = ctx.provide();
+            repo.save_many(vec![EventEntry {
+                id: EventId::default(),
+                event: Event::Buy(monee_types::backoffice::events::event::Buy {
+                    item: ItemTagId::default(),
+                    amount: Amount::default(),
+                    wallet_id: WalletId::default(),
+                    actors: vec![].into(),
+                }),
+                created_at: Datetime::MIN_UTC,
+            }])
+            .await
+            .unwrap();
         }
     }
 }

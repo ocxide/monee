@@ -15,7 +15,7 @@ pub mod application {
 
         impl LogService {
             pub fn error(&self, err: InfrastructureError) {
-                let result = self.repository.log(format_args!("{:?}", err));
+                let result = self.repository.log(format_args!("{}", err));
                 if let Err(e) = result {
                     println!("error logging error: {:?}", e);
                 }

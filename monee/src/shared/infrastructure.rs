@@ -1,13 +1,23 @@
 pub mod database;
 
 pub mod errors {
+    use std::panic::Location;
+
     #[derive(Debug, thiserror::Error)]
-    #[error("infrastructure error: {0}")]
-    pub struct UnspecifiedError(Box<dyn std::error::Error + Send + Sync + 'static>);
+    #[error("Unspecified({}:{}:{}): {inner}", location.file(), location.line(), location.column())]
+    pub struct UnspecifiedError {
+        inner: Box<dyn std::error::Error + Send + Sync + 'static>,
+        location: &'static Location<'static>,
+    }
 
     impl UnspecifiedError {
-        pub fn new<E: std::error::Error + Send + Sync + 'static>(err: E) -> Self {
-            Self(Box::new(err))
+        #[track_caller]
+        #[inline]
+        pub fn new<E: std::error::Error + Send + Sync + 'static>(value: E) -> Self {
+            Self {
+                inner: Box::new(value),
+                location: Location::caller(),
+            }
         }
     }
 
@@ -20,8 +30,10 @@ pub mod errors {
     }
 
     impl From<surrealdb::Error> for InfrastructureError {
+        #[track_caller]
+        #[inline]
         fn from(err: surrealdb::Error) -> Self {
-            Self::Unspecified(UnspecifiedError(err.into()))
+            Self::Unspecified(UnspecifiedError::new(err))
         }
     }
 
@@ -32,6 +44,8 @@ pub mod errors {
     }
 
     impl<E> From<InfrastructureError> for AppError<E> {
+        #[track_caller]
+        #[inline]
         fn from(value: InfrastructureError) -> Self {
             Self::Infrastructure(value)
         }
