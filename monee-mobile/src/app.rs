@@ -68,13 +68,15 @@ pub mod app_state {
 pub fn App() -> impl IntoView {
     app_state::setup();
 
+    use pages::event::{purchase::PurchaseForm, EventPageForm};
+
     view! {
         <Router>
                 <Routes fallback=|| view! { <p>"not foun, da heck? " <a href="/home">"Go Back"</a></p> }>
                     <Route path=path!("/") view=pages::startup::StartUp />
                     <ParentRoute path=path!("/*") view=AppLayout>
                         <Route path=path!("/home") view=pages::home::Home />
-                        <Route path=path!("/events/purchase") view=pages::purchase::Purchase />
+                        <Route path=path!("/events/purchase") view=move || view! { <EventPageForm<PurchaseForm> /> } />
                     </ParentRoute>
                 </Routes>
         </Router>
