@@ -12,7 +12,7 @@ use monee_types::{
         actors::actor::Actor,
         events::{
             apply_event::MoveValueError,
-            event::{Purchase, Event},
+            event::{Event, Purchase},
         },
         item_tags::item_tag_node::ItemTagNode,
     },
@@ -27,7 +27,7 @@ use crate::{
         forms::{create_actor::CreateActorForm, create_item::CreateItemForm},
     },
     bind_command,
-    leptos_util::local::action::LocalAction,
+    leptos_util::{local::action::local_action, signal::AppWithErr},
     prelude::{InternalError, MoneeError},
 };
 
@@ -78,7 +78,7 @@ pub fn Purchase() -> impl IntoView {
 
     let (item_refresh, set_item_refresh) = signal(());
     let items = LocalResource::new(move || async move {
-        item_refresh.get();        
+        item_refresh.get();
         get_all_items().await
     });
     let items_options = create_options(items, |item| {
@@ -98,7 +98,7 @@ pub fn Purchase() -> impl IntoView {
         view! { <option value={id.to_string()}>{msg}</option> }
     });
 
-    let add_event_action = LocalAction::new(move |event: Event| {
+    let (action, dispatch) = local_action(move |event: Event| {
         let value = navigate_back.clone();
         async move {
             add_event(event).await?;
@@ -150,15 +150,12 @@ pub fn Purchase() -> impl IntoView {
         }
     };
 
-    let on_submit = {
-        let add_event_action = add_event_action.clone();
-        move |e: SubmitEvent| {
-            e.prevent_default();
+    let on_submit = move |e: SubmitEvent| {
+        e.prevent_default();
 
-            let event = get_event();
-            if let Some(event) = event {
-                add_event_action.dispatch(event);
-            }
+        let event = get_event();
+        if let Some(event) = event {
+            dispatch.dispatch(event);
         }
     };
 
@@ -194,9 +191,6 @@ pub fn Purchase() -> impl IntoView {
         view! { <p>{msg}</p> }
     };
 
-    let output = add_event_action.output();
-    let pending = add_event_action.pending();
-
     view! {
         <>
             <a href="/home">"Back"</a>
@@ -231,18 +225,18 @@ pub fn Purchase() -> impl IntoView {
 
                 <button type="submit" class="bg-blue-800 p-2">"Save"</button>
 
-                <Show when=move || pending.get()>
+                <Show when=move || action.pending()>
                     <p>"Saving..."</p>
                 </Show>
 
-                <Show when={ let action = add_event_action.clone(); move || action.is_err() }>
-                {move || output.with(|state| {
-                    match state {
-                    Some(Err(MoneeError::App(e))) => Some(err(e).into_any()),
-                    Some(Err(MoneeError::Internal(_))) => Some(view! { <p>"Internal error :("</p> }.into_any()),
-                    _ => None,
-                    }
-                })}
+                <Show when=move || action.is_err()>
+                    {move || action.with(|state| {
+                        match state {
+                        Some(Err(MoneeError::App(e))) => Some(err(e).into_any()),
+                        Some(Err(MoneeError::Internal(_))) => Some(view! { <p>"Internal error :("</p> }.into_any()),
+                        _ => None,
+                        }
+                    })}
                 </Show>
             </form>
         </>

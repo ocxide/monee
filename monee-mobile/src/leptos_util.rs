@@ -1,3 +1,25 @@
+pub mod signal {
+    use leptos::prelude::With;
+
+    pub trait AppGetErr<E> {
+        fn error(&self) -> Option<E>;
+    }
+
+    pub trait AppWithErr<E> {
+        fn is_err(&self) -> bool;
+    }
+
+    impl<G, T, E> AppGetErr<E> for G
+    where
+        G: With<Value = Result<T, E>>,
+        E: Clone,
+    {
+        fn error(&self) -> Option<E> {
+            self.with(|v| v.as_ref().err().cloned())
+        }
+    }
+}
+
 pub mod local {
     pub(crate) mod fut_tracker {
         use std::sync::Mutex;
@@ -56,83 +78,29 @@ pub mod local {
                 Self(Mutex::new(Default::default()))
             }
         }
-
-        impl FutTrackerMutex {
-            pub fn cancel_current(&self) {
-                self.0.lock().unwrap().cancel_current();
-            }
-        }
-    }
-
-    pub mod resource {
-        use std::ops::Deref;
-
-        use futures_util::FutureExt;
-        use leptos::prelude::*;
-
-        use super::fut_tracker::FutTracker;
-
-        #[derive(Clone, Copy)]
-        pub struct ResourceLocal<T: Send + Sync + 'static> {
-            effect: Effect<LocalStorage>,
-            output_rx: ReadSignal<Option<T>>,
-            output_tx: WriteSignal<Option<T>>,
-        }
-
-        impl<T: Send + Sync + 'static> Deref for ResourceLocal<T> {
-            type Target = ReadSignal<Option<T>>;
-            fn deref(&self) -> &Self::Target {
-                &self.output_rx
-            }
-        }
-
-        impl<T: Send + Sync + 'static> ResourceLocal<T> {
-            pub fn new<Fut>(func: impl Fn() -> Fut + 'static) -> Self
-            where
-                Fut: std::future::Future<Output = T> + 'static,
-            {
-                let (output_rx, output_tx) = signal(None);
-                let effect = Effect::new(move || {
-                    let mut tracker = FutTracker::default();
-                    let fut = func();
-
-                    tracker.spawn_local(
-                        async move {
-                            let result = fut.await;
-                            output_tx.set(Some(result));
-                        }
-                        .fuse(),
-                    );
-                });
-
-                Self {
-                    effect,
-                    output_rx,
-                    output_tx,
-                }
-            }
-        }
     }
 
     pub mod action {
         use futures_util::FutureExt;
         use leptos::prelude::*;
-        use std::sync::Arc;
+        use std::{ops::Deref, sync::Arc};
+
+        use crate::leptos_util::signal::{AppGetErr, AppWithErr};
 
         use super::fut_tracker::FutTrackerMutex;
-
-        pub struct LocalAction<I, O: 'static, Fut> {
-            inner: Arc<Inner<I, Fut>>,
-            output: (ReadSignal<Option<O>>, WriteSignal<Option<O>>),
-            pending: (ReadSignal<bool>, WriteSignal<bool>),
-        }
 
         struct Inner<I, Fut> {
             tracker: FutTrackerMutex,
             func: Box<dyn Fn(I) -> Fut + 'static + Send + Sync>,
         }
 
-        impl<I, O: 'static, Fut> Clone for LocalAction<I, O, Fut> {
+        pub struct LocalDispatcher<I, O: 'static, Fut> {
+            inner: Arc<Inner<I, Fut>>,
+            output: WriteSignal<Option<O>>,
+            pending: WriteSignal<bool>,
+        }
+
+        impl<I, O: 'static, Fut> Clone for LocalDispatcher<I, O, Fut> {
             fn clone(&self) -> Self {
                 Self {
                     inner: self.inner.clone(),
@@ -142,28 +110,17 @@ pub mod local {
             }
         }
 
-        impl<I, O, Fut> LocalAction<I, O, Fut>
+        impl<I, O, Fut> LocalDispatcher<I, O, Fut>
         where
             Fut: std::future::Future<Output = O> + 'static,
             I: 'static,
             O: Send + Sync + 'static,
         {
-            pub fn new(func: impl Fn(I) -> Fut + 'static + Send + Sync) -> Self {
-                Self {
-                    inner: Arc::new(Inner {
-                        tracker: Default::default(),
-                        func: Box::new(func),
-                    }),
-                    output: signal(None),
-                    pending: signal(false),
-                }
-            }
-
             pub fn dispatch(&self, input: I) {
-                let output_signal = self.output.1;
+                let output_signal = self.output;
                 let fut = (self.inner.func)(input);
 
-                let pending = self.pending.1;
+                let pending = self.pending;
                 pending.set(true);
 
                 self.inner.tracker.spawn_local(
@@ -175,32 +132,80 @@ pub mod local {
                     .fuse(),
                 );
             }
+        }
 
-            pub fn output(&self) -> ReadSignal<Option<O>> {
-                self.output.0
-            }
+        pub struct ActionOutput<O> {
+            output: ReadSignal<Option<O>>,
+            pending: ReadSignal<bool>,
+        }
 
-            pub fn pending(&self) -> ReadSignal<bool> {
-                self.pending.0
+        impl<O> ActionOutput<O> {
+            pub fn pending(&self) -> bool {
+                self.pending.get()
             }
         }
 
-        impl<I, T: 'static, E: 'static, Fut> LocalAction<I, Result<T, E>, Fut>
+        impl<O> Clone for ActionOutput<O> {
+            fn clone(&self) -> Self {
+                *self
+            }
+        }
+
+        impl<O> Copy for ActionOutput<O> {}
+        impl<O> Deref for ActionOutput<O> {
+            type Target = ReadSignal<Option<O>>;
+            fn deref(&self) -> &Self::Target {
+                &self.output
+            }
+        }
+
+        pub fn local_action<I, O, Fut>(
+            action_fn: impl Fn(I) -> Fut + 'static + Send + Sync,
+        ) -> (ActionOutput<O>, LocalDispatcher<I, O, Fut>)
+        where
+            Fut: std::future::Future<Output = O> + 'static,
+            I: 'static,
+            O: Send + Sync + 'static,
+        {
+            let output = signal(None);
+            let pending = signal(false);
+
+            let dispatcher = LocalDispatcher {
+                inner: Arc::new(Inner {
+                    tracker: Default::default(),
+                    func: Box::new(action_fn),
+                }),
+                output: output.1,
+                pending: pending.1,
+            };
+
+            let action_output = ActionOutput {
+                output: output.0,
+                pending: pending.0,
+            };
+
+            (action_output, dispatcher)
+        }
+
+        impl<T, E> AppGetErr<E> for ActionOutput<Result<T, E>>
+        where
+            T: Send + Sync + 'static,
+            E: Clone + Send + Sync + 'static,
+        {
+            fn error(&self) -> Option<E> {
+                self.deref()
+                    .with(|v| v.as_ref().and_then(|r| r.as_ref().err()).cloned())
+            }
+        }
+
+        impl<T, E> AppWithErr<E> for ActionOutput<Result<T, E>>
         where
             T: Send + Sync + 'static,
             E: Send + Sync + 'static,
         {
-            pub fn error(&self) -> impl Fn() -> Option<E>
-            where
-                E: Clone,
-            {
-                let output = self.output.0;
-                move || output.with(|state| state.as_ref().and_then(|r| r.as_ref().err().cloned()))
-            }
-
-            pub fn is_err(&self) -> bool {
-                let output = self.output.0;
-                output.with(|state| state.as_ref().map(|r| r.is_err()).unwrap_or(false))
+            fn is_err(&self) -> bool {
+                self.deref()
+                    .with(|v| v.as_ref().is_some_and(|r| r.is_err()))
             }
         }
     }

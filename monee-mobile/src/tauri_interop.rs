@@ -1,4 +1,6 @@
 mod invoke {
+    #![allow(unused)]
+    
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsValue;
 

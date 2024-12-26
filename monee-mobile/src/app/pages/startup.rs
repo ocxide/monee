@@ -2,7 +2,7 @@ use leptos::{ev::SubmitEvent, prelude::*};
 use leptos_router::hooks::use_navigate;
 
 use crate::{
-    app_state::use_host_status, bind_command, leptos_util::local::action::LocalAction,
+    app_state::use_host_status, bind_command, leptos_util::local::action::local_action,
     prelude::InternalError,
 };
 
@@ -14,7 +14,7 @@ pub fn StartUp() -> impl IntoView {
     let host_status = use_host_status();
 
     let navigate = use_navigate();
-    let is_synced = LocalAction::new(move |_: ()| async move { is_synced().await });
+    let (is_synced, dispatch) = local_action(move |_: ()| async move { is_synced().await });
 
     Effect::new({
         let navigate = navigate.clone();
@@ -26,25 +26,23 @@ pub fn StartUp() -> impl IntoView {
     });
 
     Effect::new({
-        let is_synced = is_synced.clone();
+        let dispatch = dispatch.clone();
         move || {
-            is_synced.dispatch(());
+            dispatch.dispatch(());
         }
     });
 
     let output_view = {
-        let is_synced = is_synced.clone();
-        let output = is_synced.output();
-
+        let dispatch = dispatch.clone();
         move || {
-            output
+            is_synced
                 .get()
                 .map(|result| match result {
                     Ok(false) => view! { <StartUpForm /> }.into_any(),
                     Ok(true) => view! { <p>"Synced"</p> }.into_any(),
                     Err(_) => {
-                        let is_synced = is_synced.clone();
-                        view! { <button on:click=move |_| is_synced.dispatch(())>"Try again"</button> }
+                        let dispatch = dispatch.clone();
+                        view! { <button on:click=move |_| dispatch.dispatch(())>"Try again"</button> }
                             .into_any()
                     }
                 })
@@ -65,7 +63,7 @@ fn StartUpForm() -> impl IntoView {
     let navigate = use_navigate();
     let (host_dir, set_host_dir) = signal(String::default());
 
-    let set_host_binding = LocalAction::new(move |host_dir: String| {
+    let (set_host_binding, dispatch) = local_action(move |host_dir: String| {
         let navigate = navigate.clone();
         async move {
             set_host(host_dir).await?;
@@ -75,17 +73,13 @@ fn StartUpForm() -> impl IntoView {
         }
     });
 
-    let on_submit = {
-        let set_host_binding = set_host_binding.clone();
-        move |e: SubmitEvent| {
-            e.prevent_default();
-            set_host_binding.dispatch(host_dir.get());
-        }
+    let on_submit = move |e: SubmitEvent| {
+        e.prevent_default();
+        dispatch.dispatch(host_dir.get());
     };
 
     let error_view = move || {
         set_host_binding
-            .output()
             .with(|state| state.as_ref().map(Result::is_err))
             .map(|is_err| view! { <Show when=move || is_err> <p>"Error"</p> </Show> })
     };
