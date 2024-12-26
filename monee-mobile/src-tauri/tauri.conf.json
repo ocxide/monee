@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "monee-mobile",
+  "productName": "monee",
   "version": "0.1.0",
   "identifier": "com.monee-mobile.app",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "monee-mobile",
+        "title": "monee",
         "width": 800,
         "height": 600
       }

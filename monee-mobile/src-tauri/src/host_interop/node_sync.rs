@@ -9,7 +9,7 @@ use monee::{
     prelude::AppContext,
 };
 use monee_core::{ActorId, CurrencyId, ItemTagId, WalletId};
-use tauri::async_runtime::Sender;
+use tauri::{async_runtime::Sender, AppHandle, Emitter};
 use tokio::sync::{mpsc, watch};
 
 use crate::{prelude::*, CatchInfra};
@@ -148,7 +148,11 @@ impl DataChangedPort {
     }
 }
 
-pub fn setup(ctx: AppContext, host_context: HostContext) -> (DataChangedPort, HostSync) {
+pub fn setup(
+    ctx: AppContext,
+    host_context: HostContext,
+    tauri_app: AppHandle,
+) -> (DataChangedPort, HostSync) {
     let (changes_tx, changes_rx) = tauri::async_runtime::channel(1);
     let (host_sync, binding_rx, confirmer_tx) = HostSync::create();
 
@@ -158,6 +162,7 @@ pub fn setup(ctx: AppContext, host_context: HostContext) -> (DataChangedPort, Ho
         confirmer_tx,
         ctx,
         host_context,
+        tauri_app,
     ));
     (DataChangedPort(changes_tx), host_sync)
 }
@@ -168,6 +173,7 @@ async fn listen(
     confirmer_tx: watch::Sender<Result<(), InternalError>>,
     ctx: AppContext,
     host_context: HostContext,
+    tauri_app: AppHandle,
 ) {
     let changes_getter: monee::nodes::changes::application::load::Load = ctx.provide();
 
@@ -250,7 +256,7 @@ async fn listen(
 
             sync_from_host(&ctx, &host_context, &host_con).await
         };
-        let order = do_sync(&ctx, confirmer_tx.clone(), sync).await;
+        let order = do_sync(&ctx, confirmer_tx.clone(), sync, &tauri_app).await;
 
         if let ChangesOrder::Clear = order {
             changes = ChangesRecord::default();
@@ -268,21 +274,30 @@ enum ChangesOrder {
     Clear,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+enum HostStatus {
+    Online,
+    Offline,
+}
+
 async fn do_sync(
     ctx: &AppContext,
     confirmer_tx: watch::Sender<Result<(), InternalError>>,
     sync: impl Future<Output = Result<(), AppError<ConnectError>>>,
+    tauri_app: &AppHandle,
 ) -> ChangesOrder {
-    let (result, order) = match sync.await.catch_infra(ctx) {
-        Ok(Ok(())) => (Ok(()), ChangesOrder::Clear),
+    let (result, order, host_status) = match sync.await.catch_infra(ctx) {
+        Ok(Ok(())) => (Ok(()), ChangesOrder::Clear, HostStatus::Online),
         Ok(Err(_)) => {
             eprintln!("WARNING: Failed to connect host, skipping sync");
-            (Ok(()), ChangesOrder::Preserve)
+            (Ok(()), ChangesOrder::Preserve, HostStatus::Offline)
         }
-        Err(e) => (Err(e), ChangesOrder::Preserve),
+        Err(e) => (Err(e), ChangesOrder::Preserve, HostStatus::Offline),
     };
 
     confirmer_tx.send(result).unwrap();
+    tauri_app.emit("host_status_change", host_status).unwrap();
+
     order
 }
 
