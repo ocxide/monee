@@ -198,7 +198,7 @@ pub fn Purchase() -> impl IntoView {
     let pending = add_event_action.pending();
 
     view! {
-        <div class="container mx-auto">
+        <>
             <a href="/home">"Back"</a>
 
             {actor_form}
@@ -245,6 +245,6 @@ pub fn Purchase() -> impl IntoView {
                 })}
                 </Show>
             </form>
-        </div>
+        </>
     }
 }

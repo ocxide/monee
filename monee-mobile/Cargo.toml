@@ -24,6 +24,7 @@ send_wrapper = "0.6.0"
 futures-channel = "0.3.31"
 futures-util = "0.3.31"
 web-sys = { version = "0.3.76", features = ["HtmlCollection", "HtmlSelectElement"] }
+codee = { version = "0.2.0", features = ["json_serde", "json_serde_wasm"] }
 
 [workspace]
 members = ["src-tauri"]

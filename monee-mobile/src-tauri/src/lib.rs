@@ -7,7 +7,7 @@ use host_sync_state::HostSyncState;
 use monee::{
     nodes::hosts::domain::host::host_dir::HostDir, shared::domain::context::AppContextBuilder,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use prelude::*;
 
@@ -63,8 +63,8 @@ mod monee_commands {
 
     use crate::prelude::*;
 
-    use monee::backoffice::item_tags::application::create_one as create_item;
     use monee::backoffice::actors::application::create_one as create_actor;
+    use monee::backoffice::item_tags::application::create_one as create_item;
 
     write_command!(add_event::Add : add_event( event: add_event::Event ) -> (), MoneeError<add_event::Error>);
     read_command!(get_all_items::GetAll : get_all_items() -> Vec<ItemTagNode>, InternalError);
@@ -82,7 +82,7 @@ async fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let host_ctx = HostContext::default();
 
     let (data_port, host_sync) =
-        host_interop::node_sync::setup(setup.ctx.clone(), host_ctx.clone());
+        host_interop::node_sync::setup(setup.ctx.clone(), host_ctx.clone(), app.handle().clone());
     let (sync_confirmer, host_sync) = host_sync_state::setup(setup.ctx.clone(), host_sync);
 
     let ctx = setup

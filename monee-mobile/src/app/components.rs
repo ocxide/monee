@@ -1,74 +1,34 @@
-pub mod dialog_form {
-    use leptos::{html::Dialog, prelude::*};
-    use leptos_use::on_click_outside;
+pub mod dialog_form;
+pub mod host_status_bar {
+    use leptos::{prelude::*, IntoView};
+
+    use crate::app_state::{use_host_status, HostStatus};
 
     #[component]
-    fn DialogForm(
-        children: Children,
-        try_close: ReadSignal<bool>,
-        on_close: impl Fn() + Send + Sync + 'static + Copy,
-    ) -> impl IntoView {
-        let dialog = NodeRef::<Dialog>::new();
+    pub fn HostStatusBar() -> impl IntoView {
+        let host_status = use_host_status();
 
-        Effect::new(move |_| {
-            if try_close.get() {
-                dialog.get().unwrap().close();
-                on_close();
-            }
-        });
-
-        let _ = on_click_outside(dialog, move |_| {
-            dialog.get().unwrap().close();
-            on_close();
-        });
+        let status_bg = move || match host_status.get() {
+            Some(HostStatus::Online) => "bg-green-500",
+            Some(HostStatus::Offline) => "bg-red-500",
+            None => "bg-gray-500",
+        };
+        let status_text = move || match host_status.get() {
+            None => "Could not find host status",
+            Some(HostStatus::Online) => "Host is online",
+            Some(HostStatus::Offline) => "Host is offline",
+        };
+        let status_retry = move || matches!(host_status.get(), Some(HostStatus::Offline));
 
         view! {
-            <dialog open="true" node_ref=dialog class="text-white fixed inset-0 p-4 bg-gray-800 rounded-lg overflow-hidden backdrop:bg-white/50 backdrop:backdrop-blur-md">
-                {children()}
-            </dialog>
+            <div class=move || format!("fixed top-0 w-full py-3 px-2 {}", status_bg())>
+                <span>{move || status_text()}"."</span>
+
+                <Show when=move || status_retry()>
+                    <span class="text-underline">" Retry"</span>
+                    <a href="/" class="absolute top-0 right-0 bottom-0 left-0 w-full h-full"></a>
+                </Show>
+            </div>
         }
-    }
-
-    pub trait EntityForm {
-        type Id: 'static + Copy + Send + Sync;
-        fn create_view(
-            on_save: impl Fn(Self::Id) + Send + Sync + 'static + Copy,
-        ) -> impl IntoView + 'static;
-    }
-
-    pub fn create_dialog<F: EntityForm>(
-        on_save: impl Fn(F::Id) + Send + Sync + 'static + Copy,
-    ) -> (impl Fn() + Send + Sync, impl IntoView) {
-        let (openned, set_open) = signal(false);
-        let (try_close, set_try_close) = signal(false);
-
-        let id_store = StoredValue::new(None as Option<F::Id>);
-
-        let on_form_save = move |id: F::Id| {
-            set_try_close.set(true);
-            id_store.set_value(Some(id));
-        };
-        let on_dialog_closed = move || {
-            set_open.set(false);
-            set_try_close.set(false);
-
-            if let Some(id) = id_store.get_value() {
-                on_save(id);
-            }
-        };
-
-        let dialog = view! {
-            <Show when=move || openned.get()>
-                <DialogForm on_close=on_dialog_closed try_close=try_close>
-                    {F::create_view(on_form_save)}
-                </DialogForm>
-            </Show>
-        };
-
-        let open = move || {
-            set_open.set(true);
-        };
-
-        (open, dialog)
     }
 }

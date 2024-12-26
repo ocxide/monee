@@ -1,23 +1,27 @@
 use leptos::{ev::SubmitEvent, prelude::*};
 use leptos_router::hooks::use_navigate;
 
-use crate::{bind_command, leptos_util::local::action::LocalAction, prelude::InternalError};
+use crate::{
+    app_state::use_host_status, bind_command, leptos_util::local::action::LocalAction,
+    prelude::InternalError,
+};
 
 bind_command!(set_host(host_dir: String) -> (), InternalError);
 bind_command!(is_synced() -> bool, InternalError);
 
 #[component]
 pub fn StartUp() -> impl IntoView {
+    let host_status = use_host_status();
+
     let navigate = use_navigate();
-    let is_synced = LocalAction::new(move |_: ()| {
+    let is_synced = LocalAction::new(move |_: ()| async move { is_synced().await });
+
+    Effect::new({
         let navigate = navigate.clone();
-        async move {
-            let is_synced = is_synced().await?;
-            if is_synced {
+        move || {
+            if host_status.get().is_some() {
                 navigate("/home", Default::default());
             }
-
-            Ok(is_synced) as Result<bool, InternalError>
         }
     });
 
@@ -102,4 +106,3 @@ fn StartUpForm() -> impl IntoView {
         </>
     }
 }
-
