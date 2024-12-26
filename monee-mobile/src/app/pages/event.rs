@@ -20,21 +20,21 @@ pub mod purchase {
         html::{Input, Select},
         prelude::*,
     };
-    use monee_core::{ActorId, WalletId};
-    use monee_types::{
-        backoffice::{
-            actors::actor::Actor,
-            events::event::{Event, Purchase},
-            item_tags::item_tag_node::ItemTagNode,
-        },
-        reports::snapshot::snapshot::{Money, Wallet},
+    use monee_core::ActorId;
+    use monee_types::backoffice::{
+        actors::actor::Actor,
+        events::event::{Event, Purchase},
+        item_tags::item_tag_node::ItemTagNode,
     };
     use wasm_bindgen::JsCast;
     use web_sys::{HtmlOptionElement, HtmlSelectElement};
 
     use crate::{
         app::{
-            components::dialog_form::create_dialog,
+            components::{
+                dialog_form::create_dialog,
+                fields::{options::create_options, wallet_select::WalletSelect},
+            },
             forms::{create_actor::CreateActorForm, create_item::CreateItemForm},
         },
         bind_command,
@@ -43,7 +43,6 @@ pub mod purchase {
 
     use super::EventForm;
 
-    bind_command!(get_all_wallets() -> Vec<(WalletId, (Wallet, Money))>, InternalError);
     bind_command!(get_all_items() -> Vec<ItemTagNode>, InternalError);
     bind_command!(get_all_actors() -> Vec<(ActorId, Actor)>, InternalError);
 
@@ -68,32 +67,6 @@ pub mod purchase {
         let item_select = NodeRef::<Select>::new();
         let actor_select = NodeRef::<Select>::new();
         let amount_input = NodeRef::<Input>::new();
-
-        fn create_options<T, V1>(
-            resources: LocalResource<Result<Vec<T>, InternalError>>,
-            option: impl Fn(&T) -> V1 + Copy,
-        ) -> impl Fn() -> AnyView
-        where
-            T: 'static,
-            V1: IntoView + 'static,
-        {
-            move || {
-                resources.with(|state| {
-                    state
-                        .as_ref()
-                        .map(|result| match result.as_deref() {
-                            Ok(items) => items.iter().map(option).collect_view().into_any(),
-                            Err(_) => view! { <p>"Error"</p> }.into_any(),
-                        })
-                        .unwrap_or_else(|| view! { <p>"Loading..."</p> }.into_any())
-                })
-            }
-        }
-
-        let wallets = LocalResource::new(get_all_wallets);
-        let wallets_options = create_options(wallets, |(id, (wallet, money))| {
-            view! { <option value={id.to_string()}>{format!("{}: {} {}{}", wallet.name, money.currency.code, money.currency.symbol, money.amount)}</option> }
-        });
 
         let (item_refresh, set_item_refresh) = signal(());
         let items = LocalResource::new(move || async move {
@@ -178,9 +151,7 @@ pub mod purchase {
         };
         let form = view! {
             <>
-                <select node_ref=wallet_select required class="bg-slate-800 p-2" name="wallet_id">
-                    {wallets_options}
-                </select>
+                <WalletSelect node_ref=wallet_select />
 
                 <div class="flex gap-x-4">
                     <select node_ref=item_select required class="bg-slate-800 p-2 flex-1" name="item_tag_id">

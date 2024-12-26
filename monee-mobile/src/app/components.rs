@@ -32,3 +32,56 @@ pub mod host_status_bar {
         }
     }
 }
+
+pub mod fields {
+    pub mod options {
+        use crate::prelude::InternalError;
+        use leptos::prelude::*;
+
+        pub fn create_options<T, V1>(
+            resources: LocalResource<Result<Vec<T>, InternalError>>,
+            option: impl Fn(&T) -> V1 + Copy,
+        ) -> impl Fn() -> AnyView
+        where
+            T: 'static,
+            V1: IntoView + 'static,
+        {
+            move || {
+                resources.with(|state| {
+                    state
+                        .as_ref()
+                        .map(|result| match result.as_deref() {
+                            Ok(items) => items.iter().map(option).collect_view().into_any(),
+                            Err(_) => view! { <p>"Error"</p> }.into_any(),
+                        })
+                        .unwrap_or_else(|| view! { <p>"Loading..."</p> }.into_any())
+                })
+            }
+        }
+    }
+
+    pub mod wallet_select {
+        use leptos::{html::Select, prelude::*};
+        use monee_core::WalletId;
+
+        use super::options::create_options;
+        use crate::{bind_command, prelude::InternalError};
+        use monee_types::reports::snapshot::snapshot::{Money, Wallet};
+
+        bind_command!(get_all_wallets() -> Vec<(WalletId, (Wallet, Money))>, InternalError);
+
+        #[component]
+        pub fn WalletSelect(#[prop(optional)] node_ref: NodeRef<Select>) -> impl IntoView {
+            let wallets = LocalResource::new(get_all_wallets);
+            let wallets_options = create_options(wallets, |(id, (wallet, money))| {
+                view! { <option value={id.to_string()}>{format!("{}: {} {}{}", wallet.name, money.currency.code, money.currency.symbol, money.amount)}</option> }
+            });
+
+            view! {
+                <select node_ref=node_ref required class="bg-slate-800 p-2" name="wallet_id">
+                    {wallets_options}
+                </select>
+            }
+        }
+    }
+}
