@@ -26,8 +26,8 @@ const EVENT_BUTTONS: &[EventButton] = &[
 #[component]
 pub fn Home() -> impl IntoView {
     view! {
-        <div class="flex flex-col justify-center h-full">
-            <h1 class="text-4xl text-center">"Monee"</h1>
+        <div class="flex flex-col justify-center h-full gap-20">
+            <h1 class="text-5xl text-center">"Monee"</h1>
 
             <LoadStats />
 
@@ -76,18 +76,20 @@ fn LoadStats() -> impl IntoView {
     .collect_view();
 
         view! {
-            <div class="grid gap-x-4 grid-cols-3 place-items-center">
-                <div>
-                    <p class="text-xl">"Wallets"</p>
-                    <ListView children=wallets />
-                </div>
-                <div>
-                    <p class="text-xl">"Debts"</p>
-                    <ListView children=debts />
-                </div>
-                <div>
-                    <p class="text-xl">"Loans"</p>
-                    <ListView children=loan />
+            <div class="flex justify-center">
+                <div class="flex gap-6 justify-between flex-wrap max-w-md">
+                    <div>
+                        <p class="text-xl">"Wallets"</p>
+                        <ListView children=wallets />
+                    </div>
+                    <div>
+                        <p class="text-xl">"Debts"</p>
+                        <ListView children=debts />
+                    </div>
+                    <div>
+                        <p class="text-xl">"Loans"</p>
+                        <ListView children=loan />
+                    </div>
                 </div>
             </div>
         }
