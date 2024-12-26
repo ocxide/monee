@@ -26,7 +26,7 @@ const EVENT_BUTTONS: &[EventButton] = &[
 #[component]
 pub fn Home() -> impl IntoView {
     view! {
-        <>
+        <div class="flex flex-col justify-center h-full">
             <h1 class="text-4xl text-center">"Monee"</h1>
 
             <LoadStats />
@@ -34,7 +34,7 @@ pub fn Home() -> impl IntoView {
             <ul class="flex flex-wrap gap-4 justify-center">
                 {EVENT_BUTTONS.iter().map(|event| view! { <li><EventButton name=event.name color=event.color href=event.href /></li> } ).collect::<Vec<_>>()}
             </ul>
-        </>
+        </div>
     }
 }
 

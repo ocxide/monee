@@ -161,7 +161,7 @@ pub mod purchase {
                 </div>
 
                 <div class="flex gap-x-4">
-                    <select node_ref=actor_select class="bg-slate-800 p-2" name="actor_ids" multiple>
+                    <select node_ref=actor_select class="bg-slate-800 p-2 w-full" name="actor_ids" multiple>
                         {actors_options}
                     </select>
 
@@ -291,32 +291,34 @@ pub fn EventPageForm<F: EventForm>(#[prop(optional)] _f: PhantomData<F>) -> impl
     };
 
     view! {
-        <>
-            <a href="/home">"Back"</a>
+        <div class="py-8 h-full">
+            <a href="/home" class="underline">"Back"</a>
 
             {fragment}
 
-            <form on:submit=on_submit class="grid place-content-center gap-4">
-                <h2>{F::TITLE}</h2>
+            <div class="grid place-content-center h-full">
+                <form on:submit=on_submit class="grid place-content-center gap-4 h-full">
+                    <h2 class="text-2xl">{F::TITLE}</h2>
 
-                {form}
+                    {form}
 
-                <button type="submit" class="bg-blue-800 p-2">"Save"</button>
+                    <button type="submit" class="bg-blue-800 p-2">"Save"</button>
 
-                <Show when=move || action.pending()>
-                    <p>"Saving..."</p>
-                </Show>
+                    <Show when=move || action.pending()>
+                        <p>"Saving..."</p>
+                    </Show>
 
-                <Show when=move || action.is_err()>
-                    {move || action.with(|state| {
-                        match state {
-                        Some(Err(MoneeError::App(e))) => Some(err(e).into_any()),
-                        Some(Err(MoneeError::Internal(_))) => Some(view! { <p>"Internal error :("</p> }.into_any()),
-                        _ => None,
-                        }
-                    })}
-                </Show>
-            </form>
-        </>
+                    <Show when=move || action.is_err()>
+                        {move || action.with(|state| {
+                            match state {
+                            Some(Err(MoneeError::App(e))) => Some(err(e).into_any()),
+                            Some(Err(MoneeError::Internal(_))) => Some(view! { <p>"Internal error :("</p> }.into_any()),
+                            _ => None,
+                            }
+                        })}
+                    </Show>
+                </form>
+            </div>
+        </div>
     }
 }

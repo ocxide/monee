@@ -21,7 +21,7 @@ pub mod host_status_bar {
         let status_retry = move || matches!(host_status.get(), Some(HostStatus::Offline));
 
         view! {
-            <div class=move || format!("fixed top-0 w-full py-3 px-2 {}", status_bg())>
+            <div class=move || format!("relative w-full py-3 px-2 {}", status_bg())>
                 <span>{move || status_text()}"."</span>
 
                 <Show when=move || status_retry()>

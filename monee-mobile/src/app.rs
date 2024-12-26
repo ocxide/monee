@@ -14,7 +14,7 @@ fn AppLayout() -> impl IntoView {
     view! {
         <>
             <HostStatusBar />
-            <main class="h-full gap-4 container mx-auto px-4 flex flex-col justify-center">
+            <main class="h-full gap-4 container mx-auto px-4">
                 <Outlet />
             </main>
         </>
