@@ -70,17 +70,51 @@ pub mod fields {
 
         bind_command!(get_all_wallets() -> Vec<(WalletId, (Wallet, Money))>, InternalError);
 
+        #[derive(Default, Clone, Copy)]
+        pub struct WalletSelectRef(NodeRef<Select>);
+
+        impl WalletSelectRef {
+            pub fn get(&self) -> Option<WalletId> {
+                self.0
+                    .get_untracked()
+                    .and_then(|select| select.value().parse().ok())
+            }
+        }
+
         #[component]
-        pub fn WalletSelect(#[prop(optional)] node_ref: NodeRef<Select>) -> impl IntoView {
+        pub fn WalletSelect(#[prop(optional)] node_ref: WalletSelectRef) -> impl IntoView {
             let wallets = LocalResource::new(get_all_wallets);
             let wallets_options = create_options(wallets, |(id, (wallet, money))| {
                 view! { <option value={id.to_string()}>{format!("{}: {} {}{}", wallet.name, money.currency.code, money.currency.symbol, money.amount)}</option> }
             });
 
             view! {
-                <select node_ref=node_ref required class="bg-slate-800 p-2" name="wallet_id">
+                <select node_ref=node_ref.0 required class="bg-slate-800 p-2" name="wallet_id">
                     {wallets_options}
                 </select>
+            }
+        }
+    }
+
+    pub mod amount_input {
+        use leptos::{html::Input, prelude::*};
+        use monee_core::Amount;
+
+        #[derive(Default, Clone, Copy)]
+        pub struct AmountInputRef(NodeRef<Input>);
+
+        impl AmountInputRef {
+            pub fn get(&self) -> Option<Amount> {
+                self.0
+                    .get_untracked()
+                    .and_then(|input| input.value().parse().ok())
+            }
+        }
+
+        #[component]
+        pub fn AmountInput(#[prop(optional)] node_ref: AmountInputRef) -> impl IntoView {
+            view! {
+                <input node_ref=node_ref.0 type="number" required class="bg-slate-800 p-2" name="amount" min="0" />
             }
         }
     }

@@ -16,10 +16,7 @@ use crate::{leptos_util::local::action::local_action, prelude::MoneeError};
 pub mod purchase {
     use std::str::FromStr;
 
-    use leptos::{
-        html::{Input, Select},
-        prelude::*,
-    };
+    use leptos::{html::Select, prelude::*};
     use monee_core::ActorId;
     use monee_types::backoffice::{
         actors::actor::Actor,
@@ -33,7 +30,11 @@ pub mod purchase {
         app::{
             components::{
                 dialog_form::create_dialog,
-                fields::{options::create_options, wallet_select::WalletSelect},
+                fields::{
+                    amount_input::{AmountInput, AmountInputRef},
+                    options::create_options,
+                    wallet_select::{WalletSelect, WalletSelectRef},
+                },
             },
             forms::{create_actor::CreateActorForm, create_item::CreateItemForm},
         },
@@ -63,10 +64,10 @@ pub mod purchase {
         impl IntoView,
         impl Fn() -> Option<Event> + 'static + Copy,
     ) {
-        let wallet_select = NodeRef::<Select>::new();
+        let wallet_select = WalletSelectRef::default();
         let item_select = NodeRef::<Select>::new();
         let actor_select = NodeRef::<Select>::new();
-        let amount_input = NodeRef::<Input>::new();
+        let amount_input = AmountInputRef::default();
 
         let (item_refresh, set_item_refresh) = signal(());
         let items = LocalResource::new(move || async move {
@@ -94,7 +95,7 @@ pub mod purchase {
             fn get_single_value<T: FromStr>(select: HtmlSelectElement) -> Option<T> {
                 select.value().parse().ok()
             }
-            let wallet_id = wallet_select.get_untracked().and_then(get_single_value);
+            let wallet_id = wallet_select.get();
             let item_id = item_select.get_untracked().and_then(get_single_value);
             let actor_ids = actor_select
                 .get_untracked()
@@ -113,9 +114,7 @@ pub mod purchase {
                     ids
                 })
                 .unwrap_or_default();
-            let amount = amount_input
-                .get_untracked()
-                .and_then(|input| input.value().parse().ok());
+            let amount = amount_input.get();
 
             if let (Some(wallet_id), Some(item_id), actor_ids, Some(amount)) =
                 (wallet_id, item_id, actor_ids, amount)
@@ -169,11 +168,67 @@ pub mod purchase {
                     <button type="button" class="bg-blue-800 p-2 rounded-full" on:click=move |_| open_actor_form()>+</button>
                 </div>
 
-                <input node_ref=amount_input required class="bg-slate-800 p-2" type="number" name="amount" placeholder="Amount" />
+                <AmountInput node_ref=amount_input />
             </>
         };
 
         (form, fragment, get_event)
+    }
+}
+
+pub mod move_value {
+    use leptos::prelude::*;
+    use monee_types::backoffice::events::event::{Event, MoveValue};
+
+    use crate::app::components::fields::{
+        amount_input::{AmountInput, AmountInputRef},
+        wallet_select::{WalletSelect, WalletSelectRef},
+    };
+
+    use super::EventForm;
+
+    pub struct MoveValueForm;
+
+    impl EventForm for MoveValueForm {
+        const TITLE: &'static str = "Move Value";
+        fn create() -> (
+            impl leptos::IntoView,
+            impl leptos::IntoView,
+            impl Fn() -> Option<Event> + 'static + Copy,
+        ) {
+            move_value()
+        }
+    }
+
+    fn move_value() -> (
+        impl IntoView,
+        impl IntoView,
+        impl Fn() -> Option<Event> + 'static + Copy,
+    ) {
+        let from_ref = WalletSelectRef::default();
+        let to_ref = WalletSelectRef::default();
+        let amount_input = AmountInputRef::default();
+
+        let form = view! {
+            <>
+                <WalletSelect node_ref=from_ref />
+                <WalletSelect node_ref=to_ref />
+                <AmountInput node_ref=amount_input />
+            </>
+        };
+
+        let get_event = move || {
+            if let (Some(from), Some(to), Some(amount)) =
+                (from_ref.get(), to_ref.get(), amount_input.get())
+            {
+                let event = Event::MoveValue(MoveValue { from, to, amount });
+                Some(event)
+            } else {
+                None
+            }
+        };
+
+        (form, (), get_event)
     }
 }
 
