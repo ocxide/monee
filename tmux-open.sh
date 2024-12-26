@@ -2,8 +2,10 @@
 
 tmux new-session -d -s monee -c ~/projects/monee/monee -n "monee"
 
-tmux new-window -a -t monee -c monee-cli -n "cli"
-tmux split-window -h -t monee:cli -c monee-cli
+# tmux new-window -a -t monee -c monee-cli -n "cli"
+# tmux split-window -h -t monee:cli -c monee-cli
+tmux new-window -a -t monee -c monee-mobile -n "cli"
+tmux split-window -h -t monee:cli -c monee-mobile
 
 tmux new-window -a -t monee:cli -c ~/projects/monee/monee-cli/data/monee -n "db"
 tmux send-keys -t monee:db "~/projects/monee/monee-cli/open-db.sh" C-m
