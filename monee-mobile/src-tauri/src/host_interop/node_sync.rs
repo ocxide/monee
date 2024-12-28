@@ -180,11 +180,6 @@ async fn listen(
     let mut changes = changes_getter.run().await.expect("to load initial changes");
     let mut host_con = None;
 
-    enum SyncOrder {
-        SaveChanges,
-        PullHost,
-    }
-
     loop {
         let result = tokio::select! {
             data_changed = changes_rx.recv() => {
