@@ -2,7 +2,10 @@ use leptos::{ev::SubmitEvent, prelude::*};
 use leptos_router::hooks::use_navigate;
 
 use crate::{
-    app_state::use_host_status, bind_command, leptos_util::local::action::local_action,
+    app::components::pending::PendingPulse,
+    app_state::use_host_status,
+    bind_command,
+    leptos_util::{local::action::local_action, signal::AppWithErr},
     prelude::InternalError,
 };
 
@@ -35,25 +38,35 @@ pub fn StartUp() -> impl IntoView {
     let output_view = {
         let dispatch = dispatch.clone();
         move || {
-            is_synced
-                .get()
-                .map(|result| match result {
-                    Ok(false) => view! { <StartUpForm /> }.into_any(),
-                    Ok(true) => view! { <p>"Synced"</p> }.into_any(),
-                    Err(_) => {
-                        let dispatch = dispatch.clone();
-                        view! { <button on:click=move |_| dispatch.dispatch(())>"Try again"</button> }
-                            .into_any()
-                    }
-                })
-                .unwrap_or_else(|| view! { <p>"Loading..."</p> }.into_any())
+            let err = is_synced.is_err();
+
+            if err {
+                let dispatch = dispatch.clone();
+                let v =
+                    view! { <button on:click=move |_| dispatch.dispatch(())>"Try again"</button> };
+                Some(v)
+            } else {
+                None
+            }
         }
     };
 
     view! {
-        <div class="grid place-content-center">
-            <h1>"Monee Mobile"</h1>
+        <div class="grid place-content-center auto-rows-auto h-full gap-16">
+            <h1 class="text-5xl text-center">"Monee"</h1>
+
+            <Show when=move || is_synced.pending()>
+                <div class="grid place-content-center">
+                    <PendingPulse class="w-24" />
+                </div>
+            </Show>
+
             {output_view}
+
+
+            <Show when=move || is_synced.with(|state| matches!(state, Some(Ok(false))))>
+                <StartUpForm />
+            </Show>
         </div>
     }
 }
@@ -78,25 +91,25 @@ fn StartUpForm() -> impl IntoView {
         dispatch.dispatch(host_dir.get());
     };
 
-    let error_view = move || {
-        set_host_binding
-            .with(|state| state.as_ref().map(Result::is_err))
-            .map(|is_err| view! { <Show when=move || is_err> <p>"Error"</p> </Show> })
-    };
     view! {
-        <>
-            <form on:submit=on_submit>
+        <div class="grid gap-2">
+            <form on:submit=on_submit class="flex gap-2">
                 <input
                     type="text"
                     class="bg-slate-800 px-2 py-1"
                     on:input:target=move |e| set_host_dir.set(e.target().value())
                 />
-                <button>"Submit"</button>
+
+                <button class="bg-blue-500 px-2 py-1">"Submit"</button>
             </form>
 
-            <Suspense fallback=move || view! { <p>"Loading..."</p> }>
-                {error_view}
-            </Suspense>
-        </>
+            <Show when=move || set_host_binding.is_err()>
+                <p class="text-red-600">"OH NO, there was an error wtf"</p>
+            </Show>
+
+            <Show when=move || set_host_binding.pending()>
+                <p class="text-slate-300">"Loading..."</p>
+            </Show>
+        </div>
     }
 }

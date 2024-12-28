@@ -1,3 +1,14 @@
+pub mod pending {
+    use leptos::prelude::*;
+
+    #[component]
+    pub fn PendingPulse(#[prop(optional)] class: &'static str) -> impl IntoView {
+        view! {
+            <span class=format!("loading loading-ring {}", class)></span>
+        }
+    }
+}
+
 pub mod dialog_form;
 pub mod host_status_bar {
     use leptos::{prelude::*, IntoView};
