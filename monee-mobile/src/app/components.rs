@@ -125,7 +125,7 @@ pub mod fields {
         #[component]
         pub fn AmountInput(#[prop(optional)] node_ref: AmountInputRef) -> impl IntoView {
             view! {
-                <input node_ref=node_ref.0 type="number" required class="bg-slate-800 p-2" name="amount" min="0" />
+                <input node_ref=node_ref.0 type="number" step="0.01" required class="bg-slate-800 p-2" name="amount" min="0" />
             }
         }
     }
