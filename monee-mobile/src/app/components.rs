@@ -32,11 +32,11 @@ pub mod host_status_bar {
         let status_retry = move || matches!(host_status.get(), Some(HostStatus::Offline));
 
         view! {
-            <div class=move || format!("relative w-full py-3 px-2 {}", status_bg())>
+            <div class=move || format!("relative w-full py-3 px-2 {} text-center", status_bg())>
                 <span>{move || status_text()}"."</span>
 
                 <Show when=move || status_retry()>
-                    <span class="text-underline">" Retry"</span>
+                    <span class="text-underline font-semibold">" Retry"</span>
                     <a href="/" class="absolute top-0 right-0 bottom-0 left-0 w-full h-full"></a>
                 </Show>
             </div>
