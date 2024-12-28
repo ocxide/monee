@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use cream::context::{Context, CreateFromContext, FromContext};
 use monee::{
     host::{
@@ -7,13 +9,23 @@ use monee::{
     nodes::hosts::domain::host::{host_binding::HostBinding, host_dir::HostDir},
     prelude::InfrastructureError,
 };
-use tauri_plugin_http::reqwest::Client;
+use tauri_plugin_http::reqwest::{Client, ClientBuilder};
 
 use crate::prelude::*;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct HostContext {
     http: Client,
+}
+
+impl Default for HostContext {
+    fn default() -> Self {
+        let http = ClientBuilder::default()
+            .connect_timeout(Duration::from_secs(3))
+            .build()
+            .expect("Failed to build http client");
+        Self { http }
+    }
 }
 
 impl Context for HostContext {}
